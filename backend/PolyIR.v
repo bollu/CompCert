@@ -87,9 +87,16 @@ Inductive sequiv: Cminor.stmt -> stmt -> Prop :=
                         (ival: int),
     eequiv cmaddr addr ->
     sequiv (Cminor.Sstore chunk cmaddr (Econst (Ointconst ival))) (Sstore chunk addr ival).
-| sequiv_Sloop: forall (iub: int) (cms: Cminor.stmt) (s: stmt),
-    sequiv cms s ->
-    sequiv () (Sloop )
+
+
+(* construct a CMinor loop from 0 to ub with stmt cmsinner inside the loop *)
+Definition cm_loop_0_to_ub (ub: upperbound) (cmsinner: Cminor.stmt) : Cminor.stmt :=
+  cmsinner.
+  
+Inductive lequiv : Cminor.stmt -> loop -> Prop :=
+| lequiv_loop_0_to_ub: forall (ub: upperbound) (cmsinner: Cminor.stmt) (sinner: stmt),
+    sequiv cmsinner sinner ->
+    lequiv (cm_loop_0_to_ub 0 cmsinner) (mkLoop ub sinner).
 
     
 (*
@@ -109,5 +116,3 @@ Inductive sequiv: Cminor.stmt -> stmt -> Prop :=
 *)
 
     
-
-Definition make_loop: (s: Stmt)
