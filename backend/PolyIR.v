@@ -3,65 +3,111 @@ Require Import AST Integers Values Events Memory Globalenvs Smallstep.
 Require Import Op Registers.
 Require Import AST.
 Require Import Cop.
-Require Import Csharpminor.
-
-Definition indvar := positive.
+Require Import Cminor.
+Require Import Integers.
 
 Inductive affineexpr: Type :=
-| Eindvar: indvar -> affineexpr
-| Econstint: int -> affineexpr
-| Eadd:  affineexpr -> affineexpr -> affineexpr.
+| Eindvar: affineexpr
+| Econstint: int -> affineexpr.
 
 Inductive stmt: Type :=
 | Sstore:  memory_chunk -> affineexpr -> int -> stmt
-| Sseq: stmt -> stmt -> stmt
-| Sloop: indvar -> affineexpr -> stmt -> stmt. (* Sloop <trip count> <statement> *)
+| Sseq: stmt -> stmt -> stmt.
+
+Notation indvar := nat.
+Notation upperbound := nat.
+Definition indvar_to_int (iv: indvar): int := (Int.repr (Z.of_nat iv)).
+
+Record loop : Type := mkLoop { loopub: upperbound; loopstmt: stmt }.
+
 
 Section EVALAFFINEEXPR.
-Definition env := PTree.t int.
-Variable e: env.
+  Variable iv: indvar.
 
 Inductive eval_affineexpr: affineexpr -> int -> Prop :=
-| eval_Econstint: forall (i: int),
-    eval_affineexpr (Econstint i) i
-| eval_Eadd: forall (a1 a2: affineexpr) (v1 v2: int),
-    eval_affineexpr a1 v1 ->
-    eval_affineexpr a2 v2 ->
-    eval_affineexpr (Eadd a1 a2) (Int.add v1 v2)
-| eval_Eindvar: forall (indvar: indvar) (i: int),
-    PTree.get indvar e = Some i -> eval_affineexpr (Eindvar indvar) i.
-
+| eval_Econstint: forall (x: int), eval_affineexpr (Econstint x) x
+| eval_Eindvar: eval_affineexpr Eindvar (indvar_to_int iv).
 End EVALAFFINEEXPR.
 
-Section NATURALSEM.
-  Inductive exec_stmt: env -> mem -> stmt -> env -> mem -> Prop :=
-  | exec_Sstore: forall e m m' chunk addr vaddr vwrite,
-      eval_affineexpr e addr vaddr ->
+
+Section EVALSTMT.
+
+  Inductive exec_stmt: indvar -> mem -> stmt -> mem -> Prop :=
+  | exec_Sstore: forall iv m m' chunk addr vaddr vwrite,
+      eval_affineexpr iv addr vaddr ->
       Mem.storev chunk m (Vint vaddr) (Vint vwrite) = Some m' ->
-      exec_stmt e m (Sstore chunk  addr vwrite) e m'
-  | exec_Sseq: forall mem mem1 mem2 env env1 env2 s1 s2,
-      exec_stmt env mem s1 env1 mem1 ->
-               exec_stmt env1 mem1 s2 env2 mem2 ->
-               exec_stmt env mem (Sseq s1 s2) env2 mem2
-  | exec_Sloop_loop: forall indvar env env1 env2 mem mem1 mem2 tripcountexpr s tripcounti indvari,
-      eval_affineexpr env tripcountexpr tripcounti ->
-      PTree.get indvar env = Some indvari ->
-      Int.cmp Clt indvari  tripcounti = true ->
-      exec_stmt env mem s env1 mem1 ->
-      exec_stmt env1 mem1 (Sloop indvar tripcountexpr s) env2 mem2 ->
-      exec_stmt env mem (Sloop indvar tripcountexpr s) env2 mem2
-      
+      exec_stmt  iv m (Sstore chunk  addr vwrite) m'
+  | exec_Sseq: forall iv m m1 m2 s1 s2,
+      exec_stmt iv m s1 m1 ->
+               exec_stmt iv m1 s2 m2 ->
+               exec_stmt iv m1 (Sseq s1 s2) m2.
+
+  
+  (* 
+  | exec_Sloop_loop: forall (iv :indvar) k l m m1 m2 s ub,
+      Int.cmp Clt (indvar_to_int iv) ub = true ->
+      exec_stmt iv m s (iv + k) m1 ->
+      exec_stmt (iv + k) m1 (Sloop iv ub s) m2 (iv + k + l) ->
+      exec_stmt iv m  (Sloop indvar ub s) (iv + k + l) m2
+     
+ 
                 
-  | exec_Sloop_stop: forall indvar env mem  tripcountexpr s tripcounti indvari,
-      eval_affineexpr env tripcountexpr tripcounti ->
+  | exec_Sloop_stop: forall indvar env mem  s indvari ub,
       PTree.get indvar env = Some indvari ->
-      Int.cmp Cge indvari  tripcounti = true ->
-      exec_stmt env mem (Sloop indvar tripcountexpr s) env mem.
+      Int.cmp Cge indvari ub = true ->
+      exec_stmt env mem (Sloop indvar ub s) env mem.
+*)
       
       
- End Section NATURALSEM.
+End EVALSTMT.
+
+Section EVALLOOP.
+  Inductive exec_loop: indvar -> mem -> loop -> indvar -> mem -> Prop :=
+  | eval_loop_stop: forall iv ub mem s,
+      (iv >= ub)%nat  ->
+      exec_loop iv mem (mkLoop ub s) iv mem
+  | eval_loop_loop: forall iv iv2 ub mem s mem2 mem3,
+      (iv < ub)%nat ->
+      exec_stmt iv mem s mem2 ->
+      exec_loop (iv + 1) mem2  (mkLoop ub s) iv2 mem3 ->
+      exec_loop iv mem2 (mkLoop ub s) iv2 mem3.
+End EVALLOOP.
+
+Inductive eequiv: Cminor.expr -> affineexpr -> Prop :=
+| eequiv_Constint: forall (i: int),
+    eequiv (Econst (Ointconst i)) (Econstint i).
   
 
+Inductive sequiv: Cminor.stmt -> stmt -> Prop :=
+| sequiv_Sseq: forall (cms1 cms2: Cminor.stmt) (s1 s2: stmt),
+    sequiv cms1 s1 ->
+    sequiv cms2 s2 ->
+    sequiv (Cminor.Sseq cms1 cms2) (Sseq s1 s2)
+| sequiv_Sstore: forall (chunk: memory_chunk) (cmaddr: Cminor.expr) (addr: affineexpr)
+                        (ival: int),
+    eequiv cmaddr addr ->
+    sequiv (Cminor.Sstore chunk cmaddr (Econst (Ointconst ival))) (Sstore chunk addr ival).
+| sequiv_Sloop: forall (iub: int) (cms: Cminor.stmt) (s: stmt),
+    sequiv cms s ->
+    sequiv () (Sloop )
+
     
+(*
+  var 'i';                                                                         
+  'i' = 0;                                                                         
+  {{ loop {                                                                        
+       {{ if ('i' < 10) {                                                          
+            /*skip*/                                                               
+          } else {                                                                 
+            exit 1;                                                                
+          }                                                                        
+          int32[&0 +l 4LL *l longofint 'i'] = 'i' + 1;                             
+       }}                                                                          
+       'i' = 'i' + 1;                                                              
+     }                                                                             
+  }}
+*)
+
     
 
+Definition make_loop: (s: Stmt)
