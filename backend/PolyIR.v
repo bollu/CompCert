@@ -17,6 +17,7 @@ Inductive stmt: Type :=
 Notation indvar := nat.
 Notation upperbound := nat.
 Definition indvar_to_int (iv: indvar): int := (Int.repr (Z.of_nat iv)).
+Definition ub_to_int (ub: upperbound): int := (Int.repr (Z.of_nat ub)).
 
 Record loop : Type := mkLoop { loopub: upperbound; loopstmt: stmt }.
 
@@ -89,17 +90,8 @@ Inductive sequiv: Cminor.stmt -> stmt -> Prop :=
     sequiv (Cminor.Sstore chunk cmaddr (Econst (Ointconst ival))) (Sstore chunk addr ival).
 
 
-(* construct a CMinor loop from 0 to ub with stmt cmsinner inside the loop *)
-Definition cm_loop_0_to_ub (ub: upperbound) (cmsinner: Cminor.stmt) : Cminor.stmt :=
-  cmsinner.
-  
-Inductive lequiv : Cminor.stmt -> loop -> Prop :=
-| lequiv_loop_0_to_ub: forall (ub: upperbound) (cmsinner: Cminor.stmt) (sinner: stmt),
-    sequiv cmsinner sinner ->
-    lequiv (cm_loop_0_to_ub 0 cmsinner) (mkLoop ub sinner).
-
-    
 (*
+----
   var 'i';                                                                         
   'i' = 0;                                                                         
   {{ loop {                                                                        
@@ -113,6 +105,36 @@ Inductive lequiv : Cminor.stmt -> loop -> Prop :=
        'i' = 'i' + 1;                                                              
      }                                                                             
   }}
+----
 *)
+
+
+(* construct a CMinor loop from 0 to ub with stmt cmsinner inside the loop *)
+Definition cm_loop_0_to_ub (ub: upperbound) (cmsinner: Cminor.stmt) (iv: ident): Cminor.stmt :=
+  (*
+  var 'i';
+  'i' = 0;
+   *)
+  Cminor.Sseq (Sassign iv (Econst (Ointconst (Int.repr 0))))
+       (Sblock (
+            Sloop (
+                Sblock (
+                    Cminor.Sseq (Sifthenelse (Ebinop
+                                                (Ocmp  Clt)
+                                                (Evar iv)
+                                                (Econst (Ointconst (ub_to_int ub))))
+                                (Sskip)
+                                (Sexit 0) (* this is a hack, there is no reason it has to be 0 *)
+                         )
+                         cmsinner
+                  )
+              )
+          )
+       ).
+  
+Inductive lequiv : Cminor.stmt -> loop -> Prop :=
+| lequiv_loop_0_to_ub: forall (ub: upperbound) (cmsinner: Cminor.stmt) (sinner: stmt) (iv: ident),
+    sequiv cmsinner sinner ->
+    lequiv (cm_loop_0_to_ub ub cmsinner iv) (mkLoop ub sinner).
 
     
