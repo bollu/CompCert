@@ -88,13 +88,22 @@ Lemma iv_init_sets_iv_value: forall (ivname: ident)
 Qed.
 
 Lemma exec_stmt_is_function:
-  forall (m m' m'' e e' e'': env) (f: function) (sp: val) (ge: genv) (tr: trace) (o: outcome),
+  forall (m m' m'': mem) (e e' e'': env) (f: function) (sp: val) (ge: genv) (tr: trace) (o: outcome),
   forall (s: Cminor.stmt),
     exec_stmt ge f sp e m
               s tr e' m' o ->
     exec_stmt ge f sp e  m
               s tr e'' m'' o ->
     e' = e'' /\ m' = m''.
+Proof.
+  intros until s.
+  intros exec_s1.
+  intros exec_s2.
+  induction s; try (inversion exec_s1; inversion exec_s2; subst; auto).
+  inversion exec_s1. inversion exec_s2. subst.
+  auto.
+  inversion exec_s1. inversion exec_s2. subst.
+Abort.
 
 Lemma if_cond_with_failing_branch_will_return_else:
   forall (cond: expr) (sthen selse: Cminor.stmt),
