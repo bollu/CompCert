@@ -31,38 +31,18 @@ Inductive eval_affineexpr: affineexpr -> int -> Prop :=
 End EVALAFFINEEXPR.
 
 
-Section EVALSTMT.
+Section EXECSTMT.
 
   Inductive exec_stmt: indvar -> mem -> stmt -> mem -> Prop :=
   | exec_Sstore: forall iv m m' chunk addr vaddr vwrite,
       eval_affineexpr iv addr vaddr ->
       Mem.storev chunk m (Vint vaddr) (Vint vwrite) = Some m' ->
-      exec_stmt  iv m (Sstore chunk  addr vwrite) m'
-  | exec_Sseq: forall iv m m1 m2 s1 s2,
-      exec_stmt iv m s1 m1 ->
-               exec_stmt iv m1 s2 m2 ->
-               exec_stmt iv m1 (Sseq s1 s2) m2.
-
-  
-  (* 
-  | exec_Sloop_loop: forall (iv :indvar) k l m m1 m2 s ub,
-      Int.cmp Clt (indvar_to_int iv) ub = true ->
-      exec_stmt iv m s (iv + k) m1 ->
-      exec_stmt (iv + k) m1 (Sloop iv ub s) m2 (iv + k + l) ->
-      exec_stmt iv m  (Sloop indvar ub s) (iv + k + l) m2
-     
- 
-                
-  | exec_Sloop_stop: forall indvar env mem  s indvari ub,
-      PTree.get indvar env = Some indvari ->
-      Int.cmp Cge indvari ub = true ->
-      exec_stmt env mem (Sloop indvar ub s) env mem.
-*)
+      exec_stmt  iv m (Sstore chunk  addr vwrite) m'.
       
       
-End EVALSTMT.
+End EXECSTMT.
 
-Section EVALLOOP.
+Section EXECLOOP.
   Inductive exec_loop: indvar -> mem -> loop -> indvar -> mem -> Prop :=
   | eval_loop_stop: forall iv ub mem s,
       (iv >= ub)%nat  ->
@@ -72,23 +52,22 @@ Section EVALLOOP.
       exec_stmt iv mem s mem2 ->
       exec_loop (iv + 1) mem2  (mkLoop ub s) iv2 mem3 ->
       exec_loop iv mem2 (mkLoop ub s) iv2 mem3.
-End EVALLOOP.
+End EXECLOOP.
 
 Inductive eequiv: Cminor.expr -> affineexpr -> Prop :=
 | eequiv_Constint: forall (i: int),
     eequiv (Econst (Ointconst i)) (Econstint i).
   
 
+Section STMTEQUIV.
 Inductive sequiv: Cminor.stmt -> stmt -> Prop :=
-| sequiv_Sseq: forall (cms1 cms2: Cminor.stmt) (s1 s2: stmt),
-    sequiv cms1 s1 ->
-    sequiv cms2 s2 ->
-    sequiv (Cminor.Sseq cms1 cms2) (Sseq s1 s2)
 | sequiv_Sstore: forall (chunk: memory_chunk) (cmaddr: Cminor.expr) (addr: affineexpr)
                         (ival: int),
     eequiv cmaddr addr ->
     sequiv (Cminor.Sstore chunk cmaddr (Econst (Ointconst ival))) (Sstore chunk addr ival).
+End STMTEQUIV.
 
+     
 
 (*
 ----
@@ -97,7 +76,7 @@ Inductive sequiv: Cminor.stmt -> stmt -> Prop :=
   {{ loop {                                                                        
        {{ if ('i' < 10) {                                                          
             /*skip*/                                                               
-          } else {                                                                 
+            } else {                                                                 
             exit 1;                                                                
           }                                                                        
           int32[&0 +l 4LL *l longofint 'i'] = 'i' + 1;                             
@@ -106,35 +85,95 @@ Inductive sequiv: Cminor.stmt -> stmt -> Prop :=
      }                                                                             
   }}
 ----
-*)
+ *)
 
 
-(* construct a CMinor loop from 0 to ub with stmt cmsinner inside the loop *)
-Definition cm_loop_0_to_ub (ub: upperbound) (cmsinner: Cminor.stmt) (iv: ident): Cminor.stmt :=
-  (*
-  var 'i';
-  'i' = 0;
-   *)
-  Cminor.Sseq (Sassign iv (Econst (Ointconst (Int.repr 0))))
+(* construct a CMinor loop from 0 to ub with stmt cmstmt inside the loop *)
+Definition cm_loop_0_to_ub (ub: upperbound) (ivname: ident) (addrexpr: expr) (storeval: expr): Cminor.stmt :=
+  Cminor.Sseq (Sassign ivname (Econst (Ointconst (Int.repr 0))))
        (Sblock (
             Sloop (
                 Sblock (
                     Cminor.Sseq (Sifthenelse (Ebinop
                                                 (Ocmp  Clt)
-                                                (Evar iv)
+                                                (Evar ivname)
                                                 (Econst (Ointconst (ub_to_int ub))))
                                 (Sskip)
                                 (Sexit 0) (* this is a hack, there is no reason it has to be 0 *)
-                         )
-                         cmsinner
+                                )
+                                (Cminor.Sstore Mint32 addrexpr storeval)
                   )
               )
           )
        ).
+Hint Transparent cm_loop_0_to_ub.
+
+
+Definition cm_fn_0_to_ub
+           (fn: Cminor.function)
+           (ub: upperbound)
+           (addre storee: expr)
+           (iv: ident): Prop :=
+  Cminor.fn_body fn = cm_loop_0_to_ub ub iv addre storee.
   
-Inductive lequiv : Cminor.stmt -> loop -> Prop :=
-| lequiv_loop_0_to_ub: forall (ub: upperbound) (cmsinner: Cminor.stmt) (sinner: stmt) (iv: ident),
-    sequiv cmsinner sinner ->
-    lequiv (cm_loop_0_to_ub ub cmsinner iv) (mkLoop ub sinner).
+
+Hint Transparent cm_fn_0_to_ub.
+  
+Check (Cminor.exec_stmt).
+
+Theorem fnequiv_preserves_mem:
+  forall  (ge: genv) (cmf: Cminor.function) (cmfargs: list val)   (tr: trace) (l: loop) (mem mem': mem) (ub: upperbound) (iv: ident) (addre storee: expr) (addraff storeaff: affineexpr),
+    eequiv addre addraff ->
+    eequiv storee storeaff ->
+    cm_fn_0_to_ub cmf ub addre storee iv ->
+    eval_funcall ge mem (Internal cmf) cmfargs tr mem' Vundef ->
+    exec_loop 0 mem l ub mem'.
+  intros until storeaff.
+  intros addre_aff_rel.
+  intros storee_aff_rel.
+  intros fn_is_loop.
+  intros fn_eval.
+  unfold cm_fn_0_to_ub in fn_is_loop.
+  inversion fn_eval.
+  rewrite fn_is_loop in *.
+  rename H2 into exec_fn.
+  unfold cm_loop_0_to_ub in exec_fn.
+  inversion exec_fn.
+  subst.
+  rename H11 into exec_set_iv.
+  rename H16 into exec_block_around_loop.
+  inversion exec_block_around_loop.
+  subst.
+  rename H7 into exec_loop.
+  (* base case? *)
+  inversion exec_loop.
+  subst.
+  rename H2 into exec_loop_next_trip.
+  rename H1 into exec_loop_inner.
+  inversion exec_loop_inner.
+  subst.
+  rename H11 into sseq_in_loop.
+  inversion sseq_in_loop.
+  subst.
+  rename H2 into exec_ite.
+  rename H10 into exec_store.
+  inversion exec_ite.
+  subst.
+  rename H10 into eval_geq.
+  rename H16 into exec_skip_or_exit.
+  rename H15 into val_of_geq.
+  inversion eval_geq.
+  subst.
+  rename H9 into eval_lt.
+  rename v1 into ivar_val.
+  rename v2 into ub_val.
+  inversion_clear H8.
+  rename H into eval_ub.
+    
+
+                            
+
+
+
 
     
