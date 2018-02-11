@@ -147,6 +147,8 @@ Qed.
   
 
 Check(eval_exprlist).
+Check (eval_funcall_ind2).
+Check (exec_stmt_ind2).
 
 (* genv -> val -> env -> mem -> list expr -> list val *)
 Lemma eval_exprlist_is_function:
@@ -170,7 +172,6 @@ Proof.
   reflexivity.
 Qed.
 
-Check (outcome_result_value).
 Lemma outcome_result_value_is_function:
   forall (o: outcome) (t: option typ) (v v' : val),
     outcome_result_value o t v ->
@@ -202,7 +203,24 @@ Qed.
   
   
 Check (eval_funcall).
-(* genv -> mem -> fundef -> list val -> trace -> mem -> val -> Prop *)
+(* Check out how "eval_funcall_exec_stmt_steps" does this in CMinor *)
+Check (eval_funcall_exec_stmt_ind2).
+Lemma eval_stmt_funcall_is_function: forall ge,
+  (forall m fd args t m' res,
+      eval_funcall ge m fd args t m' res ->
+      (forall m'' res',
+          eval_funcall ge m fd args t m'' res' -> m' = m'' /\ res = res'
+  )) 
+  /\(forall f sp e m s t e' m' out,
+       exec_stmt ge f sp e m s t e' m' out ->
+       (forall e'' m'' out',
+           exec_stmt ge f sp e m s t e'' m'' out' ->
+           m' = m'' /\ out = out' /\ e' = e'')).
+Proof.
+  intros ge.
+  apply eval_funcall_exec_stmt_ind2; intros.
+
+(* genv -> mem -> fundef -> list val -> trace -> mem -> val -> Prop
 
 Lemma eval_funcall_is_function:
   forall (f: fundef),
@@ -230,6 +248,14 @@ Lemma eval_funcall_is_function:
   rewrite m1_eq_m5 in *. rewrite sp_eq_sp0 in *.
   clear H. clear m1_eq_m5. clear sp_eq_sp0.
 
+
+  assert(out = out0) as out_eq_out0.
+  assert (v = v').
+  eapply outcome_result_value_is_function.
+  exact H3.
+  exact H14.
+*) 
+
   
     
                                                               
@@ -247,7 +273,7 @@ Lemma exec_stmt_is_function:
               s tr e'' m'' o ->
     e' = e'' /\ m' = m''.
 Proof.
-  induction s; try(intros until o; intros exec_s1; intros exec_s2).
+  induction s using exec_stmt_ind2; try(intros until o; intros exec_s1; intros exec_s2).
 
   (* skip *)
   - inversion exec_s1. inversion exec_s2. subst. auto.
