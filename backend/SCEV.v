@@ -261,6 +261,57 @@ Qed.
 
 
   
+Check (external_call).
+
+Lemma external_functions_sem_is_function:
+  forall name (sg: signature) (ge: genv) (args: list val) (m mout mout': mem) (tr tr': trace)
+    (v v': val),
+ external_functions_sem name sg ge args m tr v mout ->
+ external_functions_sem name sg ge args m tr' v' mout' ->
+ tr = tr' /\ v = v' /\ mout = mout'.
+
+Proof.
+Admitted.
+
+
+Lemma volatile_load_sem_is_function:
+  forall (chunk: memory_chunk)
+    (ge: genv)
+    (args: list val)
+    (m mout mout': mem)
+    (tr tr': trace)
+    (v v': val),
+  volatile_load_sem chunk ge args m tr v mout ->
+    volatile_load_sem chunk ge args m tr' v' mout' ->
+    tr = tr' /\ v = v' /\ mout = mout'.
+Proof.
+Admitted.
+
+Lemma external_call_is_function: forall (ef: external_function),
+    forall (ge: genv) (args: list val) (m mout mout': mem) (tr tr': trace) (v v': val),
+      external_call ef ge args m
+                    tr v mout ->
+      external_call ef ge args m
+                    tr' v' mout' ->
+      tr = tr' /\ v = v' /\ mout = mout'.
+Proof.
+  intros until v'.
+  intros call1 call2.
+  induction ef;
+    unfold external_call in *;
+    try (eapply external_functions_sem_is_function; eassumption).
+  eapply volatile_load_sem_is_function; eassumption.
+  (* mother of god, this is just annoying as fuck case analysis *)
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+Admitted.
+
 
 Lemma int_eq_dec': forall (i i': int), i = i' \/ i <> i'.
 Proof.
@@ -350,8 +401,9 @@ Proof.
 
   -  (* eval funcall inernal *)
     inversion H0. subst.
-    (* need to reason about external_call. Admitting this for now *)
-    admit.
+    assert (t = t' /\ res = res' /\ m' = m'').
+    eapply external_call_is_function; eassumption.
+    intuition.
   -  (* Sskip *)
     inversion H. subst.
     auto.
@@ -402,9 +454,15 @@ Proof.
 
   - (*Sbuiltin *)
     inversion H2. subst.
-    
-    (* need to reason about external_call. Admitting this for now *)
-    admit.
+
+    assert (vargs = vargs0) as vargs_eq.
+    eapply eval_exprlist_is_function; eassumption.
+    rewrite vargs_eq in *.
+    assert (t = t' /\ vres = vres0 /\ m' = m'').
+    eapply external_call_is_function; eassumption.
+    destruct H1 as [teq [vreseq meq]].
+    rewrite teq, vreseq, meq in *.
+    auto.
 
   - (*S IfThenElse *)
     inversion H3.
@@ -506,18 +564,49 @@ Proof.
     rewrite veq in *.
 
     assert (n = n0) as neq.
-    eapply switch_argument_is_function.
+    eapply switch_argument_is_function; eassumption.
+    rewrite neq in *.
+    auto.
 
 
+  -  (* Sreturn *)
+    inversion H. subst.
+    auto.
+
+  -  (* Sreturn, Some *)
+    inversion H0. subst.
+    assert (v = v0) as veq.
+    eapply eval_expr_is_function; eassumption.
+    rewrite veq in *.
+    auto.
+
+  - (* Stailcall (is this going to be hard?) *)
+    inversion H6. subst.
+
+    assert(m' = m'0) as m'eq.
+    rewrite H22 in H3. inversion H3. auto.
+    rewrite m'eq in *. clear m'eq.
+
+    assert (vf = vf0) as vfeq.
+    eapply eval_expr_is_function; eassumption.
+    rewrite vfeq in *.
+    clear vfeq.
     
-    
+    assert (fd = fd0) as fdeq.
+    rewrite  H14 in H1.
+    inversion H1. auto.
+    rewrite fdeq in *.
+    clear fdeq.
 
-      
-      
-      (* stuck! need to reason about abnormal cases :() *)
-      admit.
-
+    assert (vargs0 = vargs) as vargseq.
+    eapply eval_exprlist_is_function; eassumption.
+    rewrite vargseq in *.
     
- Admitted.
+    specialize (H5 _ _ _ H23).
+    destruct H5 as [meq [vreseq teq]].
+    rewrite meq, vreseq, teq in *.
+    auto.
+Qed.
+
       
   
