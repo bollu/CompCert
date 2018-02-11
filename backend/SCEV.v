@@ -87,6 +87,68 @@ Lemma iv_init_sets_iv_value: forall (ivname: ident)
   auto.
 Qed.
 
+Lemma eval_expr_is_function:
+  forall  (a: expr) (sp: val) (ge: genv) (e: env) (m: mem) (v v': val),
+    eval_expr ge sp e m a v ->
+    eval_expr ge sp e m a v' ->
+    v = v'.
+Proof.
+  intros a.
+  induction a;
+    intros until v';
+  intros eval_to_v;
+  intros eval_to_v';
+  inversion eval_to_v; inversion eval_to_v'; subst;
+    try(rewrite H3 in H0; inversion H0; auto).
+  (* unary op*)
+  - 
+    rename H3 into eval_unop_u_v1.
+    rename H8 into eval_unop_u_v2.
+    rename H1 into eval_a_to_v1.
+    rename H6 into eval_a_to_v2.
+    assert (v1 = v2) as v1_eq_v2.
+    eapply IHa.
+    apply eval_a_to_v1.
+    apply eval_a_to_v2.
+    rewrite v1_eq_v2 in *.
+    assert (Some v = Some v') as inv_target.
+    rewrite <- eval_unop_u_v1.
+    rewrite <- eval_unop_u_v2.
+    reflexivity.
+    inversion inv_target. auto.
+
+  - (* binary op *)
+    assert (v1 = v3) as v1_eq_v3.
+    eapply IHa1.
+    apply H2.
+    apply H9.
+
+    assert (v2 = v4) as v2_eq_v4.
+    eapply IHa2.
+    apply H4.
+    apply H11.
+    rewrite v1_eq_v3 in *.
+    rewrite v2_eq_v4 in *.
+    clear v1_eq_v3. clear v2_eq_v4.
+    rewrite H5 in H12.
+    inversion H12.
+    auto.
+
+    (* Load? Why is this a different case? *)
+  -
+    assert (vaddr = vaddr0) as vaddr_eq_vaddr0.
+    eapply IHa.
+    exact H1. exact H6.
+    rewrite vaddr_eq_vaddr0 in *.
+    rewrite H3 in H8.
+    inversion H8.
+    auto.
+Qed.
+  
+  
+    
+
+(* Note to self: finish eval_expr_is_function first *)
 Lemma exec_stmt_is_function:
   forall (m m' m'': mem) (e e' e'': env) (f: function) (sp: val) (ge: genv) (tr: trace) (o: outcome),
   forall (s: Cminor.stmt),
@@ -99,11 +161,11 @@ Proof.
   intros until s.
   intros exec_s1.
   intros exec_s2.
-  induction s; try (inversion exec_s1; inversion exec_s2; subst; auto).
-  inversion exec_s1. inversion exec_s2. subst.
-  auto.
-  inversion exec_s1. inversion exec_s2. subst.
-Abort.
+  induction s.
+  (* skip *)
+  - inversion exec_s1. inversion exec_s2. subst. auto.
+  (* assign *)
+  - inversion exec_s1. inversion exec_s2. subst.
 
 Lemma if_cond_with_failing_branch_will_return_else:
   forall (cond: expr) (sthen selse: Cminor.stmt),
