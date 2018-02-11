@@ -249,6 +249,19 @@ Proof.
 Qed.
   
 
+Lemma switch_argument_is_function:
+  forall (b: bool) (v : val) (out out': Z),
+    Switch.switch_argument b v out -> 
+    Switch.switch_argument b v out' ->
+    out = out'.
+Proof.
+  intros.
+  inversion H; inversion H0; subst; try (inversion H5; auto).
+Qed.
+
+
+  
+
 Lemma int_eq_dec': forall (i i': int), i = i' \/ i <> i'.
 Proof.
   intros.
@@ -475,8 +488,26 @@ Proof.
       destruct H0  as [meq [outeq [eeq teq]]];
       rewrite meq, outeq, eeq, teq in *.
     try contradiction. try auto.
+
   -  (* Sblock *)
-    
+    inversion H1. subst.
+    specialize (H0 _ _ _ _ H7).
+    destruct H0 as [meq [outeq [eeq teq]]].
+    rewrite meq, outeq, eeq, teq in *.
+    auto.
+
+  - (* Sexit *)
+    inversion H. subst. auto.
+
+  - (* Sswitch *)
+    inversion H1. subst.
+    assert (v0 = v) as veq.
+    eapply eval_expr_is_function; eassumption.
+    rewrite veq in *.
+
+    assert (n = n0) as neq.
+    eapply switch_argument_is_function.
+
 
     
     
