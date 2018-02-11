@@ -145,27 +145,80 @@ Proof.
     auto.
 Qed.
   
+
+Check(eval_exprlist).
+
+(* genv -> val -> env -> mem -> list expr -> list val *)
+Lemma eval_exprlist_is_function:
+  forall  (list_a: list expr) (sp: val) (ge: genv) (e: env) (m: mem) (vs vs': list val),
+    eval_exprlist ge sp e m list_a vs -> 
+    eval_exprlist ge sp e m list_a vs' ->
+    vs = vs'.
+Proof.
+  intros list_a.
+  induction list_a;
+    intros until vs';
+    intros eval_vs;
+    intros eval_vs';
+    inversion eval_vs; inversion eval_vs'; subst; try auto.
+  assert (v1 = v0) as v1_eq_v0.
+  eapply eval_expr_is_function; eassumption.
+  rewrite v1_eq_v0 in *.
+  assert (vl = vl0) as vl_eq_vl0.
+  eapply IHlist_a; eassumption.
+  rewrite vl_eq_vl0.
+  reflexivity.
+Qed.
+                                                              
+  
   
     
 
 (* Note to self: finish eval_expr_is_function first *)
 Lemma exec_stmt_is_function:
-  forall (m m' m'': mem) (e e' e'': env) (f: function) (sp: val) (ge: genv) (tr: trace) (o: outcome),
   forall (s: Cminor.stmt),
+  forall (m m' m'': mem) (e e' e'': env) (f: function) (sp: val) (ge: genv) (tr: trace) (o: outcome),
     exec_stmt ge f sp e m
               s tr e' m' o ->
     exec_stmt ge f sp e  m
               s tr e'' m'' o ->
     e' = e'' /\ m' = m''.
 Proof.
-  intros until s.
-  intros exec_s1.
-  intros exec_s2.
-  induction s.
+  induction s; try(intros until o; intros exec_s1; intros exec_s2).
+
   (* skip *)
   - inversion exec_s1. inversion exec_s2. subst. auto.
   (* assign *)
   - inversion exec_s1. inversion exec_s2. subst.
+    assert (v = v0).
+    eapply eval_expr_is_function.
+    apply H9. apply H20.
+    rewrite H.
+    auto.
+  (* Sstore *)
+  -  inversion exec_s1. inversion exec_s2. subst.
+     assert (v = v0) as v_eq_v0.
+     + eapply eval_expr_is_function; eassumption.
+
+     + assert (vaddr = vaddr0) as vaddr_eq_vaddr0.
+     eapply eval_expr_is_function; eassumption.
+
+       
+     rewrite v_eq_v0 in *.
+     rewrite vaddr_eq_vaddr0 in *.
+       
+     assert (Some m' = Some m'') as some_m'_eq_some_m''.
+     rewrite <- H26. rewrite <- H12.
+     auto.
+     inversion some_m'_eq_some_m''.
+     auto.
+  (* Scall *)
+  - intros until o0.
+    intros exec_s1. intros exec_s2.
+    inversion exec_s1. inversion exec_s2. subst.
+     assert (vres = vres0).
+     
+    
 
 Lemma if_cond_with_failing_branch_will_return_else:
   forall (cond: expr) (sthen selse: Cminor.stmt),
