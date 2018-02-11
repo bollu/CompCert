@@ -214,6 +214,12 @@ Proof.
     subst; try (rewrite H0 in H1; inversion H1; auto). try reflexivity.
 Qed.
   
+Lemma funsig_is_inj: forall (fd fd': fundef),
+    funsig fd = funsig fd' -> fd = fd'.
+Proof.
+  intros.
+Abort.
+  
   
                                   
 
@@ -234,6 +240,8 @@ Lemma eval_stmt_funcall_is_function: forall ge,
 Proof.
   intros ge.
   apply eval_funcall_exec_stmt_ind2; intros.
+
+  - (* eval funcall internal *)
   inversion H5. subst.
 
   assert ((m4, sp0) = (m1, sp)) as m_sp_eq.
@@ -250,6 +258,69 @@ Proof.
   subst.
   clear H6.
   clear H2.
+  assert (m3 = m'') as m3_eq_m''.
+  eapply outcome_free_mem_is_function; eassumption.
+  rewrite m3_eq_m'' in *. clear m3_eq_m''.
+  assert (vres = res') as vres_eq_res'.
+  eapply outcome_result_value_is_function; eassumption.
+  rewrite vres_eq_res' in *.
+  auto.
+
+  -  (* eval funcall inernal *)
+    inversion H0. subst.
+    (* need to reason about external_call. Admitting this for now *)
+    admit.
+  -  (* Sskip *)
+    inversion H. subst.
+    auto.
+  -  (* Sasssign *)
+    inversion H0. subst.
+    assert (v = v0) as v_eq_v0.
+    eapply eval_expr_is_function; eassumption.
+    rewrite v_eq_v0 in *. auto.
+
+  -  (* Sstore *)
+    inversion H2. subst.
+    assert (v = v0) as v_eq_v0.
+    eapply eval_expr_is_function; eassumption.
+    rewrite v_eq_v0 in *. auto.
+    
+    assert (vaddr = vaddr0) as vaddr_eq_vaddr0.
+    eapply eval_expr_is_function; eassumption.
+    rewrite vaddr_eq_vaddr0 in *.
+    assert (Some m' = Some m'') as eq_some_m'_m''.
+    rewrite <- H15. rewrite <- H1. reflexivity.
+    inversion eq_some_m'_m'' as [m_eq_m'].
+    rewrite m_eq_m' in *. auto.
+
+  -  (* Scall. Gulp *)
+    inversion H6. subst.
+
+    assert(vf = vf0) as vf_eq_vf0.
+    eapply eval_expr_is_function; eassumption.
+    rewrite vf_eq_vf0 in *. clear vf_eq_vf0.
+
+    
+    assert (fd = fd0) as fd_eq_fd0.
+    rewrite H1 in H17. 
+    inversion H17. auto.
+    rewrite fd_eq_fd0 in *. clear fd_eq_fd0.
+
+    assert (vargs = vargs0) as vargs_eq.
+    eapply eval_exprlist_is_function; eassumption.
+    rewrite vargs_eq in *. clear vargs_eq.
+
+    specialize (H4 _ _ H23).
+    inversion H4.
+    rewrite H2 in *. rewrite H5 in *.
+    auto.
+
+  - (*Sbuiltin *)
+                                 
+    
+    
+    
+
 
   
 
