@@ -248,6 +248,47 @@ Proof.
     + auto.
 Qed.
   
+
+Lemma int_eq_dec': forall (i i': int), i = i' \/ i <> i'.
+Proof.
+  intros.
+  assert ({i = i'} + {i <> i'}).
+  apply Int.eq_dec.
+  destruct H.
+  left. assumption.
+  right.
+  assumption.
+Qed.
+
+
+Lemma int64_eq_dec': forall (i i': int64), i = i' \/ i <> i'.
+Proof.
+  intros.
+  assert ({i = i'} + {i <> i'}).
+  apply Int64.eq_dec.
+  destruct H.
+  left. assumption.
+  right.
+  assumption.
+Qed.
+
+Lemma val_eq_dec: forall (v v': val), v = v' \/ v <> v'.
+  intros.
+  assert ({v = v'} + {v <> v'}).
+  apply Val.eq.
+  destruct H; auto.
+Qed.
+
+Lemma outcome_eq_dec: forall (o o': outcome), o = o' \/ o <> o'.
+Proof.
+  intros.
+  decide equality.
+  omega.
+  decide equality.
+  apply val_eq_dec.
+  apply val_eq_dec.
+Qed.
+                                             
   
 
 Check (eval_funcall).
@@ -387,8 +428,17 @@ Proof.
 
     (* out != out_normal *)
     + subst.
+      assert (out = Out_normal \/ out <> Out_normal) as out_eq_decidable.
+      decide equality.
+      omega.
+      decide equality.
+      decide equality.
+      
+      
       (* stuck! need to reason about abnormal cases :() *)
       admit.
+
+    
  Admitted.
       
   
