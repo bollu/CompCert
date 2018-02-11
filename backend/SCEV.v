@@ -179,8 +179,7 @@ Lemma outcome_result_value_is_function:
     v = v'.
 Proof.
   intros o.
-  induction o;
-  intros until v';
+  induction o; intros until v';
   intros out_v out_v'.
 
   - (* out_normal *)
@@ -220,8 +219,36 @@ Proof.
   intros.
 Abort.
   
+(* TODO: this was proof-hacked. Do this nicely *)
+Lemma bool_of_val_is_function: forall (v: val) (b b': bool),
+    Val.bool_of_val v b ->
+    Val.bool_of_val v b' ->
+    b = b'.
+Proof.
+  intros until b'.
+  intros valb valb'.
+  induction b.
+
+  - induction b'.
+    + inversion valb.
+      inversion valb'.
+      subst. auto.
+
+    + inversion valb.
+      inversion valb'.
+      subst.
+      inversion H0. auto.
+
+  - induction b'.
+    + inversion valb. inversion valb'.
+      subst.
+      inversion H0.
+      auto.
+
+    + auto.
+Qed.
   
-                                  
+  
 
 Check (eval_funcall).
 (* Check out how "eval_funcall_exec_stmt_steps" does this in CMinor *)
@@ -316,6 +343,24 @@ Proof.
     auto.
 
   - (*Sbuiltin *)
+    inversion H2. subst.
+    
+    (* need to reason about external_call. Admitting this for now *)
+    admit.
+
+  - (*S IfThenElse *)
+    inversion H3.
+    subst.
+    assert (v = v0) as veq.
+    eapply eval_expr_is_function; eassumption.
+    rewrite veq in *. clear veq.
+
+    subst
+     .
+     assert(V = v0) as v_eq.
+     assert (b = b0) as b_eq.
+     eally eval_
+    
                                  
     
     
@@ -594,4 +639,6 @@ Theorem oned_loop_add_rec_matches_addrec_scev:
     
     
     
-Hint Transparent cm_loop_0_to_ub.
+  Hint Transparent cm_loop_0_to
+      
+  
