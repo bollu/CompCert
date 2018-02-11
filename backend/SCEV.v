@@ -288,7 +288,6 @@ Proof.
   apply val_eq_dec.
   apply val_eq_dec.
 Qed.
-                                             
   
 
 Check (eval_funcall).
@@ -428,11 +427,60 @@ Proof.
 
     (* out != out_normal *)
     + subst.
-      assert (out = Out_normal \/ out <> Out_normal) as out_eq_decidable.
-      decide equality.
-      omega.
-      decide equality.
-      decide equality.
+      specialize (H0 _ _ _ _ H11).
+      destruct H0.
+      destruct H3.
+      assert (out' = Out_normal /\ out' <> Out_normal) as contra.
+      split; auto.
+      inversion contra.
+      contradiction.
+  -  (* Sseq again? *)
+    intros.
+    inversion H2.
+    + subst.
+      specialize (H0 _ _ _ _ H5).
+      destruct H0 as [meq [outeq [eeq teq]]].
+      rewrite outeq, meq, eeq, teq in *.
+      rename H1 into contra.
+      contradiction.
+    + subst.
+      specialize (H0 _ _ _ _ H9).
+      auto.
+  -  (* Sloop *)
+    inversion H4.
+
+    + subst.
+    specialize (H0 _ _ _ _ H6).
+    destruct H0 as [meq [_ [eeq teq]]].
+    rewrite meq, eeq, teq in *.
+    clear meq.
+    clear eeq.
+    clear teq.
+    specialize (H2 _ _ _ _ H7).
+    destruct H2 as [meq [outeq [eeq teq]]].
+    rewrite meq, outeq, eeq, teq in *.
+    auto.
+
+    + subst.
+      specialize (H0 _ _ _ _ H6).
+      destruct H0 as [_ [out_normal _]].
+      assert (Out_normal = out' /\  Out_normal <> out') as contra. auto.
+      inversion contra.
+      contradiction.
+
+  -  (* Sloop *)
+    inversion H2;
+      subst;
+      specialize (H0 _ _ _ _ H4);
+      destruct H0  as [meq [outeq [eeq teq]]];
+      rewrite meq, outeq, eeq, teq in *.
+    try contradiction. try auto.
+  -  (* Sblock *)
+    
+
+    
+    
+
       
       
       (* stuck! need to reason about abnormal cases :() *)
