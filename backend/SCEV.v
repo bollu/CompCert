@@ -200,8 +200,23 @@ Proof.
   subst. auto.
 Qed.
 
+Lemma outcome_free_mem_is_function:
+  forall (out: outcome) (m: mem) (sp: block) (sz: Z),
+  forall (m' m'': mem),
+    outcome_free_mem out m sp sz m' ->
+    outcome_free_mem out m sp sz m'' ->
+    m' = m''.
+Proof.
+  intro out.
+  induction out;
+  intros until m''; intros outcome_m' outcome_m'';
+  inversion outcome_m'; inversion outcome_m'';
+    subst; try (rewrite H0 in H1; inversion H1; auto). try reflexivity.
+Qed.
   
   
+                                  
+
 Check (eval_funcall).
 (* Check out how "eval_funcall_exec_stmt_steps" does this in CMinor *)
 Check (eval_funcall_exec_stmt_ind2).
@@ -219,6 +234,24 @@ Lemma eval_stmt_funcall_is_function: forall ge,
 Proof.
   intros ge.
   apply eval_funcall_exec_stmt_ind2; intros.
+  inversion H5. subst.
+
+  assert ((m4, sp0) = (m1, sp)) as m_sp_eq.
+  rewrite <- H. rewrite <- H7. reflexivity.
+  inversion m_sp_eq.
+  rewrite H6 in *. rewrite H8 in *.
+  clear H6.
+  clear H8.
+  clear m_sp_eq.
+
+  specialize (H2 _ _ _ H9).
+  inversion H2.
+  inversion H6.
+  subst.
+  clear H6.
+  clear H2.
+
+  
 
 (* genv -> mem -> fundef -> list val -> trace -> mem -> val -> Prop
 
