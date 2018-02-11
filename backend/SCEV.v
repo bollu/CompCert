@@ -256,14 +256,14 @@ Check (eval_funcall_exec_stmt_ind2).
 Lemma eval_stmt_funcall_is_function: forall ge,
   (forall m fd args t m' res,
       eval_funcall ge m fd args t m' res ->
-      (forall m'' res',
-          eval_funcall ge m fd args t m'' res' -> m' = m'' /\ res = res'
+      (forall m'' res' t',
+          eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res' /\ t = t'
   )) 
   /\(forall f sp e m s t e' m' out,
        exec_stmt ge f sp e m s t e' m' out ->
-       (forall e'' m'' out',
-           exec_stmt ge f sp e m s t e'' m'' out' ->
-           m' = m'' /\ out = out' /\ e' = e'')).
+       (forall e'' m'' out' t',
+           exec_stmt ge f sp e m s t' e'' m'' out' ->
+           m' = m'' /\ out = out' /\ e' = e'' /\ t = t')).
 Proof.
   intros ge.
   apply eval_funcall_exec_stmt_ind2; intros.
@@ -279,7 +279,7 @@ Proof.
   clear H8.
   clear m_sp_eq.
 
-  specialize (H2 _ _ _ H9).
+  specialize (H2 _ _ _ _ H9).
   inversion H2.
   inversion H6.
   subst.
@@ -291,6 +291,8 @@ Proof.
   assert (vres = res') as vres_eq_res'.
   eapply outcome_result_value_is_function; eassumption.
   rewrite vres_eq_res' in *.
+  inversion H11.
+  rewrite H2 in *.
   auto.
 
   -  (* eval funcall inernal *)
@@ -316,7 +318,7 @@ Proof.
     eapply eval_expr_is_function; eassumption.
     rewrite vaddr_eq_vaddr0 in *.
     assert (Some m' = Some m'') as eq_some_m'_m''.
-    rewrite <- H15. rewrite <- H1. reflexivity.
+    rewrite <- H16. rewrite <- H1. reflexivity.
     inversion eq_some_m'_m'' as [m_eq_m'].
     rewrite m_eq_m' in *. auto.
 
@@ -337,9 +339,12 @@ Proof.
     eapply eval_exprlist_is_function; eassumption.
     rewrite vargs_eq in *. clear vargs_eq.
 
-    specialize (H4 _ _ H23).
+    specialize (H4 _ _ _ H23).
     inversion H4.
-    rewrite H2 in *. rewrite H5 in *.
+    rewrite H2 in *.
+    destruct H5.
+    rewrite H7 in *.
+    rewrite H5 in *.
     auto.
 
   - (*Sbuiltin *)
@@ -354,291 +359,36 @@ Proof.
     assert (v = v0) as veq.
     eapply eval_expr_is_function; eassumption.
     rewrite veq in *. clear veq.
+    assert (b0 = b) as beq.
+    eapply bool_of_val_is_function; eassumption.
+    rewrite beq in *. clear beq.
 
-    subst
-     .
-     assert(V = v0) as v_eq.
-     assert (b = b0) as b_eq.
-     eally eval_
-    
-                                 
-    
-    
-    
-
-
-  
-
-(* genv -> mem -> fundef -> list val -> trace -> mem -> val -> Prop
-
-Lemma eval_funcall_is_function:
-  forall (f: fundef),
-  forall (ge: genv) (m mo mo': mem)(params: list val) (tr: trace) (v v': val),
-    eval_funcall ge m f params tr mo v ->
-    eval_funcall ge m f params tr mo' v' ->
-    mo = mo' /\ v = v'.
-  intro f.
-  induction f;
-    intros until v';
-    intros eval_mo_v;
-    intros eval_mo_v';
-    inversion eval_mo_v;
-    inversion eval_mo_v';
-    subst; try auto.
-
-  (* equate the outputs of Mem.alloc *)
-  assert (m1 = m5 /\ sp = sp0).
-  cut ((m1, sp) = (m5, sp0)). intro tuple_eq.
-  inversion tuple_eq. auto.
-  rewrite <- H0.
-  rewrite <- H11.
-  auto.
-  inversion H as [m1_eq_m5 sp_eq_sp0].
-  rewrite m1_eq_m5 in *. rewrite sp_eq_sp0 in *.
-  clear H. clear m1_eq_m5. clear sp_eq_sp0.
-
-
-  assert(out = out0) as out_eq_out0.
-  assert (v = v').
-  eapply outcome_result_value_is_function.
-  exact H3.
-  exact H14.
-*) 
-
-  
-    
-                                                              
-  
-  
-    
-
-(* Note to self: finish eval_expr_is_function first *)
-Lemma exec_stmt_is_function:
-  forall (s: Cminor.stmt),
-  forall (m m' m'': mem) (e e' e'': env) (f: function) (sp: val) (ge: genv) (tr: trace) (o: outcome),
-    exec_stmt ge f sp e m
-              s tr e' m' o ->
-    exec_stmt ge f sp e  m
-              s tr e'' m'' o ->
-    e' = e'' /\ m' = m''.
-Proof.
-  induction s using exec_stmt_ind2; try(intros until o; intros exec_s1; intros exec_s2).
-
-  (* skip *)
-  - inversion exec_s1. inversion exec_s2. subst. auto.
-  (* assign *)
-  - inversion exec_s1. inversion exec_s2. subst.
-    assert (v = v0).
-    eapply eval_expr_is_function.
-    apply H9. apply H20.
-    rewrite H.
+    specialize (H2 _ _ _ _ H17).
+    inversion H2.
+    inversion H5.
+    subst.
     auto.
-  (* Sstore *)
-  -  inversion exec_s1. inversion exec_s2. subst.
-     assert (v = v0) as v_eq_v0.
-     + eapply eval_expr_is_function; eassumption.
 
-     + assert (vaddr = vaddr0) as vaddr_eq_vaddr0.
-     eapply eval_expr_is_function; eassumption.
+  - (* Sseq *)
+    inversion H4.
 
-       
-     rewrite v_eq_v0 in *.
-     rewrite vaddr_eq_vaddr0 in *.
-       
-     assert (Some m' = Some m'') as some_m'_eq_some_m''.
-     rewrite <- H26. rewrite <- H12.
-     auto.
-     inversion some_m'_eq_some_m''.
-     auto.
-  (* Scall *)
-  - intros until o0.
-    intros exec_s1. intros exec_s2.
-    inversion exec_s1. inversion exec_s2. subst.
-
-    assert (vargs = vargs0) as vargs_eq_vargs0.
-    eapply eval_exprlist_is_function; eassumption.
-    
-    rewrite vargs_eq_vargs0 in *. clear vargs_eq_vargs0.
-    
-    assert(vf = vf0) as vf_eq_vf0.
-    eapply eval_expr_is_function; eassumption.
-
-    rewrite vf_eq_vf0 in *. clear vf_eq_vf0.
+    + subst.
+    specialize (H0 _ _ _ _ H7).
+    destruct H0 as [meq [_ [eeq teq]]].
+    rewrite meq,  teq, eeq in *.
+    clear meq. clear eeq. clear teq.
 
     
-    assert (fd = fd0) as fd_eq_fd0.
-    cut (Some fd = Some fd0). intros some_eq. inversion some_eq. auto.
-    rewrite <- H9. rewrite <- H27. reflexivity.
-    rewrite fd_eq_fd0 in *. clear fd_eq_fd0.
+    specialize (H2 _ _ _ _ H12).
+    destruct H2 as [meq [outeq [eeq teq]]].
+    rewrite meq, outeq, teq, eeq in *.
+    clear meq. clear outeq. clear eeq. clear teq.
+    auto.
 
-    (* this is part where I ope up eval_funcall *)
-     
-    
-
-Lemma if_cond_with_failing_branch_will_return_else:
-  forall (cond: expr) (sthen selse: Cminor.stmt),
-  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (tr: trace) (o: outcome),
-    eval_expr ge sp e m cond Vfalse ->
-    exec_stmt ge f sp e m (selse) tr e' m' o ->
-    exec_stmt ge f sp e m
-              (Cminor.Sifthenelse cond sthen selse) tr e' m' o.
-  intros until o.
-  intros exprval.
-  intros elseval.
-  assert(forall mif eif, exec_stmt ge f sp e m (Sifthenelse cond sthen selse) tr eif mif o ->
-                    eif = e' /\ mif = m').
-  intros.
-  inversion H.
-  subst.
-
-  inversion exprval.
-  subst.
-  rename H13 into ite_bool.
-  inversion H7.
-  subst.
-  rewrite H2 in H0.
-  inversion H0. subst.
-  inversion H12.
-  assert (b = false).
-  rewrite <- H1.
-  unfold negb.
-  rewrite Int.eq_true.
-  reflexivity.
-  rewrite H4 in *.
-  split.
-  
-    
-
-
-Lemma oned_loop_with_iv_gt_ub_will_not_execute:
-  forall (n: nat) (ivname: ident) (innerstmt: Cminor.stmt),
-  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
-  forall (iv_cur_z: Z),
-    e ! ivname = Some (z_to_val iv_cur_z) ->
-    Int.lt (z_to_int iv_cur_z) (nat_to_int n) = false ->
-    exec_stmt ge f sp e m
-              (oned_loop n ivname innerstmt) E0
-              e' m' (Out_exit 1) -> e = e' /\ m = m'.
-  intros until iv_cur_z.
-  intros e_at_ivname_is_iv_cur_z.
-  intros iv_cur_z_gt_n.
-  intros exec.
-  inversion exec.
-  subst.
-  
-  rename H0 into eval_sblock.
-  rename H1 into eval_sloop.
-  inversion eval_sblock. subst.
-  rename H9 into eval_sseq.
-  inversion eval_sseq.
-  subst.
-  rename H1 into exec_if.
-  rename H8 into exec_inner.
-  inversion exec_if.
-  subst.
-  rename H14 into exec_if_bool.
-  rename H8 into eval_cond.
-  inversion eval_cond.
-  subst.
-  rename H2 into eval_iv.
-  rename H5 into eval_n.
-  rename H7 into eval_cmp.
-  inversion eval_iv.
-  subst.
-  rewrite e_at_ivname_is_iv_cur_z in H0.
-  inversion H0.
-  rewrite <- H1 in *.
-  clear H1. clear H0.
-  inversion eval_cmp.
-
-  inversion eval_n.
-  subst.
-  rename H1 into eval_constant_n.
-  inversion eval_constant_n.
-  rename H0 into v2_value.
-  subst.
-  subst.
-
-
-  assert (b = false) as b_eq_false.
-  inversion eval_cond.
-  subst.
-  inversion H13.
-  subst.
-  unfold Val.cmp in H0.
-  unfold Val.of_optbool in H0.
-  unfold Val.cmp_bool in H0.
-  simpl in H0.
-  simpl in iv_cur_z_gt_n.
-  unfold z_to_int in iv_cur_z_gt_n.
-  rewrite iv_cur_z_gt_n in H0.
-  inversion H0.
-  auto.
-  rewrite b_eq_false in *.
-  inversion exec_if_bool.
-  subst.
-  rewrite <- H4 in H12.
-  inversion H7.
-  subst.
-  rename H7 into exec_ite.
-  rename H16 into exec_ite_b.
-  rename H9 into exec_binop.
-  inversion exec_binop.
-  subst.
-  inversion H2.
-  subst.
-  rewrite  e_at_ivname_is_iv_cur_z in  H0.
-  inversion H0.
-  rewrite <- H1 in *.
-  clear H0 H1.
-  inversion H5.
-  subst.
-  inversion H0.
-  unfold nat_to_int in H1.
-  rewrite <- H1 in *.
-  clear H1.
-  clear H0.
-  inversion H7.
-  unfold Val.cmp in H0. simpl in H0.
-  unfold z_to_int,nat_to_int in iv_cur_z_gt_n.
-  rewrite iv_cur_z_gt_n in H0.
-  rewrite <- H0 in *.
-  inversion H15.
-  assert (b = false).
-  rewrite <- H3. auto.
-  clear H3.
-  subst.
-  inversion exec_ite_b.
-  subst.
-  inversion eval_sloop.
-  subst.
-
-  
-
-
-
-  
-                              
-    
-
-
-Lemma 
-
-
-
-  
-
-(* Theorem on how a 1-D loop with match that of a SCEV Value *)
-Theorem oned_loop_add_rec_matches_addrec_scev:
-  forall (n: nat) (ivname: ident) (iv_init_val iv_add_val: Z),
-   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
-    exec_stmt ge f sp e m
-              (oned_loop_add_rec n ivname iv_init_val iv_add_val) E0
-              e' m' Out_normal ->
-    e' ! ivname =  Some (z_to_val (eval_scev (SCEVAddRec iv_init_val iv_add_val) n)).
-    
-    
-    
-  Hint Transparent cm_loop_0_to
+    (* out != out_normal *)
+    + subst.
+      (* stuck! need to reason about abnormal cases :() *)
+      admit.
+ Admitted.
       
   
