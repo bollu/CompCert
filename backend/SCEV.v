@@ -169,6 +169,69 @@ Proof.
   rewrite vl_eq_vl0.
   reflexivity.
 Qed.
+
+Check (outcome_result_value).
+Lemma outcome_result_value_is_function:
+  forall (o: outcome) (t: option typ) (v v' : val),
+    outcome_result_value o t v ->
+    outcome_result_value o t v' ->
+    v = v'.
+Proof.
+  intros o.
+  induction o;
+  intros until v';
+  intros out_v out_v'.
+
+  - (* out_normal *)
+    inversion out_v. inversion out_v'. subst; try auto.
+
+  -  (* out_exit *)
+    inversion out_v.
+
+  - (*out_return *)
+  unfold outcome_result_value in *.
+  destruct o.
+  + inversion out_v. inversion out_v'. subst. auto.
+  + subst. auto.
+
+  -  (* Out_taicall_return *)
+  unfold outcome_result_value in *.
+  subst. auto.
+Qed.
+
+  
+  
+Check (eval_funcall).
+(* genv -> mem -> fundef -> list val -> trace -> mem -> val -> Prop *)
+
+Lemma eval_funcall_is_function:
+  forall (f: fundef),
+  forall (ge: genv) (m mo mo': mem)(params: list val) (tr: trace) (v v': val),
+    eval_funcall ge m f params tr mo v ->
+    eval_funcall ge m f params tr mo' v' ->
+    mo = mo' /\ v = v'.
+  intro f.
+  induction f;
+    intros until v';
+    intros eval_mo_v;
+    intros eval_mo_v';
+    inversion eval_mo_v;
+    inversion eval_mo_v';
+    subst; try auto.
+
+  (* equate the outputs of Mem.alloc *)
+  assert (m1 = m5 /\ sp = sp0).
+  cut ((m1, sp) = (m5, sp0)). intro tuple_eq.
+  inversion tuple_eq. auto.
+  rewrite <- H0.
+  rewrite <- H11.
+  auto.
+  inversion H as [m1_eq_m5 sp_eq_sp0].
+  rewrite m1_eq_m5 in *. rewrite sp_eq_sp0 in *.
+  clear H. clear m1_eq_m5. clear sp_eq_sp0.
+
+  
+    
                                                               
   
   
@@ -216,7 +279,24 @@ Proof.
   - intros until o0.
     intros exec_s1. intros exec_s2.
     inversion exec_s1. inversion exec_s2. subst.
-     assert (vres = vres0).
+
+    assert (vargs = vargs0) as vargs_eq_vargs0.
+    eapply eval_exprlist_is_function; eassumption.
+    
+    rewrite vargs_eq_vargs0 in *. clear vargs_eq_vargs0.
+    
+    assert(vf = vf0) as vf_eq_vf0.
+    eapply eval_expr_is_function; eassumption.
+
+    rewrite vf_eq_vf0 in *. clear vf_eq_vf0.
+
+    
+    assert (fd = fd0) as fd_eq_fd0.
+    cut (Some fd = Some fd0). intros some_eq. inversion some_eq. auto.
+    rewrite <- H9. rewrite <- H27. reflexivity.
+    rewrite fd_eq_fd0 in *. clear fd_eq_fd0.
+
+    (* this is part where I ope up eval_funcall *)
      
     
 
