@@ -342,7 +342,7 @@ Lemma eval_stmt_funcall_is_function: forall ge,
   (forall m fd args t m' res,
       eval_funcall ge m fd args t m' res ->
       (forall m'' res' t',
-         eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res')
+         eval_funcall ge m fd args t' m'' res' -> t = t' -> m' = m'' /\ res = res')
   ) 
   /\(forall f sp e m s t e' m' out,
        exec_stmt ge f sp e m s t e' m' out ->
@@ -360,7 +360,7 @@ Proof.
   assert (m1 = m4 /\ sp = sp0) as m_sp_eq.
   cut ((m1, sp) = (m4, sp0)). intros tup_eq. inversion tup_eq. auto.
   rewrite <- H.
-  rewrite <- H7.
+  rewrite <- H8.
   reflexivity.
   destruct m_sp_eq as [meq speq].
   subst.
@@ -368,7 +368,7 @@ Proof.
   remember H2 as stmt_eq_ind.
   clear Heqstmt_eq_ind.
 
-  specialize (H2 _ _ _ _  H9).
+  specialize (H2 _ _ _ _  H10).
   destruct H2 as [meq [outeq eeq]].
   subst.
 
@@ -381,11 +381,49 @@ Proof.
 
   auto.
 
-  - admit.
-  - admit.
-  - admit.
-  - admit.
-  - admit.
+  - (* External *)
+    intros.
+     inversion H0.
+     subst.
+     apply and_comm.
+     eapply external_call_deterministic; eassumption.
+     
+     
+  - (* Sskip *)
+    inversion H. subst.
+    auto.
+    
+  - inversion H0. subst.
+    assert (v = v0) as veq.
+    eapply eval_expr_is_function; eassumption.
+    subst.
+    auto.
+    
+  - (* Sstore *)
+    inversion H2. subst.
+    assert (v = v0) as veq.
+    eapply eval_expr_is_function; eassumption.
+
+    assert (vaddr = vaddr0) as vaddreq.
+    eapply eval_expr_is_function; eassumption.
+
+    subst.
+
+    assert (Some m' = Some m'') as some_meq.
+    rewrite <- H16.
+    rewrite <- H1.
+    reflexivity.
+    inversion some_meq.
+    subst.
+
+    auto.
+
+    
+  - intros.
+    inversion H6. subst.
+
+    
+    admit.
   - intros. admit.
   - intros. admit.
   - intros.
@@ -418,6 +456,13 @@ Proof.
      destruct H0 as [meq [outeq eeq]].
      subst.
      auto.
+
+
+  - admit.
+
+  - intros. admit.
+  - intros. admit.
+   
 
 
     
