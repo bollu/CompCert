@@ -263,6 +263,18 @@ Qed.
   
 Check (external_call).
 
+(* What in the fuck, why does match_traces only take 1 trace value? *)
+Inductive match_traces_long: genv -> trace -> trace -> Prop :=
+| Match_traces_long_E0: forall (ge: genv), match_traces_long ge E0 E0
+| Match_traces_long_eq: forall (t t': trace) (ge: genv),  t = t' -> match_traces_long ge t t'
+| Match_traces_long_match: forall (ge: genv) (t t':trace), match_traces ge t t' -> match_traces_long ge t t'
+| Match_traces_long_app: forall (ge: genv) (t1 t1' t2 t2': trace),
+    match_traces_long  ge t1 t1' ->
+    match_traces_long ge t2 t2' ->
+    match_traces_long ge (t1 ** t2) (t1' ** t2').
+
+  
+
 Lemma external_functions_sem_is_function:
   forall name (sg: signature) (ge: genv) (args: list val) (m mout mout': mem) (tr tr': trace)
     (v v': val),
@@ -295,31 +307,11 @@ Lemma external_call_is_function: forall (ef: external_function),
                     tr v mout ->
       external_call ef ge args m
                     tr' v' mout' ->
-      match_traces ge tr tr' /\ v = v' /\ mout = mout'.
+      match_traces_long ge tr tr' /\ v = v' /\ mout = mout'.
 Proof.
   intros until v'.
   intros call1 call2.
-  induction ef;
-    unfold external_call in *;
-    try (eapply external_functions_sem_is_function; eassumption).
 Admitted.
-
-Lemma match_traces_Eapp: forall (ge: genv) (t1 t1' t2 t2': trace),
-    match_traces ge t1 t1' ->
-    match_traces ge t2 t2' ->
-    match_traces ge (t1 ** t2) (t1' ** t2').
-Proof.
-  intros.
-  inversion H.
-  simpl.
-  exact H0.
-
-  simpl.
-
-  inversion H0.
-  apply match_traces_syscall.
-  auto. auto. auto.
-Abort.
   
   
 
@@ -363,17 +355,6 @@ Proof.
   apply val_eq_dec.
 Qed.
   
-(* What in the fuck, why does match_traces only take 1 trace value? *)
-Inductive match_traces_long: genv -> trace -> trace -> Prop :=
-| Match_traces_long_E0: forall (ge: genv), match_traces_long ge E0 E0
-| Match_traces_long_eq: forall (t t': trace) (ge: genv),  t = t' -> match_traces_long ge t t'
-| Match_traces_long_match: forall (ge: genv) (t t':trace), match_traces ge t t' -> match_traces_long ge t t'
-| Match_traces_long_app: forall (ge: genv) (t1 t1' t2 t2': trace),
-    match_traces_long  ge t1 t1' ->
-    match_traces_long ge t2 t2' ->
-    match_traces_long ge (t1 ** t2) (t1' ** t2').
-
-  
 
 Check (eval_funcall).
 (* Check out how "eval_funcall_exec_stmt_steps" does this in CMinor *)
@@ -382,7 +363,7 @@ Lemma eval_stmt_funcall_is_function: forall ge,
   (forall m fd args t m' res,
       eval_funcall ge m fd args t m' res ->
       (forall m'' res' t',
-          eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res' /\ (t = t' \/ match_traces_long ge t t')
+          eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res' /\ (match_traces_long ge t t')
   )) 
   /\(forall f sp e m s t e' m' out,
        exec_stmt ge f sp e m s t e' m' out ->
@@ -421,10 +402,9 @@ Proof.
 
   -  (* eval funcall inernal *)
     inversion H0. subst.
-    assert (match_traces ge t t' /\ res = res' /\ m' = m'').
+    assert (match_traces_long ge t t' /\ res = res' /\ m' = m'').
     eapply external_call_is_function; eassumption.
     intuition.
-    auto using Match_traces_long_match.
   -  (* Sskip *)
     inversion H. subst.
     auto using Match_traces_long_E0.
@@ -473,9 +453,9 @@ Proof.
     rewrite H2 in *.
     destruct H5.
     rewrite H5 in *.
-    destruct H7.
-    auto using Match_traces_long_eq.
-    auto using Match_traces_long_match.
+    auto.
+    
+    
 
   - (*Sbuiltin *)
     inversion H2. subst.
@@ -538,7 +518,7 @@ Proof.
     + subst.
       specialize (H0 _ _ _ _ H5).
       destruct H0 as [meq [outeq [eeq teq]]].
-      rewrite outeq, meq, eeq, teq in *.
+      rewrite outeq, meq, eeq in *.
       rename H1 into contra.
       contradiction.
     + subst.
@@ -550,14 +530,13 @@ Proof.
     + subst.
     specialize (H0 _ _ _ _ H6).
     destruct H0 as [meq [_ [eeq teq]]].
-    rewrite meq, eeq, teq in *.
+    rewrite meq, eeq in *.
     clear meq.
     clear eeq.
-    clear teq.
     specialize (H2 _ _ _ _ H7).
-    destruct H2 as [meq [outeq [eeq teq]]].
-    rewrite meq, outeq, eeq, teq in *.
-    auto.
+    destruct H2 as [meq [outeq [eeq teq']]].
+    rewrite meq, outeq, eeq in *.
+    auto using Match_traces_long_app.
 
     + subst.
       specialize (H0 _ _ _ _ H6).
@@ -571,18 +550,20 @@ Proof.
       subst;
       specialize (H0 _ _ _ _ H4);
       destruct H0  as [meq [outeq [eeq teq]]];
-      rewrite meq, outeq, eeq, teq in *.
-    try contradiction. try auto.
+      rewrite meq, outeq, eeq in *.
+    contradiction.
+    auto using  Match_traces_long_app.
 
   -  (* Sblock *)
     inversion H1. subst.
     specialize (H0 _ _ _ _ H7).
     destruct H0 as [meq [outeq [eeq teq]]].
-    rewrite meq, outeq, eeq, teq in *.
+    rewrite meq, outeq, eeq in *.
     auto.
 
   - (* Sexit *)
-    inversion H. subst. auto.
+    inversion H. subst. auto using Match_traces_long_E0.
+    
 
   - (* Sswitch *)
     inversion H1. subst.
@@ -593,19 +574,19 @@ Proof.
     assert (n = n0) as neq.
     eapply switch_argument_is_function; eassumption.
     rewrite neq in *.
-    auto.
+    auto using Match_traces_long_E0.
 
 
   -  (* Sreturn *)
     inversion H. subst.
-    auto.
+    auto using Match_traces_long_E0.
 
   -  (* Sreturn, Some *)
     inversion H0. subst.
     assert (v = v0) as veq.
     eapply eval_expr_is_function; eassumption.
     rewrite veq in *.
-    auto.
+    auto using Match_traces_long_E0.
 
   - (* Stailcall (is this going to be hard?) *)
     inversion H6. subst.
@@ -631,7 +612,7 @@ Proof.
     
     specialize (H5 _ _ _ H23).
     destruct H5 as [meq [vreseq teq]].
-    rewrite meq, vreseq, teq in *.
+    rewrite meq, vreseq in *.
     auto.
 Qed.
 
