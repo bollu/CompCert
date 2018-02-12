@@ -448,7 +448,40 @@ Proof.
     subst.
     auto.
 
-  - 
+  - (* Sbuiltin *)
+    inversion H3. subst.
+
+    assert (vargs = vargs0) as vargseq.
+    eapply eval_exprlist_is_function; eassumption.
+    subst.
+                                     
+    assert (vres = vres0 /\ m' = m'') as vres_m_eq.
+    eapply external_call_deterministic; eassumption.
+
+    destruct vres_m_eq as [vres_eq m_eq].
+    subst.
+    auto.
+
+  -  (* Sifthenelse *)
+    inversion H4. subst.
+
+    assert (v = v0) as veq.
+    eapply eval_expr_is_function; eassumption.
+    subst.
+    
+    assert (b = b0) as beq.
+    eapply bool_of_val_is_function; eassumption.
+    subst.
+    
+    specialize (H2 _ _ _ _ eq_refl H18).
+    destruct H2 as [meq [outeq eeq]].
+    subst.
+    auto.
+
+  - (* SSeq *)
+    inversion H5. subst.
+    specialize (H0 _ _ _ _ eq_refl H8)
+    
 
 
 
