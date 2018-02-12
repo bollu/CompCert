@@ -275,32 +275,6 @@ Inductive match_traces_long: genv -> trace -> trace -> Prop :=
 
   
 
-Lemma external_functions_sem_is_function:
-  forall name (sg: signature) (ge: genv) (args: list val) (m mout mout': mem) (tr tr': trace)
-    (v v': val),
- external_functions_sem name sg ge args m tr v mout ->
- external_functions_sem name sg ge args m tr' v' mout' ->
- tr = tr' /\ v = v' /\ mout = mout'.
-
-Proof.
-Admitted.
-
-
-Lemma volatile_load_sem_is_function:
-  forall (chunk: memory_chunk)
-    (ge: genv)
-    (args: list val)
-    (m mout mout': mem)
-    (tr tr': trace)
-    (v v': val),
-  volatile_load_sem chunk ge args m tr v mout ->
-    volatile_load_sem chunk ge args m tr' v' mout' ->
-    tr = tr' /\ v = v' /\ mout = mout'.
-Proof.
-Admitted.
-    
-  
-
 Lemma external_call_is_function: forall (ef: external_function),
     forall (ge: genv) (args: list val) (m mout mout': mem) (tr tr': trace) (v v': val),
       external_call ef ge args m
@@ -311,6 +285,8 @@ Lemma external_call_is_function: forall (ef: external_function),
 Proof.
   intros until v'.
   intros call1 call2.
+  assert (match_traces ge tr tr').
+  eapply external_call_match_traces; eassumption.
 Admitted.
   
   
@@ -363,258 +339,31 @@ Lemma eval_stmt_funcall_is_function: forall ge,
   (forall m fd args t m' res,
       eval_funcall ge m fd args t m' res ->
       (forall m'' res' t',
-          eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res' /\ (match_traces_long ge t t')
-  )) 
+         t = t' ->
+         eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res')
+  ) 
   /\(forall f sp e m s t e' m' out,
        exec_stmt ge f sp e m s t e' m' out ->
        (forall e'' m'' out' t',
+           t = t' ->
            exec_stmt ge f sp e m s t' e'' m'' out' ->
-           m' = m'' /\ out = out' /\ e' = e'' /\ match_traces_long ge t t')).
+           m' = m'' /\ out = out' /\ e' = e'')).
 Proof.
   intros ge.
   apply eval_funcall_exec_stmt_ind2; intros.
+  inversion H6. subst.
 
-  - (* eval funcall internal *)
-  inversion H5. subst.
+  assert (m1 = m4 /\ sp = sp0) as m_sp_eq.
+  cut ((m1, sp) = (m4, sp0)). intros tup_eq. inversion tup_eq. auto.
+  rewrite <- H.
+  rewrite <- H8.
+  reflexivity.
 
-  assert ((m4, sp0) = (m1, sp)) as m_sp_eq.
-  rewrite <- H. rewrite <- H7. reflexivity.
-  inversion m_sp_eq.
-  rewrite H6 in *. rewrite H8 in *.
-  clear H6.
-  clear H8.
-  clear m_sp_eq.
+  destruct m_sp_eq as [m_eq sp_eq].
+  rewrite m_eq, sp_eq in *.
+  clear m_eq. clear sp_eq.
 
-  specialize (H2 _ _ _ _ H9).
-  inversion H2.
-  inversion H6.
-  subst.
-  clear H6.
-  clear H2.
-  assert (m3 = m'') as m3_eq_m''.
-  eapply outcome_free_mem_is_function; eassumption.
-  rewrite m3_eq_m'' in *. clear m3_eq_m''.
-  assert (vres = res') as vres_eq_res'.
-  eapply outcome_result_value_is_function; eassumption.
-  rewrite vres_eq_res' in *.
-  inversion H11.
-  auto.
+  
+  
 
-  -  (* eval funcall inernal *)
-    inversion H0. subst.
-    assert (match_traces_long ge t t' /\ res = res' /\ m' = m'').
-    eapply external_call_is_function; eassumption.
-    intuition.
-  -  (* Sskip *)
-    inversion H. subst.
-    auto using Match_traces_long_E0.
-  -  (* Sasssign *)
-    inversion H0. subst.
-    assert (v = v0) as v_eq_v0.
-    eapply eval_expr_is_function; eassumption.
-    rewrite v_eq_v0 in *.
-    auto using Match_traces_long_E0.
-
-  -  (* Sstore *)
-    inversion H2. subst.
-    assert (v = v0) as v_eq_v0.
-    eapply eval_expr_is_function; eassumption.
-    rewrite v_eq_v0 in *.
-    auto using Match_traces_long_E0.
-    
-    assert (vaddr = vaddr0) as vaddr_eq_vaddr0.
-    eapply eval_expr_is_function; eassumption.
-    rewrite vaddr_eq_vaddr0 in *.
-    assert (Some m' = Some m'') as eq_some_m'_m''.
-    rewrite <- H16. rewrite <- H1. reflexivity.
-    inversion eq_some_m'_m'' as [m_eq_m'].
-    rewrite m_eq_m' in *.
-    auto using Match_traces_long_E0.
-
-  -  (* Scall. Gulp *)
-    inversion H6. subst.
-
-    assert(vf = vf0) as vf_eq_vf0.
-    eapply eval_expr_is_function; eassumption.
-    rewrite vf_eq_vf0 in *. clear vf_eq_vf0.
-
-    
-    assert (fd = fd0) as fd_eq_fd0.
-    rewrite H1 in H17. 
-    inversion H17. auto.
-    rewrite fd_eq_fd0 in *. clear fd_eq_fd0.
-
-    assert (vargs = vargs0) as vargs_eq.
-    eapply eval_exprlist_is_function; eassumption.
-    rewrite vargs_eq in *. clear vargs_eq.
-
-    specialize (H4 _ _ _ H23).
-    inversion H4.
-    rewrite H2 in *.
-    destruct H5.
-    rewrite H5 in *.
-    auto.
-    
-    
-
-  - (*Sbuiltin *)
-    inversion H2. subst.
-
-    assert (vargs = vargs0) as vargs_eq.
-    eapply eval_exprlist_is_function; eassumption.
-    rewrite vargs_eq in *.
-    assert (match_traces ge t t' /\ vres = vres0 /\ m' = m'').
-    eapply external_call_is_function; eassumption.
-    destruct H1 as [teq [vreseq meq]].
-    (* TODO: why does rewrite with inductive type crash? *)
-    rewrite vreseq, meq in *.
-    auto using Match_traces_long_match.
-
-  - (*S IfThenElse *)
-    inversion H3.
-    subst.
-    assert (v = v0) as veq.
-    eapply eval_expr_is_function; eassumption.
-    rewrite veq in *. clear veq.
-    assert (b0 = b) as beq.
-    eapply bool_of_val_is_function; eassumption.
-    rewrite beq in *. clear beq.
-
-    specialize (H2 _ _ _ _ H17).
-    inversion H2.
-    inversion H5.
-    subst.
-    auto.
-
-  - (* Sseq *)
-    inversion H4.
-
-    + subst.
-    specialize (H0 _ _ _ _ H7).
-    destruct H0 as [meq [_ [eeq teq]]].
-    rewrite meq, eeq in *.
-    clear meq. clear eeq.
-
-    
-    specialize (H2 _ _ _ _ H12).
-    destruct H2 as [meq [outeq [eeq teq']]].
-    rewrite meq, outeq, eeq in *.
-    assert(match_traces_long ge (t1 ** t2) (t3 ** t4)) as teq_concat.
-    apply Match_traces_long_app; eassumption.
-    auto.
-
-    (* out != out_normal *)
-    + subst.
-      specialize (H0 _ _ _ _ H11).
-      destruct H0.
-      destruct H3.
-      assert (out' = Out_normal /\ out' <> Out_normal) as contra.
-      split; auto.
-      inversion contra.
-      contradiction.
-  -  (* Sseq again? *)
-    intros.
-    inversion H2.
-    + subst.
-      specialize (H0 _ _ _ _ H5).
-      destruct H0 as [meq [outeq [eeq teq]]].
-      rewrite outeq, meq, eeq in *.
-      rename H1 into contra.
-      contradiction.
-    + subst.
-      specialize (H0 _ _ _ _ H9).
-      auto.
-  -  (* Sloop *)
-    inversion H4.
-
-    + subst.
-    specialize (H0 _ _ _ _ H6).
-    destruct H0 as [meq [_ [eeq teq]]].
-    rewrite meq, eeq in *.
-    clear meq.
-    clear eeq.
-    specialize (H2 _ _ _ _ H7).
-    destruct H2 as [meq [outeq [eeq teq']]].
-    rewrite meq, outeq, eeq in *.
-    auto using Match_traces_long_app.
-
-    + subst.
-      specialize (H0 _ _ _ _ H6).
-      destruct H0 as [_ [out_normal _]].
-      assert (Out_normal = out' /\  Out_normal <> out') as contra. auto.
-      inversion contra.
-      contradiction.
-
-  -  (* Sloop *)
-    inversion H2;
-      subst;
-      specialize (H0 _ _ _ _ H4);
-      destruct H0  as [meq [outeq [eeq teq]]];
-      rewrite meq, outeq, eeq in *.
-    contradiction.
-    auto using  Match_traces_long_app.
-
-  -  (* Sblock *)
-    inversion H1. subst.
-    specialize (H0 _ _ _ _ H7).
-    destruct H0 as [meq [outeq [eeq teq]]].
-    rewrite meq, outeq, eeq in *.
-    auto.
-
-  - (* Sexit *)
-    inversion H. subst. auto using Match_traces_long_E0.
-    
-
-  - (* Sswitch *)
-    inversion H1. subst.
-    assert (v0 = v) as veq.
-    eapply eval_expr_is_function; eassumption.
-    rewrite veq in *.
-
-    assert (n = n0) as neq.
-    eapply switch_argument_is_function; eassumption.
-    rewrite neq in *.
-    auto using Match_traces_long_E0.
-
-
-  -  (* Sreturn *)
-    inversion H. subst.
-    auto using Match_traces_long_E0.
-
-  -  (* Sreturn, Some *)
-    inversion H0. subst.
-    assert (v = v0) as veq.
-    eapply eval_expr_is_function; eassumption.
-    rewrite veq in *.
-    auto using Match_traces_long_E0.
-
-  - (* Stailcall (is this going to be hard?) *)
-    inversion H6. subst.
-
-    assert(m' = m'0) as m'eq.
-    rewrite H22 in H3. inversion H3. auto.
-    rewrite m'eq in *. clear m'eq.
-
-    assert (vf = vf0) as vfeq.
-    eapply eval_expr_is_function; eassumption.
-    rewrite vfeq in *.
-    clear vfeq.
-    
-    assert (fd = fd0) as fdeq.
-    rewrite  H14 in H1.
-    inversion H1. auto.
-    rewrite fdeq in *.
-    clear fdeq.
-
-    assert (vargs0 = vargs) as vargseq.
-    eapply eval_exprlist_is_function; eassumption.
-    rewrite vargseq in *.
-    
-    specialize (H5 _ _ _ H23).
-    destruct H5 as [meq [vreseq teq]].
-    rewrite meq, vreseq in *.
-    auto.
-Qed.
-
-      
   
