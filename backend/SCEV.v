@@ -369,8 +369,9 @@ t1 = [], t2 = [1, 2]
 t1' = [1], t2' = [2]).
 
 
-So, we need to somehow strengthen Sequence such that
-
+So, we need to somehow strengthen Sequence such that we
+can derive that the individual components must "match up"?
+I am not sure how to do this.
 *)
 
 Lemma exec_stmt_funcall_with_no_effect_is_function: forall ge,
