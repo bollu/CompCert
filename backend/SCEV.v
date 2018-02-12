@@ -333,33 +333,34 @@ Qed.
   
 
 Check (eval_funcall).
+Check (eval_funcall_exec_stmt_ind2).
+
+
 (* Check out how "eval_funcall_exec_stmt_steps" does this in CMinor *)
 Check (eval_funcall_exec_stmt_ind2).
 Lemma eval_stmt_funcall_is_function: forall ge,
   (forall m fd args t m' res,
       eval_funcall ge m fd args t m' res ->
       (forall m'' res' t',
-         t = t' ->
          eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res')
   ) 
   /\(forall f sp e m s t e' m' out,
        exec_stmt ge f sp e m s t e' m' out ->
        (forall e'' m'' out' t',
-           t = t' ->
-           exec_stmt ge f sp e m s t' e'' m'' out' ->
+           exec_stmt ge f sp e m s t'  e'' m'' out' ->
            m' = m'' /\ out = out' /\ e' = e'')).
 Proof.
   intros ge.
   apply eval_funcall_exec_stmt_ind2; intros.
 
   
-  inversion H6. subst.
+  inversion H5. subst.
 
   - (* Internal Call *)
   assert (m1 = m4 /\ sp = sp0) as m_sp_eq.
   cut ((m1, sp) = (m4, sp0)). intros tup_eq. inversion tup_eq. auto.
   rewrite <- H.
-  rewrite <- H8.
+  rewrite <- H7.
   reflexivity.
   destruct m_sp_eq as [meq speq].
   subst.
@@ -367,7 +368,7 @@ Proof.
   remember H2 as stmt_eq_ind.
   clear Heqstmt_eq_ind.
 
-  specialize (H2 _ _ _ _ eq_refl H10).
+  specialize (H2 _ _ _ _  H9).
   destruct H2 as [meq [outeq eeq]].
   subst.
 
@@ -380,114 +381,43 @@ Proof.
 
   auto.
 
-  - (* External call *)
-    inversion H1. subst.
-    apply and_comm.
-    eapply external_call_deterministic; eassumption.
-
-  -  (* SSkip *)
-    inversion H0. subst.
-    auto.
-
-  -  (* Sassign *)
-    inversion H1. subst.
-    assert (v = v0) as veq.
-    eapply eval_expr_is_function; eassumption.
-    subst.
-    auto.
-
-  -  (* Sstore *)
-    inversion H3. subst.
-
-    assert (v = v0) as veq.
-    eapply eval_expr_is_function; eassumption.
-
-    assert (vaddr = vaddr0) as vaddreq.
-    eapply eval_expr_is_function; eassumption.
-
-    subst.
-    
-    assert (m' = m'') as meq.
-    + cut (Some m' = Some m'').
-      intro some_meq.
-      inversion some_meq. auto.
-
-      rewrite <- H17.
-      rewrite <- H1.
-      auto.
-    + subst. auto.
-
-  -  (* Scall *)
-    inversion H7. subst.
-
-    assert (vf = vf0) as vfeq.
-    eapply eval_expr_is_function; eassumption.
-
-    subst.
-
-    assert (fd = fd0) as fdeq.
-    cut (Some fd = Some fd0).
-    intros someeq.
-    inversion someeq.
-    auto.
-    
-    rewrite <- H18.
-
-    rewrite <- H1.
-    reflexivity.
-
-    subst.
-
-
-    assert (vargs = vargs0) as vargseq.
-    eapply eval_exprlist_is_function; eassumption.
-    subst.
-    
-    specialize (H4 _ _ _ eq_refl H24).
-    destruct H4 as [meq vreseq].
-    subst.
-    auto.
-
-  - (* Sbuiltin *)
-    inversion H3. subst.
-
-    assert (vargs = vargs0) as vargseq.
-    eapply eval_exprlist_is_function; eassumption.
-    subst.
-                                     
-    assert (vres = vres0 /\ m' = m'') as vres_m_eq.
-    eapply external_call_deterministic; eassumption.
-
-    destruct vres_m_eq as [vres_eq m_eq].
-    subst.
-    auto.
-
-  -  (* Sifthenelse *)
+  - admit.
+  - admit.
+  - admit.
+  - admit.
+  - admit.
+  - intros. admit.
+  - intros. admit.
+  - intros.
     inversion H4. subst.
+    specialize (H0 _ _ _ _ H7).
+    destruct H0 as [meq [_ eeq]].
+    subst.
 
-    assert (v = v0) as veq.
-    eapply eval_expr_is_function; eassumption.
-    subst.
     
-    assert (b = b0) as beq.
-    eapply bool_of_val_is_function; eassumption.
+    specialize (H2 _ _ _ _ H12).
+    destruct H2  as [meq [outeq eeq]].
     subst.
-    
-    specialize (H2 _ _ _ _ eq_refl H18).
-    destruct H2 as [meq [outeq eeq]].
-    subst.
+
     auto.
 
-  - (* SSeq *)
-    inversion H5. subst.
-    specialize (H0 _ _ _ _ eq_refl H8)
+    subst.
+    specialize (H0 _ _ _ _ H11).
+    destruct H0 as [meq [outeq eeq]].
+
+    rewrite outeq in H16.
+    contradiction.
+
+  -  inversion H2. subst.
+     specialize (H0 _ _ _ _ H5).
+     destruct H0  as [meq [outeq eeq]].
+     rewrite outeq in H1.
+     contradiction.
+     subst.
+     specialize (H0 _ _ _ _ H9).
+     destruct H0 as [meq [outeq eeq]].
+     subst.
+     auto.
+
+
     
-
-
-
-
-
-  
-  
-
-  
