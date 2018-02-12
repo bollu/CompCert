@@ -304,6 +304,24 @@ Proof.
     try (eapply external_functions_sem_is_function; eassumption).
 Admitted.
 
+Lemma match_traces_Eapp: forall (ge: genv) (t1 t1' t2 t2': trace),
+    match_traces ge t1 t1' ->
+    match_traces ge t2 t2' ->
+    match_traces ge (t1 ** t2) (t1' ** t2').
+Proof.
+  intros.
+  inversion H.
+  simpl.
+  exact H0.
+
+  simpl.
+
+  inversion H0.
+  apply match_traces_syscall.
+  auto. auto. auto.
+Abort.
+  
+  
 
 Lemma int_eq_dec': forall (i i': int), i = i' \/ i <> i'.
 Proof.
@@ -345,6 +363,17 @@ Proof.
   apply val_eq_dec.
 Qed.
   
+(* What in the fuck, why does match_traces only take 1 trace value? *)
+Inductive match_traces_long: genv -> trace -> trace -> Prop :=
+| Match_traces_long_E0: forall (ge: genv), match_traces_long ge E0 E0
+| Match_traces_long_eq: forall (t t': trace) (ge: genv),  t = t' -> match_traces_long ge t t'
+| Match_traces_long_match: forall (ge: genv) (t t':trace), match_traces ge t t' -> match_traces_long ge t t'
+| Match_traces_long_app: forall (ge: genv) (t1 t1' t2 t2': trace),
+    match_traces_long  ge t1 t1' ->
+    match_traces_long ge t2 t2' ->
+    match_traces_long ge (t1 ** t2) (t1' ** t2').
+
+  
 
 Check (eval_funcall).
 (* Check out how "eval_funcall_exec_stmt_steps" does this in CMinor *)
@@ -353,13 +382,13 @@ Lemma eval_stmt_funcall_is_function: forall ge,
   (forall m fd args t m' res,
       eval_funcall ge m fd args t m' res ->
       (forall m'' res' t',
-          eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res' /\ match_traces ge t t'
+          eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res' /\ (t = t' \/ match_traces_long ge t t')
   )) 
   /\(forall f sp e m s t e' m' out,
        exec_stmt ge f sp e m s t e' m' out ->
        (forall e'' m'' out' t',
            exec_stmt ge f sp e m s t' e'' m'' out' ->
-           m' = m'' /\ out = out' /\ e' = e'' /\ match_traces ge t t')).
+           m' = m'' /\ out = out' /\ e' = e'' /\ match_traces_long ge t t')).
 Proof.
   intros ge.
   apply eval_funcall_exec_stmt_ind2; intros.
@@ -395,22 +424,23 @@ Proof.
     assert (match_traces ge t t' /\ res = res' /\ m' = m'').
     eapply external_call_is_function; eassumption.
     intuition.
+    auto using Match_traces_long_match.
   -  (* Sskip *)
     inversion H. subst.
-    auto using match_traces_E0.
+    auto using Match_traces_long_E0.
   -  (* Sasssign *)
     inversion H0. subst.
     assert (v = v0) as v_eq_v0.
     eapply eval_expr_is_function; eassumption.
     rewrite v_eq_v0 in *.
-    auto using match_traces_E0.
+    auto using Match_traces_long_E0.
 
   -  (* Sstore *)
     inversion H2. subst.
     assert (v = v0) as v_eq_v0.
     eapply eval_expr_is_function; eassumption.
     rewrite v_eq_v0 in *.
-    auto using match_traces_E0.
+    auto using Match_traces_long_E0.
     
     assert (vaddr = vaddr0) as vaddr_eq_vaddr0.
     eapply eval_expr_is_function; eassumption.
@@ -419,7 +449,7 @@ Proof.
     rewrite <- H16. rewrite <- H1. reflexivity.
     inversion eq_some_m'_m'' as [m_eq_m'].
     rewrite m_eq_m' in *.
-    auto using match_traces_E0.
+    auto using Match_traces_long_E0.
 
   -  (* Scall. Gulp *)
     inversion H6. subst.
@@ -443,7 +473,9 @@ Proof.
     rewrite H2 in *.
     destruct H5.
     rewrite H5 in *.
-    auto using match_traces_E0.
+    destruct H7.
+    auto using Match_traces_long_eq.
+    auto using Match_traces_long_match.
 
   - (*Sbuiltin *)
     inversion H2. subst.
@@ -455,9 +487,8 @@ Proof.
     eapply external_call_is_function; eassumption.
     destruct H1 as [teq [vreseq meq]].
     (* TODO: why does rewrite with inductive type crash? *)
-    rewrite teq, vreseq, meq in *.
-                                      
-    auto.
+    rewrite vreseq, meq in *.
+    auto using Match_traces_long_match.
 
   - (*S IfThenElse *)
     inversion H3.
@@ -481,14 +512,15 @@ Proof.
     + subst.
     specialize (H0 _ _ _ _ H7).
     destruct H0 as [meq [_ [eeq teq]]].
-    rewrite meq,  teq, eeq in *.
-    clear meq. clear eeq. clear teq.
+    rewrite meq, eeq in *.
+    clear meq. clear eeq.
 
     
     specialize (H2 _ _ _ _ H12).
-    destruct H2 as [meq [outeq [eeq teq]]].
-    rewrite meq, outeq, teq, eeq in *.
-    clear meq. clear outeq. clear eeq. clear teq.
+    destruct H2 as [meq [outeq [eeq teq']]].
+    rewrite meq, outeq, eeq in *.
+    assert(match_traces_long ge (t1 ** t2) (t3 ** t4)) as teq_concat.
+    apply Match_traces_long_app; eassumption.
     auto.
 
     (* out != out_normal *)
