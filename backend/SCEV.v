@@ -477,7 +477,8 @@ Proof.
       destruct contra.
       contradiction.
 
-  - inversion H3; subst.
+  - (* Sloop *)
+    inversion H3; subst.
     + assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
     apply destruct_trace_app_eq_E0. eassumption.
     destruct t1_t2_E0. subst.
@@ -490,7 +491,8 @@ Proof.
     +  specialize (H0 eq_refl _ _ _ H5).
        auto.
 
-  - subst.
+  - (* Sloop *)
+    subst.
     specialize (H0 eq_refl).
     inversion H2. subst.
 
@@ -500,7 +502,36 @@ Proof.
 
     auto.
 
-  - 
+  - (* SExit *)
+    inversion H0. subst.
+     auto.
+
+  - (* Sswitch *)
+    inversion H2. subst.
+     assert (v = v0) as veq.
+     eapply eval_expr_is_function; eassumption.
+     subst.
+
+     assert (n = n0) as neq.
+     eapply switch_argument_is_function; eassumption.
+     subst.
+     auto.
+
+  - (* Sreturn *)
+    inversion H0. subst.
+    auto.
+
+  -  (* Sreturn (some case) *)
+    inversion H1. subst.
+    assert (v = v0).
+    eapply eval_expr_is_function; eassumption.
+    subst.
+    auto.
+
+  - (* Stailcall *)
+       
+
+  
 
     
 
