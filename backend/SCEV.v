@@ -342,14 +342,63 @@ Proof.
   intros genv.
   apply eval_funcall_exec_stmt_ind2; intros.
 
-  - admit.
-  - inversion H1. subst.
+  - (* Internal call *)
+    inversion H6. subst.
+    assert ((m1, sp) = (m4, sp0)) as m_sp_eq.
+    rewrite <- H.
+    rewrite <- H8.
+    reflexivity.
+    inversion m_sp_eq.
+    subst.
+    clear m_sp_eq.
+
+    specialize (H2 eq_refl _ _ _ H10).
+    destruct H2 as [meq [outeq eeq]].
+    subst.
+
+    assert (m3 = m'') as meq.
+    eapply outcome_free_mem_is_function; eassumption.
+    subst.
+
+    assert (vres = res') as vreseq.
+    eapply outcome_result_value_is_function; eassumption.
+    subst.
+    auto.
+    
+  - (* External call *)
+    inversion H1. subst.
     apply and_comm.
     eapply external_call_deterministic; eassumption.
-  - admit.
-  - admit.
-  -  admit.
-  -  inversion H7. subst.
+
+  - (* Sskip *)
+    inversion H0. subst. auto.
+
+  - (* Sassign *)
+    inversion H1. subst.
+    assert (v = v0) as veq.
+    eapply eval_expr_is_function; eassumption.
+    subst.
+    auto.
+  - (* Sstore *)
+    inversion H3. subst.
+    assert (v = v0) as veq.
+    eapply eval_expr_is_function; eassumption.
+
+    assert (vaddr = vaddr0) as vaddreq.
+    eapply eval_expr_is_function; eassumption.
+
+    subst.
+
+    assert (Some m' = Some m'') as meq.
+    rewrite <- H16. rewrite <- H1.
+    reflexivity.
+
+    inversion meq.
+    subst.
+    auto.
+
+  - (* Scall *)
+    inversion H7. subst.
 
      assert (vf = vf0) as vfeq.
      eapply eval_expr_is_function; eassumption.
@@ -375,7 +424,8 @@ Proof.
 
      auto.
 
-  -  inversion H3. subst.
+  - (* Sbuiltin *)
+    inversion H3. subst.
 
      assert (vargs = vargs0) as vargs_eq.
      eapply eval_exprlist_is_function; eassumption.
@@ -387,7 +437,22 @@ Proof.
      subst.
      auto.
 
-  - admit.
+  -  (* Sifthenelse *)
+    inversion H4. subst.
+    assert (v0 = v) as veq.
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+    assert (b = b0) as beq.
+    eapply bool_of_val_is_function; eassumption.
+    subst.
+
+    specialize (H2 eq_refl _ _ _ H18).
+    destruct H2 as [meq [outeq eeq]].
+    subst.
+    auto.
+
+    
   - (* Sseq *)
     rewrite H4 in H3.
     assert (t1 = E0 /\ t2 = E0) as t1_t2_eq_E0.
@@ -529,24 +594,35 @@ Proof.
     auto.
 
   - (* Stailcall *)
-       
+    inversion H7.
+    subst.
 
-  
+    assert (vargs = vargs0) as vargseq.
+    eapply eval_exprlist_is_function; eassumption.
+    subst.
 
-    
+    assert (vf = vf0).
+    eapply eval_expr_is_function; eassumption.
+    subst.
 
+    assert (Some m' = Some m'0) as m'_eq.
+    rewrite <- H23.
+    rewrite <- H3.
+    auto.
+    inversion m'_eq. subst.
+    clear m'_eq.
 
-    
+    assert (Some fd = Some fd0) as fdeq.
+    rewrite <- H15.
+    rewrite <- H1.
+    reflexivity.
+    inversion fdeq. subst.
 
-        
-
-
-    
-
-
-
-     
-Abort.
+    specialize (H5 eq_refl _ _ H24).
+    destruct H5 as [meq vreseq].
+    subst.
+    auto.
+Qed.
     
 
 
