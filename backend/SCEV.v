@@ -323,9 +323,57 @@ Qed.
   
 
 
-(* Check out how "eval_funcall_exec_stmt_steps" does this in CMinor *)
-Check (eval_funcall_exec_stmt_ind2).
-Lemma exec_stmt_funcall_with_no__effect_is_function: forall ge,
+(* Note that this result is weaker than what I originally wanted to prove. This
+just proves that two statements run in the same initial configuration,
+**that have no trace** (that is, no external world interaction), will have
+the same output.
+
+Note that "external world interaction" is:
+- volatile load, store
+- external function call
+
+This does not really matter for our polyhedral use case, since we would most likely
+be fully blocked from analysing by either of those.
+
+However, in principle, I should be able to prove that:
+
+Two statements, s1 and s2, that start at the same initial configuaration and
+** produce the same trace ** t will have the same output.
+
+Note that "produce the same trace" is stronger than "no trace". This intuitively makes
+sense. However, you get blocked in the SSeq case.
+
+Roughly, what happens is:
+
+conceptually,  this is the pairing we want
+------------------------------------------
+s1 (stmt) paired with t1 (trace)
+s2 (stmt) paired with t2 (trace)
+
+s1' -> t1'
+s2' -> t2'
+
+However,
+
+this is the pairing we get
+--------------------------
+
+Sequence s1 s2 -> t1 ++ t2
+Sequence s1' s2' -> t1' ++ t2'
+
+Note that this __does not let us conclude__
+s1 -> t1, s2 -> t2. s1' -> t1', s2' -> t2'.
+
+(Obviously. It is possible that for example,
+t1 = [], t2 = [1, 2]
+t1' = [1], t2' = [2]).
+
+
+So, we need to somehow strengthen Sequence such that
+
+*)
+
+Lemma exec_stmt_funcall_with_no_effect_is_function: forall ge,
   (forall m fd args (t:trace) m' res,
       eval_funcall ge m fd args t m' res ->
       t = E0 ->
