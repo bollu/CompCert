@@ -286,6 +286,8 @@ Lemma volatile_load_sem_is_function:
     tr = tr' /\ v = v' /\ mout = mout'.
 Proof.
 Admitted.
+    
+  
 
 Lemma external_call_is_function: forall (ef: external_function),
     forall (ge: genv) (args: list val) (m mout mout': mem) (tr tr': trace) (v v': val),
@@ -293,23 +295,13 @@ Lemma external_call_is_function: forall (ef: external_function),
                     tr v mout ->
       external_call ef ge args m
                     tr' v' mout' ->
-      tr = tr' /\ v = v' /\ mout = mout'.
+      match_traces ge tr tr' /\ v = v' /\ mout = mout'.
 Proof.
   intros until v'.
   intros call1 call2.
   induction ef;
     unfold external_call in *;
     try (eapply external_functions_sem_is_function; eassumption).
-  eapply volatile_load_sem_is_function; eassumption.
-  (* mother of god, this is just annoying as fuck case analysis *)
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
 Admitted.
 
 
@@ -361,13 +353,13 @@ Lemma eval_stmt_funcall_is_function: forall ge,
   (forall m fd args t m' res,
       eval_funcall ge m fd args t m' res ->
       (forall m'' res' t',
-          eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res' /\ t = t'
+          eval_funcall ge m fd args t' m'' res' -> m' = m'' /\ res = res' /\ match_traces ge t t'
   )) 
   /\(forall f sp e m s t e' m' out,
        exec_stmt ge f sp e m s t e' m' out ->
        (forall e'' m'' out' t',
            exec_stmt ge f sp e m s t' e'' m'' out' ->
-           m' = m'' /\ out = out' /\ e' = e'' /\ t = t')).
+           m' = m'' /\ out = out' /\ e' = e'' /\ match_traces ge t t')).
 Proof.
   intros ge.
   apply eval_funcall_exec_stmt_ind2; intros.
@@ -396,28 +388,29 @@ Proof.
   eapply outcome_result_value_is_function; eassumption.
   rewrite vres_eq_res' in *.
   inversion H11.
-  rewrite H2 in *.
   auto.
 
   -  (* eval funcall inernal *)
     inversion H0. subst.
-    assert (t = t' /\ res = res' /\ m' = m'').
+    assert (match_traces ge t t' /\ res = res' /\ m' = m'').
     eapply external_call_is_function; eassumption.
     intuition.
   -  (* Sskip *)
     inversion H. subst.
-    auto.
+    auto using match_traces_E0.
   -  (* Sasssign *)
     inversion H0. subst.
     assert (v = v0) as v_eq_v0.
     eapply eval_expr_is_function; eassumption.
-    rewrite v_eq_v0 in *. auto.
+    rewrite v_eq_v0 in *.
+    auto using match_traces_E0.
 
   -  (* Sstore *)
     inversion H2. subst.
     assert (v = v0) as v_eq_v0.
     eapply eval_expr_is_function; eassumption.
-    rewrite v_eq_v0 in *. auto.
+    rewrite v_eq_v0 in *.
+    auto using match_traces_E0.
     
     assert (vaddr = vaddr0) as vaddr_eq_vaddr0.
     eapply eval_expr_is_function; eassumption.
@@ -425,7 +418,8 @@ Proof.
     assert (Some m' = Some m'') as eq_some_m'_m''.
     rewrite <- H16. rewrite <- H1. reflexivity.
     inversion eq_some_m'_m'' as [m_eq_m'].
-    rewrite m_eq_m' in *. auto.
+    rewrite m_eq_m' in *.
+    auto using match_traces_E0.
 
   -  (* Scall. Gulp *)
     inversion H6. subst.
@@ -448,9 +442,8 @@ Proof.
     inversion H4.
     rewrite H2 in *.
     destruct H5.
-    rewrite H7 in *.
     rewrite H5 in *.
-    auto.
+    auto using match_traces_E0.
 
   - (*Sbuiltin *)
     inversion H2. subst.
@@ -458,10 +451,12 @@ Proof.
     assert (vargs = vargs0) as vargs_eq.
     eapply eval_exprlist_is_function; eassumption.
     rewrite vargs_eq in *.
-    assert (t = t' /\ vres = vres0 /\ m' = m'').
+    assert (match_traces ge t t' /\ vres = vres0 /\ m' = m'').
     eapply external_call_is_function; eassumption.
     destruct H1 as [teq [vreseq meq]].
+    (* TODO: why does rewrite with inductive type crash? *)
     rewrite teq, vreseq, meq in *.
+                                      
     auto.
 
   - (*S IfThenElse *)
