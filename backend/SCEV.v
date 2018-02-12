@@ -308,21 +308,132 @@ Qed.
 Check (eval_funcall).
 Check (eval_funcall_exec_stmt_ind2).
 
+Lemma destruct_trace_app_eq_E0:
+  forall (t1 t2: trace),
+    E0 = t1 ** t2 ->
+    t1 = E0 /\ t2 = E0.
+Proof.
+  intros.
+  induction t1.
+  - induction t2.
+    +  simpl. auto.
+    +  inversion H.
+  - inversion H.
+Qed.
+  
+
 
 (* Check out how "eval_funcall_exec_stmt_steps" does this in CMinor *)
 Check (eval_funcall_exec_stmt_ind2).
-Lemma eval_stmt_funcall_is_function: forall ge,
-  (forall m fd args t m' res,
+Lemma exec_stmt_funcall_with_no__effect_is_function: forall ge,
+  (forall m fd args (t:trace) m' res,
       eval_funcall ge m fd args t m' res ->
+      t = E0 ->
       (forall m'' res',
-         eval_funcall ge m fd args t m'' res' ->  m' = m'' /\ res = res')
+         eval_funcall ge m fd args E0 m'' res' ->  m' = m'' /\ res = res')
   ) 
-  /\(forall f sp e m s t e' m' out,
+  /\(forall f sp e m s  (t:trace) e' m' out,
        exec_stmt ge f sp e m s t e' m' out ->
+       t = E0 ->
        (forall e'' m'' out',
-           exec_stmt ge f sp e m s t e'' m'' out' ->
+           exec_stmt ge f sp e m s E0 e'' m'' out' ->
            m' = m'' /\ out = out' /\ e' = e'')).
 Proof.
+  intros genv.
+  apply eval_funcall_exec_stmt_ind2; intros.
+
+  - admit.
+  - inversion H1. subst.
+    apply and_comm.
+    eapply external_call_deterministic; eassumption.
+  - admit.
+  - admit.
+  -  admit.
+  -  inversion H7. subst.
+
+     assert (vf = vf0) as vfeq.
+     eapply eval_expr_is_function; eassumption.
+     subst.
+
+     assert (vargs = vargs0) as vargseq.
+     eapply eval_exprlist_is_function; eassumption.
+     subst.
+
+     assert (Some fd = Some fd0) as some_fdeq.
+     rewrite <- H18.
+     rewrite <- H1.
+     reflexivity.
+
+     inversion some_fdeq.
+     subst.
+     clear some_fdeq.
+
+     specialize (H4 eq_refl).
+     specialize (H4 _ _ H24).
+     destruct H4 as [meq vreseq].
+     subst.
+
+     auto.
+
+  -  inversion H3. subst.
+
+     assert (vargs = vargs0) as vargs_eq.
+     eapply eval_exprlist_is_function; eassumption.
+     subst.
+     
+     assert (vres = vres0 /\ m' = m'') as vres_m_eq.
+     eapply  external_call_deterministic; eassumption.
+     destruct vres_m_eq as [vres_eq m_eq].
+     subst.
+     auto.
+
+  - admit.
+  -
+    rewrite H4 in H3.
+    assert (t1 = E0 /\ t2 = E0) as t1_t2_eq_E0.
+    apply destruct_trace_app_eq_E0.
+    auto.
+
+    destruct t1_t2_eq_E0 as [t1_eq_E0 t2_eq_E0].
+    subst.
+
+    specialize (H0 eq_refl).
+    specialize (H2 eq_refl).
+    clear H3.
+    rename m'' into mgoal.
+    rename out' into outgoal.
+    rename e'' into egoal.
+
+    inversion H5; subst.
+    + 
+      assert (t1 = E0 /\ t2 = E0).
+      apply destruct_trace_app_eq_E0. assumption.
+      destruct H3. subst.
+
+      
+      specialize (H0 _ _ _ H6).
+      destruct H0 as [meq [_ eeq]]. subst.
+
+      specialize (H2 _ _ _ H11).
+      destruct H2 as [meq [outeq eeq]]. subst.
+      auto.
+    +
+      specialize (H0 _ _ _ H10).
+      destruct H0 as [_ [outgoal_normal _]].
+      assert(Out_normal <> Out_normal) as contra.
+      rewrite outgoal_normal. auto.
+
+      contradiction.
+
+  -  inversion H3. subst.
+     +  assert  (t1 = E0 /\ t2 = E0).
+
+
+    
+
+
+
+     
 Abort.
     
 
@@ -358,5 +469,6 @@ Theorem oned_loop_add_rec_matches_addrec_scev:
               (oned_loop_add_rec n ivname iv_init_val iv_add_val) E0
               e' m' Out_normal ->
     e' ! ivname =  Some (z_to_val (eval_scev (SCEVAddRec iv_init_val iv_add_val) n)).
+Proof.
 Abort.
     
