@@ -351,17 +351,108 @@ Lemma eval_stmt_funcall_is_function: forall ge,
 Proof.
   intros ge.
   apply eval_funcall_exec_stmt_ind2; intros.
+
+  
   inversion H6. subst.
 
+  - (* Internal Call *)
   assert (m1 = m4 /\ sp = sp0) as m_sp_eq.
   cut ((m1, sp) = (m4, sp0)). intros tup_eq. inversion tup_eq. auto.
   rewrite <- H.
   rewrite <- H8.
   reflexivity.
+  destruct m_sp_eq as [meq speq].
+  subst.
 
-  destruct m_sp_eq as [m_eq sp_eq].
-  rewrite m_eq, sp_eq in *.
-  clear m_eq. clear sp_eq.
+  remember H2 as stmt_eq_ind.
+  clear Heqstmt_eq_ind.
+
+  specialize (H2 _ _ _ _ eq_refl H10).
+  destruct H2 as [meq [outeq eeq]].
+  subst.
+
+
+  assert(m3 = m'') as meq.
+  eapply outcome_free_mem_is_function; eassumption.
+  
+  assert (vres = res') as reseq.
+  eapply outcome_result_value_is_function; eassumption.
+
+  auto.
+
+  - (* External call *)
+    inversion H1. subst.
+    apply and_comm.
+    eapply external_call_deterministic; eassumption.
+
+  -  (* SSkip *)
+    inversion H0. subst.
+    auto.
+
+  -  (* Sassign *)
+    inversion H1. subst.
+    assert (v = v0) as veq.
+    eapply eval_expr_is_function; eassumption.
+    subst.
+    auto.
+
+  -  (* Sstore *)
+    inversion H3. subst.
+
+    assert (v = v0) as veq.
+    eapply eval_expr_is_function; eassumption.
+
+    assert (vaddr = vaddr0) as vaddreq.
+    eapply eval_expr_is_function; eassumption.
+
+    subst.
+    
+    assert (m' = m'') as meq.
+    + cut (Some m' = Some m'').
+      intro some_meq.
+      inversion some_meq. auto.
+
+      rewrite <- H17.
+      rewrite <- H1.
+      auto.
+    + subst. auto.
+
+  -  (* Scall *)
+    inversion H7. subst.
+
+    assert (vf = vf0) as vfeq.
+    eapply eval_expr_is_function; eassumption.
+
+    subst.
+
+    assert (fd = fd0) as fdeq.
+    cut (Some fd = Some fd0).
+    intros someeq.
+    inversion someeq.
+    auto.
+    
+    rewrite <- H18.
+
+    rewrite <- H1.
+    reflexivity.
+
+    subst.
+
+
+    assert (vargs = vargs0) as vargseq.
+    eapply eval_exprlist_is_function; eassumption.
+    subst.
+    
+    specialize (H4 _ _ _ eq_refl H24).
+    destruct H4 as [meq vreseq].
+    subst.
+    auto.
+
+  - 
+
+
+
+
 
   
   
