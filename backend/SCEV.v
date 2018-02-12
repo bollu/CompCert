@@ -325,3 +325,38 @@ Lemma eval_stmt_funcall_is_function: forall ge,
 Proof.
 Abort.
     
+
+
+Lemma if_cond_with_failing_branch_will_return_else:
+  forall (cond: expr) (sthen selse: Cminor.stmt),
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (tr: trace) (o: outcome),
+    eval_expr ge sp e m cond Vfalse ->
+    exec_stmt ge f sp e m (selse) tr e' m' o ->
+    exec_stmt ge f sp e m
+              (Cminor.Sifthenelse cond sthen selse) tr e' m' o.
+  Abort.
+  
+    
+
+
+Lemma oned_loop_with_iv_gt_ub_will_not_execute:
+  forall (n: nat) (ivname: ident) (innerstmt: Cminor.stmt),
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
+  forall (iv_cur_z: Z),
+    e ! ivname = Some (z_to_val iv_cur_z) ->
+    Int.lt (z_to_int iv_cur_z) (nat_to_int n) = false ->
+    exec_stmt ge f sp e m
+              (oned_loop n ivname innerstmt) E0
+              e' m' (Out_exit 1) -> e = e' /\ m = m'.
+Abort.
+
+(* Theorem on how a 1-D loop with match that of a SCEV Value *)
+Theorem oned_loop_add_rec_matches_addrec_scev:
+  forall (n: nat) (ivname: ident) (iv_init_val iv_add_val: Z),
+   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
+    exec_stmt ge f sp e m
+              (oned_loop_add_rec n ivname iv_init_val iv_add_val) E0
+              e' m' Out_normal ->
+    e' ! ivname =  Some (z_to_val (eval_scev (SCEVAddRec iv_init_val iv_add_val) n)).
+Abort.
+    
