@@ -388,7 +388,7 @@ Proof.
      auto.
 
   - admit.
-  -
+  - (* Sseq *)
     rewrite H4 in H3.
     assert (t1 = E0 /\ t2 = E0) as t1_t2_eq_E0.
     apply destruct_trace_app_eq_E0.
@@ -425,8 +425,89 @@ Proof.
 
       contradiction.
 
-  -  inversion H3. subst.
-     +  assert  (t1 = E0 /\ t2 = E0).
+  - (* Sseq *)
+    inversion H3. subst.
+     assert  (t1 = E0 /\ t2 = E0) as t1_t2_eq_t0.
+     apply destruct_trace_app_eq_E0. eassumption.
+     destruct t1_t2_eq_t0. subst.
+
+     specialize (H0 eq_refl).
+     specialize (H0 _ _ _ H6).
+     destruct H0 as [_ [out_eq_normal _]].
+     contradiction.
+
+     
+     subst.
+     specialize (H0 eq_refl _ _ _ H10).
+     destruct H0 as [meq [outeq eeq]].
+     subst.
+     auto.
+  -  (* Sloop *)
+    subst.
+    assert (t1 = E0 /\ t2 = E0) as t1_t2_eq_E0.
+    eapply destruct_trace_app_eq_E0. auto.
+    destruct t1_t2_eq_E0.
+    subst.
+    clear H4.
+    specialize (H0 eq_refl).
+    specialize (H2 eq_refl).
+
+    inversion H5.
+
+    + subst.
+
+    assert (t1 = E0 /\ t2 = E0) as dest.
+    eapply destruct_trace_app_eq_E0. auto.
+    destruct  dest.
+    subst.
+    
+    specialize (H0 _ _ _ H4).
+    destruct H0 as [meq [_ eeq]].
+    subst.
+
+    
+    specialize (H2  _ _ _ H6).
+    auto.
+
+    + subst.
+      specialize (H0 _ _ _ H4) as contra.
+      destruct contra as [_ [out_eq _]].
+      assert (Out_normal = out' /\ Out_normal <> out') as contra.
+      intuition.
+      destruct contra.
+      contradiction.
+
+  - inversion H3; subst.
+    + assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
+    apply destruct_trace_app_eq_E0. eassumption.
+    destruct t1_t2_E0. subst.
+    clear H11.
+
+    specialize (H0 eq_refl _ _ _ H5).
+    destruct H0 as [_ [out_normal _]].
+    contradiction.
+
+    +  specialize (H0 eq_refl _ _ _ H5).
+       auto.
+
+  - subst.
+    specialize (H0 eq_refl).
+    inversion H2. subst.
+
+    specialize (H0 _ _ _ H7).
+    destruct H0 as [meq [outeq eeq]].
+    subst.
+
+    auto.
+
+  - 
+
+    
+
+
+    
+
+        
 
 
     
