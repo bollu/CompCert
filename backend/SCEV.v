@@ -263,33 +263,6 @@ Qed.
   
 Check (external_call).
 
-(* What in the fuck, why does match_traces only take 1 trace value? *)
-Inductive match_traces_long: genv -> trace -> trace -> Prop :=
-| Match_traces_long_E0: forall (ge: genv), match_traces_long ge E0 E0
-| Match_traces_long_eq: forall (t t': trace) (ge: genv),  t = t' -> match_traces_long ge t t'
-| Match_traces_long_match: forall (ge: genv) (t t':trace), match_traces ge t t' -> match_traces_long ge t t'
-| Match_traces_long_app: forall (ge: genv) (t1 t1' t2 t2': trace),
-    match_traces_long  ge t1 t1' ->
-    match_traces_long ge t2 t2' ->
-    match_traces_long ge (t1 ** t2) (t1' ** t2').
-
-  
-
-Lemma external_call_is_function: forall (ef: external_function),
-    forall (ge: genv) (args: list val) (m mout mout': mem) (tr tr': trace) (v v': val),
-      external_call ef ge args m
-                    tr v mout ->
-      external_call ef ge args m
-                    tr' v' mout' ->
-      match_traces_long ge tr tr' /\ v = v' /\ mout = mout'.
-Proof.
-  intros until v'.
-  intros call1 call2.
-  assert (match_traces ge tr tr').
-  eapply external_call_match_traces; eassumption.
-Admitted.
-  
-  
 
 Lemma int_eq_dec': forall (i i': int), i = i' \/ i <> i'.
 Proof.
@@ -341,128 +314,14 @@ Check (eval_funcall_exec_stmt_ind2).
 Lemma eval_stmt_funcall_is_function: forall ge,
   (forall m fd args t m' res,
       eval_funcall ge m fd args t m' res ->
-      (forall m'' res' t',
-         eval_funcall ge m fd args t' m'' res' -> t = t' -> m' = m'' /\ res = res')
+      (forall m'' res',
+         eval_funcall ge m fd args t m'' res' ->  m' = m'' /\ res = res')
   ) 
   /\(forall f sp e m s t e' m' out,
        exec_stmt ge f sp e m s t e' m' out ->
-       (forall e'' m'' out' t',
-           exec_stmt ge f sp e m s t'  e'' m'' out' ->
+       (forall e'' m'' out',
+           exec_stmt ge f sp e m s t e'' m'' out' ->
            m' = m'' /\ out = out' /\ e' = e'')).
 Proof.
-  intros ge.
-  apply eval_funcall_exec_stmt_ind2; intros.
-
-  
-  inversion H5. subst.
-
-  - (* Internal Call *)
-  assert (m1 = m4 /\ sp = sp0) as m_sp_eq.
-  cut ((m1, sp) = (m4, sp0)). intros tup_eq. inversion tup_eq. auto.
-  rewrite <- H.
-  rewrite <- H8.
-  reflexivity.
-  destruct m_sp_eq as [meq speq].
-  subst.
-
-  remember H2 as stmt_eq_ind.
-  clear Heqstmt_eq_ind.
-
-  specialize (H2 _ _ _ _  H10).
-  destruct H2 as [meq [outeq eeq]].
-  subst.
-
-
-  assert(m3 = m'') as meq.
-  eapply outcome_free_mem_is_function; eassumption.
-  
-  assert (vres = res') as reseq.
-  eapply outcome_result_value_is_function; eassumption.
-
-  auto.
-
-  - (* External *)
-    intros.
-     inversion H0.
-     subst.
-     apply and_comm.
-     eapply external_call_deterministic; eassumption.
-     
-     
-  - (* Sskip *)
-    inversion H. subst.
-    auto.
-    
-  - inversion H0. subst.
-    assert (v = v0) as veq.
-    eapply eval_expr_is_function; eassumption.
-    subst.
-    auto.
-    
-  - (* Sstore *)
-    inversion H2. subst.
-    assert (v = v0) as veq.
-    eapply eval_expr_is_function; eassumption.
-
-    assert (vaddr = vaddr0) as vaddreq.
-    eapply eval_expr_is_function; eassumption.
-
-    subst.
-
-    assert (Some m' = Some m'') as some_meq.
-    rewrite <- H16.
-    rewrite <- H1.
-    reflexivity.
-    inversion some_meq.
-    subst.
-
-    auto.
-
-    
-  - intros.
-    inversion H6. subst.
-
-    
-    admit.
-  - intros. admit.
-  - intros. admit.
-  - intros.
-    inversion H4. subst.
-    specialize (H0 _ _ _ _ H7).
-    destruct H0 as [meq [_ eeq]].
-    subst.
-
-    
-    specialize (H2 _ _ _ _ H12).
-    destruct H2  as [meq [outeq eeq]].
-    subst.
-
-    auto.
-
-    subst.
-    specialize (H0 _ _ _ _ H11).
-    destruct H0 as [meq [outeq eeq]].
-
-    rewrite outeq in H16.
-    contradiction.
-
-  -  inversion H2. subst.
-     specialize (H0 _ _ _ _ H5).
-     destruct H0  as [meq [outeq eeq]].
-     rewrite outeq in H1.
-     contradiction.
-     subst.
-     specialize (H0 _ _ _ _ H9).
-     destruct H0 as [meq [outeq eeq]].
-     subst.
-     auto.
-
-
-  - admit.
-
-  - intros. admit.
-  - intros. admit.
-   
-
-
+Abort.
     
