@@ -764,12 +764,12 @@ Example exit_sexit:
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
     forall (n: nat),
     exec_stmt ge f sp e m (Sexit n) E0 e' m' o ->
-    o = Out_exit n.
+    o = Out_exit n /\ e = e' /\ m = m'.
 Proof.
   intros.
   inversion H.
   subst.
-  reflexivity.
+  auto.
 Qed.
 
 Example exit_sif:
@@ -782,7 +782,7 @@ Example exit_sif:
                  (Sexit n)
               )
               E0 e' m' o ->
-    o = Out_exit n.
+    o = Out_exit n /\ e = e' /\ m = m'.
 Proof.
   intros until econd.
   intros econd_is_false.
@@ -801,7 +801,7 @@ Proof.
 
   inversion execif_bool.
   subst.
-  reflexivity.
+  auto.
 Qed.
 
 (* Yes, this helped get me unstuck! I now realise that the first clause
@@ -820,17 +820,16 @@ Example exit_sseq_sif:
                  )
                  sinner)
               E0 e' m' o ->
-    o = Out_exit n.
+    o = Out_exit n /\ e = e' /\ m = m'.
 Proof.
   intros until econd.
   intros econd_false.
   intros seq.
   assert (forall o' m1 e1, exec_stmt ge f sp e m
          (Sifthenelse econd Sskip (Sexit n)) E0 e1
-         m1 o' -> o' = (Out_exit n)) as out_exit.
+         m1 o' -> o' = (Out_exit n) /\ e = e1 /\ m = m1) as out_exit.
   intros.
   eapply exit_sif; eassumption.
-                                                
 
   
   inversion seq.
@@ -839,13 +838,15 @@ Proof.
   assert (t1 = E0 /\ t2 = E0) as ht1t2. eapply destruct_trace_app_eq_E0; eassumption.
   destruct ht1t2 as [t1E0 t2E0]. subst.
   specialize (out_exit _ _ _  H1).
-  inversion out_exit.
+  destruct out_exit as [out_contra _].
+  inversion out_contra.
   
   - (* Early quit of S1. correct case *)
     subst.
     specialize (out_exit _ _ _ H5).
+    destruct out_exit as [oeq [eeq meq]].
     subst.
-    reflexivity.
+    auto.
 Qed.
 
 Example exit_sblock_sseq_sif:
@@ -863,23 +864,25 @@ Example exit_sblock_sseq_sif:
                     sinner)
               )
               E0 e' m' o ->
-    o = Out_exit (n - 1).
+    o = Out_exit (n - 1) /\ e = e' /\ m = m'.
 Proof.
   intros until econd.
   intros n_gt_0.
   intros econd_is_false.
   intros block.
   inversion block; subst.
-  assert (out = Out_exit n).
+  assert (out = Out_exit n /\ e = e' /\ m = m').
   eapply exit_sseq_sif; eassumption.
-  rewrite H.
+  destruct H as [outeq eeq meq].
+  subst.
   destruct n.
-  inversion n_gt_0.
-  unfold outcome_block.
-  simpl.
+  - (* n = 0 *)inversion n_gt_0.
+  - (* n = S n' *)
+    unfold outcome_block.
+    simpl.
   assert ((n - 0 = n)%nat) as stupid. omega.
   rewrite stupid.
-  reflexivity.
+  auto.
 Qed.
 
   
@@ -895,7 +898,7 @@ Lemma exit_oned_loop_inner_block:
        (Econst (Ointconst (nat_to_int n)))) Vfalse ->
     exec_stmt ge f sp e m (oned_loop_inner_block n ivname inner_stmt)
               E0 e' m' o ->
-    o = Out_exit 0.
+    o = Out_exit 0 /\ e = e' /\ m = m'.
 Proof.
   intros until o.
   intros ivval_gt_n.
