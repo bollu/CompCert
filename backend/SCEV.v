@@ -757,8 +757,149 @@ Proof.
   auto.
 Qed.
   
+
+Example exit_exec_outcome:
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
+    forall (n: nat),
+    exec_stmt ge f sp e m (Sexit n) E0 e' m' o ->
+    o = Out_exit n.
+Proof.
+  intros.
+  inversion H.
+  subst.
+  reflexivity.
+Qed.
+
+Example exit_exec_in_if_outcome:
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
+  forall (n: nat),
+    exec_stmt ge f sp e m
+              (Sifthenelse
+                 (Econst (Ointconst (nat_to_int 0)))
+                 (Sskip)
+                 (Sexit n)
+              )
+              E0 e' m' o ->
+    o = Out_exit n.
+Proof.
+  intros until n.
+  intros execif.
+  inversion execif.
+  subst.
+  rename H12 into execif_bool.
+  assert (b = false) as bf.
+  apply bool_of_val_to_bool_false.
+  inversion H6.
+  subst.
+  unfold eval_constant in H0.
+  unfold nat_to_int in H0.
+  inversion H0.
+  subst.
+  unfold Vfalse.
+  unfold Int.zero.
+  auto.
+
+  rewrite bf in execif_bool.
+  inversion execif_bool.
+  subst.
+  reflexivity.
+Qed.
+
+(* Yes, this helped get me unstuck! I now realise that the first clause
+provides us with a contradiciton that Out_normal = Out_exit n.
+This is because of us inverting the "seq"
+ *)
+Example exit_exec_in_seq_if_outcome:
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
+  forall (n: nat) (sinner: stmt),
+    exec_stmt ge f sp e m
+              (Cminor.Sseq 
+                 (Sifthenelse
+                    (Econst (Ointconst (nat_to_int 0)))
+                    (Sskip)
+                    (Sexit n)
+                 )
+                 sinner)
+              E0 e' m' o ->
+    o = Out_exit n.
+Proof.
+  intros until sinner.
+  intros seq.
+  
+  assert (forall o' m1 e1, exec_stmt ge f sp e m
+         (Sifthenelse (Econst (Ointconst (nat_to_int 0))) Sskip (Sexit n)) E0 e1
+         m1 o' -> o' = (Out_exit n)) as out_exit.
+  intros.
+  eapply exit_exec_in_if_outcome. exact H.
+
+  
+  inversion seq.
+  - subst.
+  assert (t1 = E0 /\ t2 = E0) as ht1t2. eapply destruct_trace_app_eq_E0; eassumption.
+  destruct ht1t2 as [t1E0 t2E0]. subst.
+  specialize (out_exit _ _ _  H1).
+  inversion out_exit.
+  
+  - subst.
+    specialize (out_exit _ _ _ H5).
+    subst.
+    reflexivity.
+
+Qed.
+  
+
+
+Theorem oned_loop_at_zero_does_not_change_env:
+  forall (ivname: ident) (inner: stmt),
+   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
+    exec_stmt ge f sp e m
+              (oned_loop 0 ivname inner) E0
+              e' m' (Out_exit 0) ->
+    e = e' /\ m = m'.
+Proof.
+  intros until ge.
+  intros exec.
+  unfold oned_loop in *.
+  inversion exec;
+    subst.
+
+  rename H0 into block.
+  rename H1 into loop.
+  inversion block.
+  subst.
+  rename H9 into seq.
+  inversion seq. subst.
+
+  rename H1 into exec_ite.
+  inversion exec_ite.
+  subst.
+  assert (b = false). admit.
+  rewrite H in H15.
+  inversion H15.
+  subst. 
+  unfold outcome_block in H4.
+
+
+    
+- contradiction.
+Admitted.
     
 
+Lemma exec_stmt_funcall_with_no_effect_is_injective: forall ge,
+  (forall m fd args (t:trace) m' res,
+      eval_funcall ge m' fd args t m res ->
+      t = E0 ->
+      (forall m'' res,
+         eval_funcall ge m'' fd args E0 m res ->  m' = m'')
+  ) 
+  /\(forall f sp e m s  (t:trace) e' m' out,
+       exec_stmt ge f sp e m s t e' m' out ->
+       t = E0 ->
+       (forall e'' m'' out',
+           exec_stmt ge f sp e m s E0 e'' m'' out' ->
+           m' = m'' /\ out = out' /\ e' = e'')).
+Proof.
+Abort.
 
 
 Lemma oned_loop_with_iv_gt_ub_will_not_execute:
@@ -856,22 +997,6 @@ Proof.
 
 
 Admitted.
-
-
-Theorem oned_loop_at_zero_does_not_change_env:
-  forall (ivname: ident) (iv_init_val iv_add_val: Z),
-   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
-    exec_stmt ge f sp e m
-              (oned_loop_add_rec 0 ivname iv_init_val iv_add_val) E0
-              e' m' Out_normal ->
-    e' ! ivname = Some (z_to_val iv_init_val).
-Proof.
-  intros until ge.
-  intros exec.
-  inversion exec;
-    subst.
-
-  -  rename H1 into exec_set_iv.
 
 (* Theorem on how a 1-D loop with match that of a SCEV Value *)
 Theorem oned_loop_add_rec_matches_addrec_scev:
