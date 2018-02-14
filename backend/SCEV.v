@@ -890,7 +890,7 @@ Qed.
 (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt := *)
 
 Lemma exit_oned_loop_inner_block:
-  forall (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt) (ivval_int: int),
+  forall (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt),
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
     eval_expr ge sp e m (Ebinop
        (Ocmp Clt)
@@ -902,12 +902,59 @@ Lemma exit_oned_loop_inner_block:
 Proof.
   intros until o.
   intros ivval_gt_n.
-  intros exec_if.
+  intros exec_block.
   eapply exit_sblock_sseq_sif with (n := 1%nat).
   omega.
-  exact ivval_gt_n.
-  exact exec_if.
+  eassumption.
+  eassumption.
 Qed.
+
+
+Lemma exit_oned_loop:
+  forall (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt) (ivval_int: int),
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
+    eval_expr ge sp e m (Ebinop
+       (Ocmp Clt)
+       (Evar ivname)
+       (Econst (Ointconst (nat_to_int n)))) Vfalse ->
+    exec_stmt ge f sp e m (oned_loop n ivname inner_stmt)
+              E0 e' m' o ->
+    o = Out_exit 0 /\ e = e' /\ m = m'.
+Proof.
+  intros until o.
+  intros ivval_gt_n.
+  intros exec_loop.
+
+  inversion exec_loop; subst.
+
+  - (* This case can't work, since it assumes the block exits with Out_normal, which
+    it does not *)
+
+    rename H0 into exec_block.
+    rename H1 into eval_loop_iters.
+
+    assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
+    eapply destruct_trace_app_eq_E0; eassumption.
+    destruct t1_t2_E0 as [t1_e0 t2_e0].
+    subst.
+
+    assert (forall e' m' o,
+               exec_stmt ge f sp e m (oned_loop_inner_block n ivname inner_stmt) E0 e' m' o ->
+               o = Out_exit 0) as force_out_exit.
+    intros.
+    eapply exit_oned_loop_inner_block.
+    eassumption.
+    eassumption.
+    specialize (force_out_exit e1 m1 _ exec_block).
+    inversion force_out_exit.
+
+  - (* The loop does not execute, since we exit from the previous loop iteration *)
+    eapply exit_oned_loop_inner_block.
+     eassumption.
+     eassumption.
+Qed.
+
+
 
 
 Lemma oned_loop_with_iv_gt_ub_will_not_execute:
@@ -944,6 +991,10 @@ Proof.
   rewrite iv_cur_z_gt_n.
   unfold Val.of_optbool.
   reflexivity.
+
+  inversion exec. subst.
+  rename H0 into eval_inner_loop.
+  rename H1 into eval_loop.
  
 Abort.
 
@@ -956,5 +1007,6 @@ Theorem oned_loop_add_rec_matches_addrec_scev:
               e' m' Out_normal ->
     e' ! ivname =  Some (z_to_val (eval_scev (SCEVAddRec iv_init_val iv_add_val) n)).
 Proof.
+  intros n. induction n.
 Abort.
     
