@@ -777,9 +777,9 @@ Proof.
   intros exec_oned_loop.
 
   assert (forall v, eval_expr ge sp e m
-                    (Ebinop (Ocmp Clt) (Evar ivname) (Econst (Ointconst (nat_to_int n)))) v ->
+                         (Ebinop (Ocmp Clt) (Evar ivname) (Econst (Ointconst (nat_to_int n)))) v ->
                v = Vfalse) as if_cond_is_false.
-  - intros v eval_cond.
+  intros v eval_cond.
   inversion eval_cond. subst.
   assert (v1 = (z_to_val iv_cur_z)).
   eapply eval_evar_val; eassumption.
@@ -800,77 +800,21 @@ Proof.
   reflexivity.
 
 
-   - assert (forall v v_bool, eval_expr ge sp e m
-                                  (Ebinop (Ocmp Clt) (Evar ivname) (Econst (Ointconst (nat_to_int n)))) v ->
-                        Val.bool_of_val v v_bool ->
-                        v_bool = false) as if_cond_is_false'.
-    + intros.
-    cut (v = Vfalse).
-    intros.
-    subst.
-    inversion H0.
-    rewrite Int.eq_true.
-    auto.
-    eapply if_cond_is_false.
-    assumption.
+  assert (forall v v_bool, eval_expr ge sp e m
+                                (Ebinop (Ocmp Clt) (Evar ivname) (Econst (Ointconst (nat_to_int n)))) v ->
+                      Val.bool_of_val v v_bool ->
+                      v_bool = false) as if_cond_is_false'.
+  intros.
+  cut (v = Vfalse).
+  intros.
+  subst.
+  inversion H0.
+  rewrite Int.eq_true.
+  auto.
+  eapply if_cond_is_false.
+  assumption.
   
-    +  inversion exec_oned_loop; subst.
-       * (* previous loop + current loop iter *)
-         assert (e = e1 /\ m = m1).
-         clear H1.
-         rename H0 into eval_block.
-         inversion eval_block. subst.
-         rename H9 into eval_seq.
-         inversion eval_seq. subst.
-         rename H8 into eval_inner.
-
-         (* If is in terms of e and e2. We need to convert it to e and e1 *)
-         rename H1 into eval_ite.
-         inversion eval_ite. subst.
-         assert (b = false).
-         eapply if_cond_is_false'; eassumption.
-         subst.
-         inversion H14.
-         subst.
-
-         rename H7 into eval_ite.
-         inversion eval_ite. subst.
-         assert (b = false).
-         eapply if_cond_is_false'; eassumption.
-         subst.
-         inversion H15.
-         subst.
-         auto.
-
-         (* substitute e = e1 and m = m1 *)
-         destruct H as [eeq meq].
-         subst.
-
-
-         (* Now, link e1 and e' *)
-         clear H0.
-         rename H1 into exec_loop.
-         inversion exec_loop.
-         subst.
-   
-         
-
-       admit.
-    +  (* Exit out of loop iter *)
-       
-Admitted.
-
-    
-
-     
-    
-    
-    
-
-     
-
-
-
+  inversion exec_oned_loop; subst.
 Abort.
 
 (* Theorem on how a 1-D loop with match that of a SCEV Value *)
