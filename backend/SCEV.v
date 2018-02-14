@@ -27,7 +27,7 @@ Definition numiters := positive.
 Fixpoint eval_scev (s: scev) (n: nat) : Z :=
   match s with
     | SCEVAddRec init step => match n with
-                             | 0%nat => init
+                             | 0%nat => init + step
                              | S n' => step +  (eval_scev s n')
                              end
   end.
@@ -769,7 +769,7 @@ Lemma oned_loop_with_iv_gt_ub_will_not_execute:
     Int.lt (z_to_int iv_cur_z) (nat_to_int n) = false ->
     exec_stmt ge f sp e m
               (oned_loop n ivname innerstmt) E0
-              e' m' (Out_exit 1) -> e = e' /\ m = m'.
+              e' m' (Out_normal) -> e = e' /\ m = m'.
 Proof.
   intros until iv_cur_z.
   intros e_at_ivname.
@@ -813,9 +813,65 @@ Proof.
   auto.
   eapply if_cond_is_false.
   assumption.
-  
+
+  unfold oned_loop in *.
   inversion exec_oned_loop; subst.
-Abort.
+  (* Holy crap, I need to show that exec_stmt is *injective* as well, now *)
+  -
+    rename H0 into eval_block.
+    rename H1 into eval_loop.
+
+    assert (e = e1 /\ m = m1) as e_m_1.
+    inversion eval_block. subst.
+    rename H9 into eval_seq.
+    inversion eval_seq. subst.
+    rename H8 into eval_inner.
+    clear eval_inner.
+    rename H1 into eval_if.
+    inversion eval_if. subst.
+    rename H14 into eval_if_unfold.
+    assert (b = false).
+    eapply if_cond_is_false'; eassumption.
+    subst.
+    inversion eval_if_unfold.
+    subst.
+
+    rename H7 into eval_ite.
+    inversion eval_ite. subst.
+    rename H15 into eval_if_unfold.
+    assert (b = false).
+    eapply if_cond_is_false'; eassumption.
+    subst.
+    inversion eval_if_unfold.
+    auto.
+
+    destruct e_m_1 as  [e_1 m_1].
+    subst.
+    clear eval_block.
+    unfold oned_loop in exec_oned_loop.
+    assert (t1 = E0 /\ t2 = E0) as t1_t2_eq_E0.
+    apply destruct_trace_app_eq_E0; assumption.
+    destruct t1_t2_eq_E0 as [t1_E0 t2_E0].
+    subst.
+
+
+Admitted.
+
+
+Theorem oned_loop_at_zero_does_not_change_env:
+  forall (ivname: ident) (iv_init_val iv_add_val: Z),
+   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
+    exec_stmt ge f sp e m
+              (oned_loop_add_rec 0 ivname iv_init_val iv_add_val) E0
+              e' m' Out_normal ->
+    e' ! ivname = Some (z_to_val iv_init_val).
+Proof.
+  intros until ge.
+  intros exec.
+  inversion exec;
+    subst.
+
+  -  rename H1 into exec_set_iv.
 
 (* Theorem on how a 1-D loop with match that of a SCEV Value *)
 Theorem oned_loop_add_rec_matches_addrec_scev:
@@ -826,5 +882,18 @@ Theorem oned_loop_add_rec_matches_addrec_scev:
               e' m' Out_normal ->
     e' ! ivname =  Some (z_to_val (eval_scev (SCEVAddRec iv_init_val iv_add_val) n)).
 Proof.
-Abort.
+  intros n.
+  induction n;
+    intros until ge;
+    intros exec_loop;
+    inversion exec_loop;
+    subst.
+
+  - rename H1 into exec_init;
+  rename H6 into exec_loop_inner.
+
+   
+   
+ 
+Admitted.
     
