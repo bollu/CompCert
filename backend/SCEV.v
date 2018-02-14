@@ -27,7 +27,7 @@ Definition numiters := positive.
 Fixpoint eval_scev (s: scev) (n: nat) : Z :=
   match s with
     | SCEVAddRec init step => match n with
-                             | 0%nat => init + step
+                             | 0%nat => init 
                              | S n' => step +  (eval_scev s n')
                              end
   end.
@@ -912,14 +912,39 @@ Qed.
 
 Lemma oned_loop_with_iv_gt_ub_will_not_execute:
   forall (n: nat) (ivname: ident) (innerstmt: Cminor.stmt),
-  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
   forall (iv_cur_z: Z),
     e ! ivname = Some (z_to_val iv_cur_z) ->
     Int.lt (z_to_int iv_cur_z) (nat_to_int n) = false ->
     exec_stmt ge f sp e m
               (oned_loop n ivname innerstmt) E0
-              e' m' (Out_normal) -> e = e' /\ m = m'.
+              e' m' o -> o = Out_exit 0 /\ e = e' /\ m = m'.
 Proof.
+  intros until iv_cur_z.
+  intros e_at_ivname.
+  intros iv_cur_z_gt_n.
+  intros exec.
+  assert (eval_expr ge sp e m (Ebinop
+                                 (Ocmp Clt)
+                                 (Evar ivname)
+                                 (Econst (Ointconst (nat_to_int n)))) Vfalse) as
+      cond_is_false.
+  eapply eval_Ebinop.
+  eapply eval_Evar.
+  eapply e_at_ivname.
+  eapply eval_Econst.
+  unfold eval_constant.
+  auto.
+  unfold eval_binop.
+  unfold Val.cmp.
+  unfold Val.cmp_bool.
+  unfold z_to_val.
+  unfold Int.cmp.
+  unfold z_to_int in iv_cur_z_gt_n.
+  rewrite iv_cur_z_gt_n.
+  unfold Val.of_optbool.
+  reflexivity.
+ 
 Abort.
 
 (* Theorem on how a 1-D loop with match that of a SCEV Value *)
@@ -931,5 +956,5 @@ Theorem oned_loop_add_rec_matches_addrec_scev:
               e' m' Out_normal ->
     e' ! ivname =  Some (z_to_val (eval_scev (SCEVAddRec iv_init_val iv_add_val) n)).
 Proof.
-  Aboty`
+Abort.
     
