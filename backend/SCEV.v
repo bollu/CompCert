@@ -911,7 +911,7 @@ Qed.
 
 
 Lemma exit_oned_loop:
-  forall (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt) (ivval_int: int),
+  forall (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt),
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
     eval_expr ge sp e m (Ebinop
        (Ocmp Clt)
@@ -992,11 +992,8 @@ Proof.
   unfold Val.of_optbool.
   reflexivity.
 
-  inversion exec. subst.
-  rename H0 into eval_inner_loop.
-  rename H1 into eval_loop.
- 
-Abort.
+  eapply exit_oned_loop; eassumption.
+Qed.
 
 (* Theorem on how a 1-D loop with match that of a SCEV Value *)
 Theorem oned_loop_add_rec_matches_addrec_scev:
