@@ -13,8 +13,10 @@ Definition z_to_val (z: Z) : val := Vint (Int.repr z).
 
 Hint Unfold z_to_val.
 Hint Unfold z_to_int.
+Hint Unfold nat_to_int.
 Hint Transparent z_to_val.
 Hint Transparent z_to_int.
+Hint Transparent nat_to_int.
 
 (* scev for identifier "i" that starts with first val and recurrences with val *)
 Inductive scev: Type :=
@@ -674,17 +676,89 @@ Proof.
 Qed.
     
 
+Lemma bool_of_val_to_bool_false: forall (b: bool),
+    Val.bool_of_val Vfalse b -> b = false.
+Proof.
+  intros b b_val_eq_false.
+  inversion b_val_eq_false.
+  assert (Int.eq Int.zero Int.zero = true) as Ieq.
+  apply Int.eq_true.
+  rewrite Ieq.
+  simpl.
+  reflexivity.
+Qed.
 
+(* Why do I need to phrase this as:
+<hypothesis> -> aRb -> aRc -> b = c?
+
+Why can I not simply say "<hypothesis> -> aRb"?
+Intuitively, I should be able to, because I have shown that this relation
+is a function, so I can talk about a unique aRb. However, I am not sure
+how to convince Coq that I am allowed to talk aobut this unique aRb
+*)
 Lemma if_cond_with_failing_branch_will_return_else:
   forall (cond: expr) (sthen selse: Cminor.stmt),
-  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (tr: trace) (o: outcome),
+  forall (m m' m'': mem)
+    (e e' e'': env) (f: function) (sp: val) (ge: genv) (o o' o'': outcome),
+
     eval_expr ge sp e m cond Vfalse ->
-    exec_stmt ge f sp e m (selse) tr e' m' o ->
+    exec_stmt ge f sp e m (selse) E0 e' m' o' ->
     exec_stmt ge f sp e m
-              (Cminor.Sifthenelse cond sthen selse) tr e' m' o.
-  Abort.
+              (Cminor.Sifthenelse cond sthen selse) E0 e'' m'' o'' ->
+     m' = m'' /\ o' = o'' /\ e' = e''. 
+Proof.
+  intros until o''.
+  intros cond_false.
+  intros exec_else.
+  intros exec_sifthenelse.
+  inversion exec_sifthenelse. subst.
+  assert (v = Vfalse) as veq.
+  eapply eval_expr_is_function; eassumption.
+  subst.
+  assert (b = false) as b_is_false.
+  apply bool_of_val_to_bool_false. auto.
+  subst.
+
+  eapply exec_stmt_funcall_with_no_effect_is_function.
+  eassumption.
+  auto.
+  eassumption.
+Qed.
+
+Lemma eval_constint_val: forall (ge: genv) (sp: val) (e: env) (m: mem)
+    (n: nat) (v: val),
+    eval_expr ge sp e m (Econst (Ointconst (nat_to_int n))) v ->
+    v = Vint (nat_to_int n).
+Proof.
+  intros until v.
+  intros eval_v.
+  inversion eval_v.
+  subst.
+  inversion H0.
+  subst.
+  reflexivity.
+Qed.
+
+Lemma eval_evar_val: forall (ge: genv) (sp: val) (e: env) (m: mem)
+                       (ivname:  ident) (v v': val),
+    e ! ivname = Some v' ->
+  eval_expr ge sp e m (Evar ivname) v ->
+  v = v'.
+Proof.
+  intros until v'.
+  intros e_at_ivname.
+  intros eval_evar.
+  inversion eval_evar. subst.
+  assert (Some v = Some v') as some_eq.
+  rewrite <- H0. rewrite <- e_at_ivname.
+  reflexivity.
+
+  inversion some_eq.
+  auto.
+Qed.
   
     
+
 
 
 Lemma oned_loop_with_iv_gt_ub_will_not_execute:
@@ -696,6 +770,107 @@ Lemma oned_loop_with_iv_gt_ub_will_not_execute:
     exec_stmt ge f sp e m
               (oned_loop n ivname innerstmt) E0
               e' m' (Out_exit 1) -> e = e' /\ m = m'.
+Proof.
+  intros until iv_cur_z.
+  intros e_at_ivname.
+  intros lt_cond.
+  intros exec_oned_loop.
+
+  assert (forall v, eval_expr ge sp e m
+                    (Ebinop (Ocmp Clt) (Evar ivname) (Econst (Ointconst (nat_to_int n)))) v ->
+               v = Vfalse) as if_cond_is_false.
+  - intros v eval_cond.
+  inversion eval_cond. subst.
+  assert (v1 = (z_to_val iv_cur_z)).
+  eapply eval_evar_val; eassumption.
+  subst.
+  assert (v2 = Vint (nat_to_int n)).
+  eapply eval_constint_val.
+  eassumption. auto.
+  subst.
+
+  inversion H5.
+  unfold Val.cmp in *.
+  unfold Val.cmp_bool in *.
+  unfold z_to_val in *.
+  unfold z_to_int in lt_cond.
+  unfold Int.cmp in *.
+  rewrite lt_cond in *.
+  simpl.
+  reflexivity.
+
+
+   - assert (forall v v_bool, eval_expr ge sp e m
+                                  (Ebinop (Ocmp Clt) (Evar ivname) (Econst (Ointconst (nat_to_int n)))) v ->
+                        Val.bool_of_val v v_bool ->
+                        v_bool = false) as if_cond_is_false'.
+    + intros.
+    cut (v = Vfalse).
+    intros.
+    subst.
+    inversion H0.
+    rewrite Int.eq_true.
+    auto.
+    eapply if_cond_is_false.
+    assumption.
+  
+    +  inversion exec_oned_loop; subst.
+       * (* previous loop + current loop iter *)
+         assert (e = e1 /\ m = m1).
+         clear H1.
+         rename H0 into eval_block.
+         inversion eval_block. subst.
+         rename H9 into eval_seq.
+         inversion eval_seq. subst.
+         rename H8 into eval_inner.
+
+         (* If is in terms of e and e2. We need to convert it to e and e1 *)
+         rename H1 into eval_ite.
+         inversion eval_ite. subst.
+         assert (b = false).
+         eapply if_cond_is_false'; eassumption.
+         subst.
+         inversion H14.
+         subst.
+
+         rename H7 into eval_ite.
+         inversion eval_ite. subst.
+         assert (b = false).
+         eapply if_cond_is_false'; eassumption.
+         subst.
+         inversion H15.
+         subst.
+         auto.
+
+         (* substitute e = e1 and m = m1 *)
+         destruct H as [eeq meq].
+         subst.
+
+
+         (* Now, link e1 and e' *)
+         clear H0.
+         rename H1 into exec_loop.
+         inversion exec_loop.
+         subst.
+   
+         
+
+       admit.
+    +  (* Exit out of loop iter *)
+       
+Admitted.
+
+    
+
+     
+    
+    
+    
+
+     
+
+
+
 Abort.
 
 (* Theorem on how a 1-D loop with match that of a SCEV Value *)
