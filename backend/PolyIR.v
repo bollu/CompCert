@@ -5,6 +5,7 @@ Require Import AST.
 Require Import Cop.
 Require Import Cminor.
 Require Import Integers.
+Require Import SCEV.
 
 Inductive affineexpr: Type :=
 | Eindvar: affineexpr
@@ -128,52 +129,4 @@ Theorem fnequiv_preserves_mem:
     cm_fn_0_to_ub cmf ub addre storee iv ->
     eval_funcall ge mem (Internal cmf) cmfargs tr mem' Vundef ->
     exec_loop 0 mem l ub mem'.
-  intros until storeaff.
-  intros addre_aff_rel.
-  intros storee_aff_rel.
-  intros fn_is_loop.
-  intros fn_eval.
-  unfold cm_fn_0_to_ub in fn_is_loop.
-  inversion fn_eval.
-  rewrite fn_is_loop in *.
-  rename H2 into exec_fn.
-  unfold cm_loop_0_to_ub in exec_fn.
-  inversion exec_fn.
-  subst.
-  rename H11 into exec_set_iv.
-  rename H16 into exec_block_around_loop.
-  inversion exec_block_around_loop.
-  subst.
-  rename H7 into exec_loop.
-  (* base case? *)
-  inversion exec_loop.
-  subst.
-  rename H2 into exec_loop_next_trip.
-  rename H1 into exec_loop_inner.
-  inversion exec_loop_inner.
-  subst.
-  rename H11 into sseq_in_loop.
-  inversion sseq_in_loop.
-  subst.
-  rename H2 into exec_ite.
-  rename H10 into exec_store.
-  inversion exec_ite.
-  subst.
-  rename H10 into eval_geq.
-  rename H16 into exec_skip_or_exit.
-  rename H15 into val_of_geq.
-  inversion eval_geq.
-  subst.
-  rename H9 into eval_lt.
-  rename v1 into ivar_val.
-  rename v2 into ub_val.
-  inversion_clear H8.
-  rename H into eval_ub.
-    
-
-                            
-
-
-
-
-    
+Abort.
