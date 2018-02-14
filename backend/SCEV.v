@@ -34,19 +34,21 @@ Fixpoint eval_scev (s: scev) (n: nat) : Z :=
 
 
 
-
-Definition oned_loop (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt :=
-Sloop (
+Definition oned_loop_inner_block (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt :=
     Sblock (
         Cminor.Sseq (Sifthenelse (Ebinop
                                     (Ocmp Clt)
                                     (Evar ivname)
                                     (Econst (Ointconst (nat_to_int n))))
                                  (Sskip)
-                                 (Sexit 1) (* this is a hack, there is no reason it has to be 0 *)
+                                 (Sexit 1)
                     )
                     (inner_stmt)
-      )
+      ).
+
+Definition oned_loop (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt :=
+  Sloop (
+      oned_loop_inner_block n ivname inner_stmt
   ).
 
 Definition iv_init (ivname: ident) (iv_init_val: Z): Cminor.stmt :=
@@ -758,7 +760,7 @@ Proof.
 Qed.
   
 
-Example exit_exec_outcome:
+Example exit_sexit:
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
     forall (n: nat),
     exec_stmt ge f sp e m (Sexit n) E0 e' m' o ->
@@ -770,36 +772,33 @@ Proof.
   reflexivity.
 Qed.
 
-Example exit_exec_in_if_outcome:
+Example exit_sif:
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
-  forall (n: nat),
+  forall (n: nat) (econd: expr),
+    eval_expr ge sp e m econd Vfalse ->
     exec_stmt ge f sp e m
-              (Sifthenelse
-                 (Econst (Ointconst (nat_to_int 0)))
+              (Sifthenelse econd
                  (Sskip)
                  (Sexit n)
               )
               E0 e' m' o ->
     o = Out_exit n.
 Proof.
-  intros until n.
+  intros until econd.
+  intros econd_is_false.
   intros execif.
   inversion execif.
   subst.
   rename H12 into execif_bool.
-  assert (b = false) as bf.
-  apply bool_of_val_to_bool_false.
-  inversion H6.
-  subst.
-  unfold eval_constant in H0.
-  unfold nat_to_int in H0.
-  inversion H0.
-  subst.
-  unfold Vfalse.
-  unfold Int.zero.
-  auto.
 
-  rewrite bf in execif_bool.
+  assert (v = Vfalse).
+  eapply eval_expr_is_function; eassumption.
+  subst.
+  
+  assert (b = false) as bf.
+  apply bool_of_val_to_bool_false. eassumption.
+  subst.
+
   inversion execif_bool.
   subst.
   reflexivity.
@@ -809,13 +808,13 @@ Qed.
 provides us with a contradiciton that Out_normal = Out_exit n.
 This is because of us inverting the "seq"
  *)
-Example exit_exec_in_seq_if_outcome:
+Example exit_sseq_sif:
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
-  forall (n: nat) (sinner: stmt),
+  forall (n: nat) (sinner: stmt) (econd: expr),
+    eval_expr ge sp e m econd Vfalse ->
     exec_stmt ge f sp e m
               (Cminor.Sseq 
-                 (Sifthenelse
-                    (Econst (Ointconst (nat_to_int 0)))
+                 (Sifthenelse econd
                     (Sskip)
                     (Sexit n)
                  )
@@ -823,83 +822,89 @@ Example exit_exec_in_seq_if_outcome:
               E0 e' m' o ->
     o = Out_exit n.
 Proof.
-  intros until sinner.
+  intros until econd.
+  intros econd_false.
   intros seq.
-  
   assert (forall o' m1 e1, exec_stmt ge f sp e m
-         (Sifthenelse (Econst (Ointconst (nat_to_int 0))) Sskip (Sexit n)) E0 e1
+         (Sifthenelse econd Sskip (Sexit n)) E0 e1
          m1 o' -> o' = (Out_exit n)) as out_exit.
   intros.
-  eapply exit_exec_in_if_outcome. exact H.
+  eapply exit_sif; eassumption.
+                                                
 
   
   inversion seq.
-  - subst.
+  - (* normal trace of S1 in SSeq. not happening *)
+    subst.
   assert (t1 = E0 /\ t2 = E0) as ht1t2. eapply destruct_trace_app_eq_E0; eassumption.
   destruct ht1t2 as [t1E0 t2E0]. subst.
   specialize (out_exit _ _ _  H1).
   inversion out_exit.
   
-  - subst.
+  - (* Early quit of S1. correct case *)
+    subst.
     specialize (out_exit _ _ _ H5).
     subst.
     reflexivity.
-
 Qed.
-  
 
-
-Theorem oned_loop_at_zero_does_not_change_env:
-  forall (ivname: ident) (inner: stmt),
-   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
+Example exit_sblock_sseq_sif:
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
+  forall (n: nat) (sinner: stmt) (econd: expr),
+    (n > 0)%nat ->
+    eval_expr ge sp e m econd Vfalse ->
     exec_stmt ge f sp e m
-              (oned_loop 0 ivname inner) E0
-              e' m' (Out_exit 0) ->
-    e = e' /\ m = m'.
+              (Cminor.Sblock
+                 (Cminor.Sseq 
+                    (Sifthenelse econd
+                                 (Sskip)
+                                 (Sexit n)
+                    )
+                    sinner)
+              )
+              E0 e' m' o ->
+    o = Out_exit (n - 1).
 Proof.
-  intros until ge.
-  intros exec.
-  unfold oned_loop in *.
-  inversion exec;
-    subst.
+  intros until econd.
+  intros n_gt_0.
+  intros econd_is_false.
+  intros block.
+  inversion block; subst.
+  assert (out = Out_exit n).
+  eapply exit_sseq_sif; eassumption.
+  rewrite H.
+  destruct n.
+  inversion n_gt_0.
+  unfold outcome_block.
+  simpl.
+  assert ((n - 0 = n)%nat) as stupid. omega.
+  rewrite stupid.
+  reflexivity.
+Qed.
 
-  rename H0 into block.
-  rename H1 into loop.
-  inversion block.
-  subst.
-  rename H9 into seq.
-  inversion seq. subst.
+  
+(* Definition oned_loop_inner_block
+(n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt := *)
 
-  rename H1 into exec_ite.
-  inversion exec_ite.
-  subst.
-  assert (b = false). admit.
-  rewrite H in H15.
-  inversion H15.
-  subst. 
-  unfold outcome_block in H4.
-
-
-    
-- contradiction.
-Admitted.
-    
-
-Lemma exec_stmt_funcall_with_no_effect_is_injective: forall ge,
-  (forall m fd args (t:trace) m' res,
-      eval_funcall ge m' fd args t m res ->
-      t = E0 ->
-      (forall m'' res,
-         eval_funcall ge m'' fd args E0 m res ->  m' = m'')
-  ) 
-  /\(forall f sp e m s  (t:trace) e' m' out,
-       exec_stmt ge f sp e m s t e' m' out ->
-       t = E0 ->
-       (forall e'' m'' out',
-           exec_stmt ge f sp e m s E0 e'' m'' out' ->
-           m' = m'' /\ out = out' /\ e' = e'')).
+Lemma exit_oned_loop_inner_block:
+  forall (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt) (ivval_int: int),
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
+    eval_expr ge sp e m (Ebinop
+       (Ocmp Clt)
+       (Evar ivname)
+       (Econst (Ointconst (nat_to_int n)))) Vfalse ->
+    exec_stmt ge f sp e m (oned_loop_inner_block n ivname inner_stmt)
+              E0 e' m' o ->
+    o = Out_exit 0.
 Proof.
-Abort.
+  intros until o.
+  intros ivval_gt_n.
+  intros exec_if.
+  eapply exit_sblock_sseq_sif with (n := 1%nat).
+  omega.
+  exact ivval_gt_n.
+  exact exec_if.
+Qed.
 
 
 Lemma oned_loop_with_iv_gt_ub_will_not_execute:
@@ -912,91 +917,7 @@ Lemma oned_loop_with_iv_gt_ub_will_not_execute:
               (oned_loop n ivname innerstmt) E0
               e' m' (Out_normal) -> e = e' /\ m = m'.
 Proof.
-  intros until iv_cur_z.
-  intros e_at_ivname.
-  intros lt_cond.
-  intros exec_oned_loop.
-
-  assert (forall v, eval_expr ge sp e m
-                         (Ebinop (Ocmp Clt) (Evar ivname) (Econst (Ointconst (nat_to_int n)))) v ->
-               v = Vfalse) as if_cond_is_false.
-  intros v eval_cond.
-  inversion eval_cond. subst.
-  assert (v1 = (z_to_val iv_cur_z)).
-  eapply eval_evar_val; eassumption.
-  subst.
-  assert (v2 = Vint (nat_to_int n)).
-  eapply eval_constint_val.
-  eassumption. auto.
-  subst.
-
-  inversion H5.
-  unfold Val.cmp in *.
-  unfold Val.cmp_bool in *.
-  unfold z_to_val in *.
-  unfold z_to_int in lt_cond.
-  unfold Int.cmp in *.
-  rewrite lt_cond in *.
-  simpl.
-  reflexivity.
-
-
-  assert (forall v v_bool, eval_expr ge sp e m
-                                (Ebinop (Ocmp Clt) (Evar ivname) (Econst (Ointconst (nat_to_int n)))) v ->
-                      Val.bool_of_val v v_bool ->
-                      v_bool = false) as if_cond_is_false'.
-  intros.
-  cut (v = Vfalse).
-  intros.
-  subst.
-  inversion H0.
-  rewrite Int.eq_true.
-  auto.
-  eapply if_cond_is_false.
-  assumption.
-
-  unfold oned_loop in *.
-  inversion exec_oned_loop; subst.
-  (* Holy crap, I need to show that exec_stmt is *injective* as well, now *)
-  -
-    rename H0 into eval_block.
-    rename H1 into eval_loop.
-
-    assert (e = e1 /\ m = m1) as e_m_1.
-    inversion eval_block. subst.
-    rename H9 into eval_seq.
-    inversion eval_seq. subst.
-    rename H8 into eval_inner.
-    clear eval_inner.
-    rename H1 into eval_if.
-    inversion eval_if. subst.
-    rename H14 into eval_if_unfold.
-    assert (b = false).
-    eapply if_cond_is_false'; eassumption.
-    subst.
-    inversion eval_if_unfold.
-    subst.
-
-    rename H7 into eval_ite.
-    inversion eval_ite. subst.
-    rename H15 into eval_if_unfold.
-    assert (b = false).
-    eapply if_cond_is_false'; eassumption.
-    subst.
-    inversion eval_if_unfold.
-    auto.
-
-    destruct e_m_1 as  [e_1 m_1].
-    subst.
-    clear eval_block.
-    unfold oned_loop in exec_oned_loop.
-    assert (t1 = E0 /\ t2 = E0) as t1_t2_eq_E0.
-    apply destruct_trace_app_eq_E0; assumption.
-    destruct t1_t2_eq_E0 as [t1_E0 t2_E0].
-    subst.
-
-
-Admitted.
+Abort.
 
 (* Theorem on how a 1-D loop with match that of a SCEV Value *)
 Theorem oned_loop_add_rec_matches_addrec_scev:
@@ -1007,18 +928,5 @@ Theorem oned_loop_add_rec_matches_addrec_scev:
               e' m' Out_normal ->
     e' ! ivname =  Some (z_to_val (eval_scev (SCEVAddRec iv_init_val iv_add_val) n)).
 Proof.
-  intros n.
-  induction n;
-    intros until ge;
-    intros exec_loop;
-    inversion exec_loop;
-    subst.
-
-  - rename H1 into exec_init;
-  rename H6 into exec_loop_inner.
-
-   
-   
- 
-Admitted.
+  Aboty`
     
