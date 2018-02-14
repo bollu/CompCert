@@ -37,7 +37,7 @@ Fixpoint eval_scev (s: scev) (n: nat) : Z :=
 Definition oned_loop_inner_block (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt :=
     Sblock (
         Cminor.Sseq (Sifthenelse (Ebinop
-                                    (Ocmp Clt)
+                                    (Ocmpu Clt)
                                     (Evar ivname)
                                     (Econst (Ointconst (nat_to_int n))))
                                  (Sskip)
@@ -51,35 +51,34 @@ Definition oned_loop (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.
       oned_loop_inner_block n ivname inner_stmt
   ).
 
-Definition iv_init (ivname: ident) (iv_init_val: Z): Cminor.stmt :=
-  Sassign ivname (Econst (Ointconst (Int.repr iv_init_val))).
+Definition z_init (ivname: ident) (z_init_val: Z): Cminor.stmt :=
+  Sassign ivname (Econst (Ointconst (Int.repr z_init_val))).
 
 
-Definition oned_loop_with_init (n: nat)
+
+Definition oned_loop_add_rec (n: nat)
            (ivname: ident)
-           (iv_init_val: Z)
-           (inner_stmt: Cminor.stmt): Cminor.stmt :=
+           (scevname: ident)
+           (scev_init_val: Z)
+           (scev_add_val: Z) : Cminor.stmt :=
   Cminor.Sseq
-    (iv_init ivname iv_init_val)
-    (oned_loop n ivname inner_stmt).
+    (z_init ivname 0)
+    (Cminor.Sseq
+       (z_init scevname scev_init_val)
+       (oned_loop n ivname (
+                    Cminor.Sseq
+                      (Sassign ivname (Ebinop Oadd (Evar ivname) (Econst (Ointconst (z_to_int 1)))))
+                      (Sassign scevname (Ebinop Oadd (Evar scevname) (Econst (Ointconst (z_to_int scev_add_val)))))
+       ))
+    ).
 
-
-Definition oned_loop_add_rec (n: nat) (ivname: ident) (iv_init_val: Z) (add_val: Z) : Cminor.stmt :=
-  oned_loop_with_init n ivname iv_init_val
-            (Sassign
-               ivname
-               (Ebinop
-                  Oadd
-                  (Evar ivname)
-                  (Econst (Ointconst (Int.repr add_val))))).
-
-Lemma iv_init_sets_iv_value: forall (ivname: ident)
-                               (iv_init_val: Z),
+Lemma z_init_sets_z_value: forall (ivname: ident)
+                               (z_init_val: Z),
     
    forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
     exec_stmt ge f sp e m
-              (iv_init ivname iv_init_val) E0
-              e' m' Out_normal -> e' ! ivname = Some (z_to_val iv_init_val).
+              (z_init ivname z_init_val) E0
+              e' m' Out_normal -> e' ! ivname = Some (z_to_val z_init_val).
   intros until ge.
   intros exec.
   inversion exec.
@@ -727,10 +726,25 @@ Proof.
   eassumption.
 Qed.
 
-Lemma eval_constint_val: forall (ge: genv) (sp: val) (e: env) (m: mem)
+Lemma eval_constnat_val: forall (ge: genv) (sp: val) (e: env) (m: mem)
     (n: nat) (v: val),
     eval_expr ge sp e m (Econst (Ointconst (nat_to_int n))) v ->
     v = Vint (nat_to_int n).
+Proof.
+  intros until v.
+  intros eval_v.
+  inversion eval_v.
+  subst.
+  inversion H0.
+  subst.
+  reflexivity.
+Qed.
+
+
+Lemma eval_constint_val: forall (ge: genv) (sp: val) (e: env) (m: mem)
+    (i: int) (v: val),
+    eval_expr ge sp e m (Econst (Ointconst i)) v ->
+    v = Vint (i).
 Proof.
   intros until v.
   intros eval_v.
@@ -893,7 +907,7 @@ Lemma exit_oned_loop_inner_block:
   forall (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt),
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
     eval_expr ge sp e m (Ebinop
-       (Ocmp Clt)
+       (Ocmpu Clt)
        (Evar ivname)
        (Econst (Ointconst (nat_to_int n)))) Vfalse ->
     exec_stmt ge f sp e m (oned_loop_inner_block n ivname inner_stmt)
@@ -914,7 +928,7 @@ Lemma exit_oned_loop:
   forall (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt),
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
     eval_expr ge sp e m (Ebinop
-       (Ocmp Clt)
+       (Ocmpu Clt)
        (Evar ivname)
        (Econst (Ointconst (nat_to_int n)))) Vfalse ->
     exec_stmt ge f sp e m (oned_loop n ivname inner_stmt)
@@ -962,7 +976,7 @@ Lemma oned_loop_with_iv_gt_ub_will_not_execute:
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
   forall (iv_cur_z: Z),
     e ! ivname = Some (z_to_val iv_cur_z) ->
-    Int.lt (z_to_int iv_cur_z) (nat_to_int n) = false ->
+    Int.ltu (z_to_int iv_cur_z) (nat_to_int n) = false ->
     exec_stmt ge f sp e m
               (oned_loop n ivname innerstmt) E0
               e' m' o -> o = Out_exit 0 /\ e = e' /\ m = m'.
@@ -972,7 +986,7 @@ Proof.
   intros iv_cur_z_gt_n.
   intros exec.
   assert (eval_expr ge sp e m (Ebinop
-                                 (Ocmp Clt)
+                                 (Ocmpu Clt)
                                  (Evar ivname)
                                  (Econst (Ointconst (nat_to_int n)))) Vfalse) as
       cond_is_false.
@@ -983,11 +997,13 @@ Proof.
   unfold eval_constant.
   auto.
   unfold eval_binop.
-  unfold Val.cmp.
+  unfold Val.cmpu.
   unfold Val.cmp_bool.
   unfold z_to_val.
   unfold Int.cmp.
   unfold z_to_int in iv_cur_z_gt_n.
+  unfold Val.cmpu_bool.
+  unfold Int.cmpu.
   rewrite iv_cur_z_gt_n.
   unfold Val.of_optbool.
   reflexivity.
@@ -996,14 +1012,148 @@ Proof.
 Qed.
 
 (* Theorem on how a 1-D loop with match that of a SCEV Value *)
-Theorem oned_loop_add_rec_matches_addrec_scev:
-  forall (n: nat) (ivname: ident) (iv_init_val iv_add_val: Z),
-   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
+
+Theorem oned_loop_add_rec_matches_addrec_scev_n_eq_0:
+  forall  (ivname scevname: ident),
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
+  forall  (scevz scevinit scevrec: Z),
+    scevname <> ivname ->
+    scevz = eval_scev (SCEVAddRec scevinit scevrec) 0 ->
     exec_stmt ge f sp e m
-              (oned_loop_add_rec n ivname iv_init_val iv_add_val) E0
+              (oned_loop_add_rec 0 ivname scevname scevinit scevrec) E0
               e' m' Out_normal ->
-    e' ! ivname =  Some (z_to_val (eval_scev (SCEVAddRec iv_init_val iv_add_val) n)).
+    e' ! scevname =  Some (z_to_val (scevz)).
+Proof.
+  intros until scevrec.
+  intros scevname_neq_ivname.
+  intros scevzval.
+  unfold eval_scev in scevzval.
+  subst.
+  intros exec.
+  inversion exec. subst.
+  rename H1 into ivinit.
+  rename H6 into seq.
+
+  assert (t1 = E0 /\ t2 = E0) as teq.
+  eapply destruct_trace_app_eq_E0. eassumption.
+  destruct teq as [t1eq t2eq].
+  subst.
+  clear H11.
+
+  assert (e1 ! ivname = Some (Vint (Int.repr 0))) as e1_at_ivname_is_0.
+  eapply z_init_sets_z_value.
+  eassumption.
+
+  
+  inversion seq. subst.
+  rename H1 into stmt_scevinit.
+  rename H6 into oned_loop_empty.
+
+  
+  assert (t1 = E0 /\ t2 = E0) as teq.
+  eapply destruct_trace_app_eq_E0. eassumption.
+  destruct teq as [t1eq t2eq].
+  subst.
+  clear H11.
+
+  assert (e2 ! scevname = Some (Vint (Int.repr scevinit))) as e2_at_scevname_is_init.
+  eapply z_init_sets_z_value.
+  eassumption.
+
+  assert (e2 !ivname = Some (Vint (Int.repr 0))) as e2_at_ivname_is_0.
+  inversion stmt_scevinit. subst.
+  cut ((PTree.set scevname v e1) ! ivname = e1 ! ivname).
+  intros ix_ivname.
+  rewrite ix_ivname.
+  eassumption.
+  eapply PTree.gso.
+  auto.
+
+  assert (Out_normal = Out_exit 0).
+  eapply exit_oned_loop with (ivname := ivname) (n := 0%nat).
+  eapply eval_Ebinop.
+  eapply eval_Evar.
+  exact e2_at_ivname_is_0.
+  assert (eval_expr ge sp e2 m2 (Econst (Ointconst (nat_to_int 0))) (Vint (Int.repr 0))) as eval_zero.
+  eapply eval_Econst.
+  unfold eval_constant.
+  reflexivity.
+  eassumption.
+  unfold eval_binop.
+  unfold Val.cmpu.
+  unfold Val.cmpu_bool.
+  unfold Int.cmpu.
+  unfold Int.ltu.
+  assert (0 >= 0) as zero_geq_zero. omega.
+  rewrite zlt_false.
+  unfold Val.of_optbool.
+  reflexivity.
+  auto.
+  eassumption.
+
+  inversion H.
+
+
+  subst.
+  contradiction.
+
+  subst.
+  contradiction.
+Qed.
+
+
+  
+Theorem oned_loop_add_rec_matches_addrec_scev:
+  forall  (n: nat) (ivname scevname: ident),
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
+  forall  (scevz scevinit scevrec: Z),
+    scevz = eval_scev (SCEVAddRec scevinit scevrec) n ->
+    exec_stmt ge f sp e m
+              (oned_loop_add_rec n ivname scevname scevinit scevrec) E0
+              e' m' Out_normal ->
+    e' ! scevname =  Some (z_to_val (scevz)).
 Proof.
   intros n. induction n.
-Abort.
+  - intros until scevrec.
+    intros scevz_val.
+    unfold eval_scev in scevz_val.
+    subst.
     
+    intros exec_loop.
+    inversion exec_loop; subst.
+    + assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
+    eapply destruct_trace_app_eq_E0; eassumption.
+    destruct t1_t2_E0 as [t1_E0 t2_E0].
+    subst.
+    clear H11.
+    
+    rename H1 into ivinit.
+    rename H6 into sseq.
+    inversion sseq. subst.
+
+    *  (* sseq steps normally *)
+    
+    
+    inversion eval_init.
+    subst.
+    rename H4 into v_eval_as_z_init_val.
+
+    
+    assert (v = Vint (Int.repr z_init_val)).
+    eapply eval_constint_val.
+    eassumption.
+    subst.
+
+    assert (Out_normal = Out_exit 0).
+
+    (* time to show that evaluation of ivar leads to 0)
+    eval_loop.
+
+  
+  
+  assert(PTree.set ivname v e = e').
+  eapply oned_loop_with_iv_gt_ub_will_not_execute with (ivname := ivname).
+  rewrite PTree.gss.
+  rewrite H.
+  unfold z_to_val.
+  auto.
