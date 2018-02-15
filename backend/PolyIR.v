@@ -132,29 +132,33 @@ Section MATCHAFFINEEXPR.
   | match_Econstint: forall i,match_affineexpr (Econst (Ointconst i)) (Econstint i).
 End MATCHAFFINEEXPR.
 
-Theorem matched_affineexpr_have_same_value:
-  forall (l:loop) (le:loopenv) (a:expr) (sp: val) (m: mem) (ae:affineexpr) (e:env) (ge: genv) (v:val),
+Theorem match_expr_have_same_value:
+  forall (l:loop) (le:loopenv) (a:expr) (sp: val) (m: mem) (ae:affineexpr) (e:env) (ge: genv) (v v':val),
     match_affineexpr l a ae ->
     match_env l e le ->
     eval_expr ge sp e m a v ->
-    eval_affineexpr le l ae v.
+    eval_affineexpr le l ae v' ->
+    v = v'.
 Proof.
-  intros until v.
+  intros until v'.
   intros match_exprs.
   intros match_envs.
   intros eval_expr.
-  induction match_exprs.
-  - inversion match_envs.
-    inversion eval_expr.
+  intros eval_affineexpr.
+  
+  induction match_exprs;
+    inversion eval_expr;
+    inversion eval_affineexpr;
+    inversion match_envs;
     subst.
-    rewrite H0 in H1.
-    inversion H1.
-    eapply eval_Eindvar.
-  -  inversion match_envs.
-     inversion eval_expr.
-     subst.
-     inversion H1.
-     eapply eval_Econstint.
+  - (* eval indvar *)
+    rewrite H4 in H0.
+    inversion H0.
+    auto.
+
+  -  (* eval const int *)
+    inversion H0.
+    auto.
 Qed.
 
 
@@ -172,8 +176,36 @@ End MATCHSTMT.
 
 Theorem match_stmt_has_same_effect:
   forall (le: loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m' m'': mem) (ge: genv) (e e': env) (t: trace) (o: outcome),
+    match_env l e le ->
     Cminor.exec_stmt ge f sp e m cms t e' m' o ->
     exec_stmt le l m s m'' ->
+    match_stmt l  cms s ->
     m' = m'' /\ e = e' /\ t = E0 /\ o = Out_normal.
 Proof.
-Abort.
+  intros until o.
+  intros matchenv.
+  intros exec_cms.
+  intros exec_s.
+  intros match_cms_s.
+  induction match_cms_s.
+  inversion exec_s.
+  inversion exec_cms.
+  subst.
+  assert (vaddr0 = vaddr) as vaddreq.
+  eapply match_expr_have_same_value; eassumption.
+  subst.
+
+  assert (v = Vint i) as veq.
+  inversion H21.
+  subst.
+  inversion H1. subst.
+  reflexivity.
+  subst.
+  
+  assert (Some m' = Some m'') as meq.
+  rewrite <- H22.
+  rewrite <- H8.
+  auto.
+  inversion meq. subst.
+  auto.
+Qed.
