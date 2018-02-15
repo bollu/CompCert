@@ -70,6 +70,7 @@ COMMON=Errors.v AST.v Linking.v \
 # Back-end modules (in backend/, $(ARCH)/)
 
 BACKEND=\
+  SCEV.v  \
   Cminor.v Op.v CminorSel.v \
   SelectOp.v SelectDiv.v SplitLong.v SelectLong.v Selection.v \
   SelectOpproof.v SelectDivproof.v SplitLongproof.v \

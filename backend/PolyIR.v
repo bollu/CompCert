@@ -12,121 +12,75 @@ Inductive affineexpr: Type :=
 | Econstint: int -> affineexpr.
 
 Inductive stmt: Type :=
-| Sstore:  memory_chunk -> affineexpr -> int -> stmt
-| Sseq: stmt -> stmt -> stmt.
+| Sstore:  memory_chunk -> affineexpr -> int -> stmt.
+                                              
 
+Notation vindvar := nat.
 Notation indvar := nat.
 Notation upperbound := nat.
-Definition indvar_to_int (iv: indvar): int := (Int.repr (Z.of_nat iv)).
-Definition ub_to_int (ub: upperbound): int := (Int.repr (Z.of_nat ub)).
 
-Record loop : Type := mkLoop { loopub: upperbound; loopstmt: stmt }.
+Definition nat_to_int (n: nat): int := (Int.repr (Z.of_nat n)).
+Definition nat_to_val (n: nat): val := Vint (nat_to_int  n).
 
+Record loop : Type := mkLoop { loopub: upperbound;
+                               loopstmt: stmt;
+                               loopschedule: vindvar -> vindvar
+                             }.
+Record lenv : Type := mkLenv { viv: vindvar }.
+Definition lenv_bump_vindvar (le: lenv) : lenv :=
+  mkLenv ((viv le) + 1)%nat.
 
-Section EVALAFFINEEXPR.
-  Variable iv: indvar.
+Section EVAL_AFFINEEXPR.
 
-Inductive eval_affineexpr: affineexpr -> int -> Prop :=
-| eval_Econstint: forall (x: int), eval_affineexpr (Econstint x) x
-| eval_Eindvar: eval_affineexpr Eindvar (indvar_to_int iv).
-End EVALAFFINEEXPR.
+Variable le: lenv.
+Variable l: loop.
 
+Inductive eval_affineexpr: affineexpr -> val -> Prop :=
+  | eval_Eindvar: eval_affineexpr Eindvar (nat_to_val (loopschedule l (viv le)))
+  | eval_Econstint: forall (i: int),
+      eval_affineexpr (Econstint i) (Vint i).
+End EVAL_AFFINEEXPR.
 
-Section EXECSTMT.
+Section EXEC_STMT.
+Variable l: loop.
+  
+  Inductive exec_stmt: lenv -> mem -> stmt -> mem -> lenv -> Prop :=
+  | exec_Sstore: forall (le: lenv) (m m': mem)
+                   (chunk: memory_chunk) (addr: affineexpr) (i: int) (vaddr: val),
+      eval_affineexpr le l addr vaddr ->
+      Mem.storev chunk m vaddr (Vint i) = Some m' ->
+      exec_stmt le m (Sstore chunk addr i) m' le.
+End EXEC_STMT.
 
-  Inductive exec_stmt: indvar -> mem -> stmt -> mem -> Prop :=
-  | exec_Sstore: forall iv m m' chunk addr vaddr vwrite,
-      eval_affineexpr iv addr vaddr ->
-      Mem.storev chunk m (Vint vaddr) (Vint vwrite) = Some m' ->
-      exec_stmt  iv m (Sstore chunk  addr vwrite) m'.
+Section EXEC_LOOP.
+
+  Inductive exec_loop: lenv -> mem -> loop -> mem -> lenv -> Prop :=
+  | eval_loop_stop: forall le m l,
+      (loopschedule l (viv le) >= (loopub l))%nat ->
+      exec_loop le m l m le
+  | eval_loop_loop: forall le le' le'' m m' m'' l,
+      exec_stmt l le m (loopstmt l) m' le' ->
+      exec_loop (lenv_bump_vindvar le) m' l m'' le'' ->
+      exec_loop le m l m'' le''.
+End EXEC_LOOP.
+
+Theorem eval_affinexpr_is_function:
+  forall (le: lenv) (l: loop) (ae: affineexpr) (v v': val),
+    eval_affineexpr le l ae v ->
+    eval_affineexpr le l ae v' ->
+    v = v'.
+Proof.
+  intros until v'.
+  intros eval_v.
+  intros eval_v'.
+  induction ae; inversion eval_v; inversion eval_v'; subst; try auto.
+Qed.
       
       
-End EXECSTMT.
-
-Section EXECLOOP.
-  Inductive exec_loop: indvar -> mem -> loop -> indvar -> mem -> Prop :=
-  | eval_loop_stop: forall iv ub mem s,
-      (iv >= ub)%nat  ->
-      exec_loop iv mem (mkLoop ub s) iv mem
-  | eval_loop_loop: forall iv iv2 ub mem s mem2 mem3,
-      (iv < ub)%nat ->
-      exec_stmt iv mem s mem2 ->
-      exec_loop (iv + 1) mem2  (mkLoop ub s) iv2 mem3 ->
-      exec_loop iv mem2 (mkLoop ub s) iv2 mem3.
-End EXECLOOP.
-
-Inductive eequiv: Cminor.expr -> affineexpr -> Prop :=
-| eequiv_Constint: forall (i: int),
-    eequiv (Econst (Ointconst i)) (Econstint i).
+      
+      
+    
+    
   
-
-Section STMTEQUIV.
-Inductive sequiv: Cminor.stmt -> stmt -> Prop :=
-| sequiv_Sstore: forall (chunk: memory_chunk) (cmaddr: Cminor.expr) (addr: affineexpr)
-                        (ival: int),
-    eequiv cmaddr addr ->
-    sequiv (Cminor.Sstore chunk cmaddr (Econst (Ointconst ival))) (Sstore chunk addr ival).
-End STMTEQUIV.
-
-     
-
-(*
-----
-  var 'i';                                                                         
-  'i' = 0;                                                                         
-  {{ loop {                                                                        
-       {{ if ('i' < 10) {                                                          
-            /*skip*/                                                               
-            } else {                                                                 
-            exit 1;                                                                
-          }                                                                        
-          int32[&0 +l 4LL *l longofint 'i'] = 'i' + 1;                             
-       }}                                                                          
-       'i' = 'i' + 1;                                                              
-     }                                                                             
-  }}
-----
- *)
-
-
-(* construct a CMinor loop from 0 to ub with stmt cmstmt inside the loop *)
-Definition cm_loop_0_to_ub (ub: upperbound) (ivname: ident) (addrexpr: expr) (storeval: expr): Cminor.stmt :=
-  Cminor.Sseq (Sassign ivname (Econst (Ointconst (Int.repr 0))))
-       (Sblock (
-            Sloop (
-                Sblock (
-                    Cminor.Sseq (Sifthenelse (Ebinop
-                                                (Ocmp  Clt)
-                                                (Evar ivname)
-                                                (Econst (Ointconst (ub_to_int ub))))
-                                (Sskip)
-                                (Sexit 0) (* this is a hack, there is no reason it has to be 0 *)
-                                )
-                                (Cminor.Sstore Mint32 addrexpr storeval)
-                  )
-              )
-          )
-       ).
-Hint Transparent cm_loop_0_to_ub.
-
-
-Definition cm_fn_0_to_ub
-           (fn: Cminor.function)
-           (ub: upperbound)
-           (addre storee: expr)
-           (iv: ident): Prop :=
-  Cminor.fn_body fn = cm_loop_0_to_ub ub iv addre storee.
+End EXEC_STMT.
   
-
-Hint Transparent cm_fn_0_to_ub.
-  
-Check (Cminor.exec_stmt).
-
-Theorem fnequiv_preserves_mem:
-  forall  (ge: genv) (cmf: Cminor.function) (cmfargs: list val)   (tr: trace) (l: loop) (mem mem': mem) (ub: upperbound) (iv: ident) (addre storee: expr) (addraff storeaff: affineexpr),
-    eequiv addre addraff ->
-    eequiv storee storeaff ->
-    cm_fn_0_to_ub cmf ub addre storee iv ->
-    eval_funcall ge mem (Internal cmf) cmfargs tr mem' Vundef ->
-    exec_loop 0 mem l ub mem'.
-Abort.
