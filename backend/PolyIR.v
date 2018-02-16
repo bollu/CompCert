@@ -209,3 +209,79 @@ Proof.
   inversion meq. subst.
   auto.
 Qed.
+
+Section MATCHLOOP.
+  Inductive match_loop: Cminor.stmt -> loop -> Prop :=
+  | match_oned_loop: forall (l: loop)
+                       (cm_inner_stmt: Cminor.stmt)
+                       (inner_stmt: stmt),
+      loopschedule l = id ->
+      loopscheduleinv l = id ->
+      match_stmt l cm_inner_stmt inner_stmt ->
+      match_loop (oned_loop (loopub l) (loopivname l) (cm_inner_stmt))
+                 l.
+End MATCHLOOP.
+
+Theorem match_loop_has_same_effect:
+  forall (le le': loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m' m'': mem) (ge: genv) (e e': env) (o: outcome),
+    match_env l e le ->
+    Cminor.exec_stmt ge f sp e m cms E0 e' m' o ->
+    exec_loop le m l  m'' le' ->
+    match_loop cms l ->
+    m' = m''  /\  match_env l e' le'.
+Proof.
+  intros until o.
+  intros matchenv.
+  intros exec_cm_loop.
+  intros exec_l.
+  intros match_l.
+
+
+  induction match_l.
+
+  (* match_oned_loop *)
+  - rename H into l_sched_id.
+    rename H0 into l_schedinv_id.
+    rename H1 into match_stmts.
+
+    inversion exec_l.
+    subst.
+
+    + (* exec_loop when loop has no iters *)
+      rename H into viv_le_gt_loopub.
+      assert (e = e' /\ m'' = m').
+      eapply oned_loop_with_iv_gt_ub_will_not_execute with
+          (ivname := (loopivname l))
+          (n := loopub l).
+      inversion matchenv. subst. exact H0.
+      rewrite l_sched_id.
+      unfold id.
+      unfold Int.ltu.
+      rewrite zlt_false.
+      reflexivity.
+      unfold SCEV.nat_to_int.
+      unfold z_to_int.
+      admit. (* modulo arithmetic *)
+      eassumption.
+      destruct H. subst.
+      auto.
+
+    + (* exec_loop where we have loop iters *)
+      intros.
+      subst.
+      rename H into iv_in_bounds.
+      rename H0 into exec_prev_s.
+      rename H1 into exec_cur_l.
+      induction (loopub l).
+
+      * (* loopub = 0 *)
+        inversion iv_in_bounds.
+      * (* loopub > 0 *)
+        apply IHn.
+        inversion exec_cm_loop. subst.
+Abort.
+             
+
+
+
+

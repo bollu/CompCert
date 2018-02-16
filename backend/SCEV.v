@@ -8,6 +8,7 @@ Require Import Integers.
 Require Import Maps.
 
 Definition nat_to_int (n: nat): int := (Int.repr (Z.of_nat n)).
+Definition nat_to_val (n: nat): val := Vint (Int.repr (Z.of_nat n)).
 Definition z_to_int (z: Z): int := (Int.repr z).
 Definition z_to_val (z: Z) : val := Vint (Int.repr z).
 
@@ -34,19 +35,19 @@ Fixpoint eval_scev (s: scev) (n: nat) : Z :=
 
 
 
-Definition oned_loop_inner_block (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt :=
+Definition oned_loop_inner_block (n: int) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt :=
     Sblock (
         Cminor.Sseq (Sifthenelse (Ebinop
                                     (Ocmpu Clt)
                                     (Evar ivname)
-                                    (Econst (Ointconst (nat_to_int n))))
+                                    (Econst (Ointconst n)))
                                  (Sskip)
                                  (Sexit 1)
                     )
                     (inner_stmt)
       ).
 
-Definition oned_loop (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt :=
+Definition oned_loop (n: int) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt :=
   Sloop (
       oned_loop_inner_block n ivname inner_stmt
   ).
@@ -56,7 +57,7 @@ Definition z_init (ivname: ident) (z_init_val: Z): Cminor.stmt :=
 
 
 
-Definition oned_loop_add_rec (n: nat)
+Definition oned_loop_add_rec (n: int)
            (ivname: ident)
            (scevname: ident)
            (scev_init_val: Z)
@@ -904,12 +905,12 @@ Qed.
 (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt := *)
 
 Lemma exit_oned_loop_inner_block:
-  forall (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt),
+  forall (n: int) (ivname: ident) (inner_stmt: Cminor.stmt),
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
     eval_expr ge sp e m (Ebinop
        (Ocmpu Clt)
        (Evar ivname)
-       (Econst (Ointconst (nat_to_int n)))) Vfalse ->
+       (Econst (Ointconst n))) Vfalse ->
     exec_stmt ge f sp e m (oned_loop_inner_block n ivname inner_stmt)
               E0 e' m' o ->
     o = Out_exit 0 /\ e = e' /\ m = m'.
@@ -925,12 +926,12 @@ Qed.
 
 
 Lemma exit_oned_loop:
-  forall (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt),
+  forall (n: int) (ivname: ident) (inner_stmt: Cminor.stmt),
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
     eval_expr ge sp e m (Ebinop
        (Ocmpu Clt)
        (Evar ivname)
-       (Econst (Ointconst (nat_to_int n)))) Vfalse ->
+       (Econst (Ointconst n))) Vfalse ->
     exec_stmt ge f sp e m (oned_loop n ivname inner_stmt)
               E0 e' m' o ->
     o = Out_exit 0 /\ e = e' /\ m = m'.
@@ -962,6 +963,7 @@ Proof.
     specialize (force_out_exit e1 m1 _ exec_block).
     inversion force_out_exit.
 
+  unfold Int.cmpu.
   - (* The loop does not execute, since we exit from the previous loop iteration *)
     eapply exit_oned_loop_inner_block.
      eassumption.
@@ -972,23 +974,23 @@ Qed.
 
 
 Lemma oned_loop_with_iv_gt_ub_will_not_execute:
-  forall (n: nat) (ivname: ident) (innerstmt: Cminor.stmt),
+  forall (n: int) (ivname: ident) (innerstmt: Cminor.stmt),
   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
-  forall (iv_cur_z: Z),
-    e ! ivname = Some (z_to_val iv_cur_z) ->
-    Int.ltu (z_to_int iv_cur_z) (nat_to_int n) = false ->
+  forall (iv_cur: int),
+    e ! ivname = Some (Vint iv_cur) ->
+    (Int.cmpu Clt iv_cur n) = false ->
     exec_stmt ge f sp e m
               (oned_loop n ivname innerstmt) E0
               e' m' o -> o = Out_exit 0 /\ e = e' /\ m = m'.
 Proof.
-  intros until iv_cur_z.
+  intros until iv_cur.
   intros e_at_ivname.
-  intros iv_cur_z_gt_n.
+  intros iv_gt_n.
   intros exec.
   assert (eval_expr ge sp e m (Ebinop
                                  (Ocmpu Clt)
                                  (Evar ivname)
-                                 (Econst (Ointconst (nat_to_int n)))) Vfalse) as
+                                 (Econst (Ointconst n))) Vfalse) as
       cond_is_false.
   eapply eval_Ebinop.
   eapply eval_Evar.
@@ -1001,10 +1003,8 @@ Proof.
   unfold Val.cmp_bool.
   unfold z_to_val.
   unfold Int.cmp.
-  unfold z_to_int in iv_cur_z_gt_n.
   unfold Val.cmpu_bool.
-  unfold Int.cmpu.
-  rewrite iv_cur_z_gt_n.
+  rewrite iv_gt_n.
   unfold Val.of_optbool.
   reflexivity.
 
@@ -1100,6 +1100,3 @@ Proof.
   subst.
   contradiction.
 Qed.
-
-
-  
