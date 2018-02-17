@@ -210,6 +210,23 @@ Proof.
   auto.
 Qed.
 
+(* When we have a loop that is in bounds, shit will work out *)
+Theorem match_loop_inner_block_has_same_effect_when_loop_in_bounds:
+  forall (le: loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m' m'': mem) (ge: genv) (e e': env) (t: trace) (o: outcome),
+    (viv le < loopub l)%nat ->
+    match_env l e le ->
+    Cminor.exec_stmt ge f sp e m
+                     (oned_loop_inner_block (nat_to_int (loopub l))
+                                            (loopivname l)
+                        cms) t e' m' o ->
+    exec_stmt le l m s m'' ->
+    match_stmt l  cms s ->
+    m' = m'' /\ match_env l e' le.
+Proof.
+  admit.
+Admitted.
+
+
 Section MATCHLOOP.
   Inductive match_loop: Cminor.stmt -> loop -> Prop :=
   | match_oned_loop: forall (l: loop)
@@ -218,19 +235,59 @@ Section MATCHLOOP.
       loopschedule l = id ->
       loopscheduleinv l = id ->
       match_stmt l cm_inner_stmt inner_stmt ->
-      match_loop (oned_loop (loopub l) (loopivname l) (cm_inner_stmt))
+      match_loop (oned_loop
+                    (nat_to_int (loopub l))
+                    (loopivname l)
+                    (cm_inner_stmt))
                  l.
 End MATCHLOOP.
+Theorem exec_loop_when_iv_gt_ub_has_no_effect:
+  forall (ub: nat) (iv: nat),
+  forall (le le': loopenv) (l: loop) (m m': mem),
+    loopub l = ub ->
+    viv le = iv ->
+    (iv >= ub)%nat -> 
+    exec_loop le  m l  m' le' ->
+    le = le' /\ m = m'.
+Proof.
+  intros until m'.
+  intros loopub.
+  intros viv.
+  intros iv_gt_ub.
+  intros execloop.
+  induction execloop.
+  -  auto.
+  - omega.
+Qed.
+
+(* 
+Theorem match_loop_induction_on_bump_indvar:
+  forall (lub: nat) (iv: vindvar) (ivname: ident) (lsched lschedinv: vindvar -> vindvar)
+    (loopstmt: stmt),
+  forall (le le': loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m' m'': mem) (ge: genv) (e e': env) (o: outcome),
+    le = mkLenv iv ->
+    l = mkLoop lub ivname loopstmt lsched lschedinv ->
+    exec_loop le m l m' (loopenv_bump_vindvar) ->
+    exec_loop (loopenv_bump_vindvar le) m'0 l m'' le' ->
+*)
 
 Theorem match_loop_has_same_effect:
+  forall (lub: nat) (iv: vindvar) (ivname: ident) (lsched lschedinv: vindvar -> vindvar)
+     (loopstmt: stmt),
   forall (le le': loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m' m'': mem) (ge: genv) (e e': env) (o: outcome),
+    le = mkLenv iv ->
+    l = mkLoop lub ivname loopstmt lsched lschedinv ->
     match_env l e le ->
     Cminor.exec_stmt ge f sp e m cms E0 e' m' o ->
     exec_loop le m l  m'' le' ->
     match_loop cms l ->
-    m' = m''  /\  match_env l e' le'.
+    m' = m'' /\  match_env l e' le'.
 Proof.
   intros until o.
+  intros iv_desc.
+  intros l_desc.
+  (* intros lub_in_l. *)
+  
   intros matchenv.
   intros exec_cm_loop.
   intros exec_l.
@@ -245,40 +302,72 @@ Proof.
     rename H1 into match_stmts.
 
     inversion exec_l.
-    subst.
+    subst le0. subst m0. subst l0. subst m. subst le'.
 
     + (* exec_loop when loop has no iters *)
       rename H into viv_le_gt_loopub.
       assert (e = e' /\ m'' = m').
       eapply oned_loop_with_iv_gt_ub_will_not_execute with
           (ivname := (loopivname l))
-          (n := loopub l).
+          (n := nat_to_int (loopub l)).
       inversion matchenv. subst. exact H0.
+      simpl in l_sched_id.
       rewrite l_sched_id.
       unfold id.
       unfold Int.ltu.
-      rewrite zlt_false.
-      reflexivity.
-      unfold SCEV.nat_to_int.
-      unfold z_to_int.
+      unfold nat_to_int.
       admit. (* modulo arithmetic *)
-      eassumption.
+      exact exec_cm_loop.
       destruct H. subst.
       auto.
 
     + (* exec_loop where we have loop iters *)
       intros.
-      subst.
+      subst le0 m0 l0 m''0 le'0.
       rename H into iv_in_bounds.
       rename H0 into exec_prev_s.
       rename H1 into exec_cur_l.
-      induction (loopub l).
+
+      inversion exec_cm_loop.
+      subst f0 sp0 e0 m0 s0 t e2 m2 out.
+      assert (m = m1 /\ match_env l e' le).
+      eapply match_loop_inner_block_has_same_effect_when_loop_in_bounds.
+
+
+
+      
+      generalize dependent e.
+      generalize dependent m.
+      generalize dependent e'.
+      generalize dependent m'.
+      induction (lub).
 
       * (* loopub = 0 *)
+        inversion l_desc.
+        subst.
         inversion iv_in_bounds.
-      * (* loopub > 0 *)
+      * (* loopub > 0 *);
+        intros until m.
+        intros execloop execloopstmt e.
+        intros matchenv.
+        intros cmexecloop.
+
+        assert ((iv = lub \/  iv < lub))%nat as viv_cases.
+        simpl in iv_in_bounds.
+        omega.
+        destruct viv_cases as [viv_eq_lub | viv_lt_lub].
+
+        ** (* viv = lub *)
+          
         apply IHn.
         inversion exec_cm_loop. subst.
+        assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
+        eapply destruct_trace_app_eq_E0.
+        eassumption.
+        destruct t1_t2_E0.
+        subst.
+
+        
 Abort.
              
 
