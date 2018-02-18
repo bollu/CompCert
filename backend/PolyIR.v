@@ -120,6 +120,19 @@ Qed.
 Section MATCHENV.
   Definition match_env (l: loop) (e: env) (le: loopenv) : Prop :=
     e ! (loopivname  l) = Some (nat_to_val (loopschedule l (viv le))).
+
+  Lemma match_env_on_bump_indvar: forall (l: loop) (e': env) (le: loopenv),
+      e' ! (loopivname l) = Some (nat_to_val (loopschedule l (viv le + 1))%nat) ->
+      match_env l e' (loopenv_bump_vindvar le).
+  Proof.
+    intros until le.
+    intros matchle.
+    unfold match_env.
+    unfold loopenv_bump_vindvar.
+    rewrite  matchle.
+    simpl.
+    reflexivity.
+  Qed.
 End MATCHENV.
 
 
@@ -234,13 +247,14 @@ Section MATCHLOOP.
                        (inner_stmt: stmt),
       loopschedule l = id ->
       loopscheduleinv l = id ->
-      match_stmt l cm_inner_stmt inner_stmt ->
+      match_stmt l cm_inner_stmt (loopstmt l) ->
       match_loop (oned_loop
                     (nat_to_int (loopub l))
                     (loopivname l)
                     (cm_inner_stmt))
                  l.
 End MATCHLOOP.
+
 Theorem exec_loop_when_iv_gt_ub_has_no_effect:
   forall (ub: nat) (iv: nat),
   forall (le le': loopenv) (l: loop) (m m': mem),
@@ -272,104 +286,87 @@ Theorem match_loop_induction_on_bump_indvar:
 *)
 
 Theorem match_loop_has_same_effect:
-  forall (lub: nat) (iv: vindvar) (ivname: ident) (lsched lschedinv: vindvar -> vindvar)
-     (loopstmt: stmt),
-  forall (le le': loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m' m'': mem) (ge: genv) (e e': env) (o: outcome),
+  forall le m l m'' le',
+    exec_loop le m l  m'' le' ->
+    forall (lub: nat)
+      (iv: vindvar)
+      (ivname: ident)
+      (lsched lschedinv: vindvar -> vindvar)
+      (loopstmt: stmt),
+    forall (f: function)
+      (sp: val)
+      (cms: Cminor.stmt)
+      (m': mem)
+      (ge: genv)
+      (e e': env)
+      (o: outcome),
     le = mkLenv iv ->
     l = mkLoop lub ivname loopstmt lsched lschedinv ->
     match_env l e le ->
     Cminor.exec_stmt ge f sp e m cms E0 e' m' o ->
-    exec_loop le m l  m'' le' ->
     match_loop cms l ->
     m' = m'' /\  match_env l e' le'.
 Proof.
-  intros until o.
-  intros iv_desc.
-  intros l_desc.
-  (* intros lub_in_l. *)
+  intros until le'.
+  intros execl.
+  induction execl.
+  - admit.
+  - rename H into viv_inbounds.
+    rename H0 into exec_stmt.
+
+    intros until o.
+    intros leval.
+    intros lval.
+    intros matchenv.
+    intros exec_cms.
+    intros matchloop.
+
+    (* Extract as much information we can get from matchloop *)
+    inversion matchloop.
+
+    (* Revert to prevent proof term explosion *)
+    revert lval leval.
+    
+    subst.
+    inversion exec_cms. subst.
+    rename H into loopsched.
+    rename H0 into loopschedinv.
+    rename H1 into match_cm_inner_stmt.
+    rename H3 into exec_cms_inner_block.
+    rename H4 into exec_cms_loop.
+    rename H9 into t1t2val.
+
+    assert (t1 = E0 /\ t2 = E0) as t1_t2_e0.
+    apply destruct_trace_app_eq_E0.
+    assumption.
+    destruct t1_t2_e0.
+    subst.
+    clear t1t2val.
+    
+    intros leval lval.
+    assert (m1 = m' /\ match_env l e1 le) as match_prev_stmt.
+    eapply match_loop_inner_block_has_same_effect_when_loop_in_bounds;
+      eassumption.
+    destruct match_prev_stmt as [meq matchenv1].
+    subst m1.
+    eapply IHexecl.
+    unfold loopenv_bump_vindvar. auto.
+    exact leval.
+    apply match_env_on_bump_indvar with
+        (e' := PTree.set (loopivname l)
+                         (nat_to_val(loopschedule l (viv le + 1)%nat))
+                         e).
+    erewrite PTree.gss.
+    reflexivity.
+    (* Show that on e', the new e = e with loop value updated *)
+    exact exec_cms_loop.
+    eassumption.
+    
+    
+    (* Done *)
+
+    assert ()
   
-  intros matchenv.
-  intros exec_cm_loop.
-  intros exec_l.
-  intros match_l.
-
-
-  induction match_l.
-
-  (* match_oned_loop *)
-  - rename H into l_sched_id.
-    rename H0 into l_schedinv_id.
-    rename H1 into match_stmts.
-
-    inversion exec_l.
-    subst le0. subst m0. subst l0. subst m. subst le'.
-
-    + (* exec_loop when loop has no iters *)
-      rename H into viv_le_gt_loopub.
-      assert (e = e' /\ m'' = m').
-      eapply oned_loop_with_iv_gt_ub_will_not_execute with
-          (ivname := (loopivname l))
-          (n := nat_to_int (loopub l)).
-      inversion matchenv. subst. exact H0.
-      simpl in l_sched_id.
-      rewrite l_sched_id.
-      unfold id.
-      unfold Int.ltu.
-      unfold nat_to_int.
-      admit. (* modulo arithmetic *)
-      exact exec_cm_loop.
-      destruct H. subst.
-      auto.
-
-    + (* exec_loop where we have loop iters *)
-      intros.
-      subst le0 m0 l0 m''0 le'0.
-      rename H into iv_in_bounds.
-      rename H0 into exec_prev_s.
-      rename H1 into exec_cur_l.
-
-      inversion exec_cm_loop.
-      subst f0 sp0 e0 m0 s0 t e2 m2 out.
-      assert (m = m1 /\ match_env l e' le).
-      eapply match_loop_inner_block_has_same_effect_when_loop_in_bounds.
-
-
-
-      
-      generalize dependent e.
-      generalize dependent m.
-      generalize dependent e'.
-      generalize dependent m'.
-      induction (lub).
-
-      * (* loopub = 0 *)
-        inversion l_desc.
-        subst.
-        inversion iv_in_bounds.
-      * (* loopub > 0 *);
-        intros until m.
-        intros execloop execloopstmt e.
-        intros matchenv.
-        intros cmexecloop.
-
-        assert ((iv = lub \/  iv < lub))%nat as viv_cases.
-        simpl in iv_in_bounds.
-        omega.
-        destruct viv_cases as [viv_eq_lub | viv_lt_lub].
-
-        ** (* viv = lub *)
-          
-        apply IHn.
-        inversion exec_cm_loop. subst.
-        assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
-        eapply destruct_trace_app_eq_E0.
-        eassumption.
-        destruct t1_t2_E0.
-        subst.
-
-        
-Abort.
-             
 
 
 
