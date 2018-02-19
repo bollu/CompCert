@@ -25,12 +25,15 @@ Notation upperbound := nat.
 Definition nat_to_int (n: nat): int := (Int.repr (Z.of_nat n)).
 Definition nat_to_val (n: nat): val := Vint (nat_to_int  n).
 
-Record loop : Type := mkLoop { loopub: upperbound;
-                               loopivname: ident;
-                               loopstmt: stmt;
-                               loopschedule: vindvar -> vindvar;
-                               loopscheduleinv: vindvar -> vindvar
-                             }.
+Record loop : Type :=
+  mkLoop { loopub: upperbound;
+           loopub_in_range_witness: Z.of_nat loopub < 10;
+           loopivname: ident;
+           loopstmt: stmt;
+           loopschedule: vindvar -> vindvar;
+           loopscheduleinv: vindvar -> vindvar
+         }.
+
 Record loopenv : Type := mkLenv { viv: vindvar }.
 Definition loopenv_bump_vindvar (le: loopenv) : loopenv :=
   mkLenv ((viv le) + 1)%nat.
@@ -293,10 +296,16 @@ Qed.
 Lemma transfer_nat_lt_to_int_lt:
   forall (n1 n2: nat),
     (n1 < n2)%nat ->
+    Z.of_nat n1 <= Int.max_unsigned ->
+    Z.of_nat n2 <= Int.max_unsigned ->
     Int.ltu (nat_to_int n1) (nat_to_int n2) = true.
 Proof.
   intros until n2.
   intros n1_lt_n2.
+
+  intros n1_lt_max_unsigned.
+  intros n2_lt_max_unsigned.
+  
   unfold nat_to_int.
   unfold Int.ltu.
   rewrite Int.unsigned_repr.
@@ -307,16 +316,15 @@ Proof.
   rewrite  Znat.inj_compare.
   rewrite Nat.compare_lt_iff.
   assumption.
+
   split.
   apply Nat2Z.is_nonneg.
-  
-  
-  
-  reflexivity.
+  apply n2_lt_max_unsigned.
 
-
-
-
+  split.
+  apply Nat2Z.is_nonneg.
+  apply n1_lt_max_unsigned.
+Qed.
   
 Theorem match_loop_has_same_effect:
   forall le m l m'' le',
