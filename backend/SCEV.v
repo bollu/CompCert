@@ -1050,6 +1050,9 @@ Definition stmt_does_not_alias (s: Cminor.stmt) (loc: ident) : Prop :=
     e' ! loc = Some locv.
 
 
+Definition incr_env_by_1 (e: env) (loc: ident) (prev: int) :=
+  PTree.set loc (Vint (Int.add prev Int.one)) e.
+
 Theorem exec_s_incr_by_1:
   forall (ivname: ident) (ivprev: int),
   forall (f: function)
@@ -1180,7 +1183,9 @@ Example continue_sblock_incr_by_1_sseq_sif:
               E0 e' m' o ->
     e ! ivname = Some (nat_to_val ivval) ->
     stmt_does_not_alias sinner ivname ->
-    o = Out_normal /\ e' = einner /\ m' = minner.
+    m' = minner /\
+    o = Out_normal /\
+    e' = PTree.set ivname (Vint (Int.add (nat_to_int ivval) Int.one)) einner.
 Proof.
   intros until ivname.
   intros econd_is_true.
@@ -1201,7 +1206,22 @@ Proof.
   eapply destruct_trace_app_eq_E0. assumption.
   destruct t1_t2_E0. subst.
 
-  admit.
+  assert (e = e1 /\ m = m1) as if_eq.
+  eapply continue_sif; eassumption.
+  destruct if_eq as [eeq meq].
+  subst.
+
+  assert (m' = minner /\ out = Out_normal /\
+          e' = PTree.set
+                 ivname
+                 (Vint (Int.add (nat_to_int ivval) Int.one))
+                 einner) as seq_sinner_sincr_eq.
+  eapply exec_seq_sinner_then_sincr; eassumption.
+
+  destruct  seq_sinner_sincr_eq as [meq [oeq eeq]].
+  subst.
+  unfold outcome_block.
+  auto.
 
   -  rename H5 into exec_cond.
      assert (out = Out_normal).
