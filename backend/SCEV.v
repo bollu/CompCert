@@ -1053,6 +1053,7 @@ Definition stmt_does_not_alias (s: Cminor.stmt) (loc: ident) : Prop :=
 Definition incr_env_by_1 (e: env) (loc: ident) (prev: int) :=
   PTree.set loc (Vint (Int.add prev Int.one)) e.
 
+
 Theorem exec_s_incr_by_1:
   forall (ivname: ident) (ivprev: int),
   forall (f: function)
@@ -1065,7 +1066,7 @@ Theorem exec_s_incr_by_1:
       e ! ivname = Some (Vint ivprev) ->
       exec_stmt ge f sp e m (s_incr_by_1 ivname) t e' m' o ->
       m' = m /\ o = Out_normal /\ t = E0 /\
-      e' = PTree.set ivname (Vint (Int.add ivprev Int.one)) e.
+      e' = incr_env_by_1 e ivname ivprev.
 Proof.
   intros until e'.
   intros e_at_ivname.
@@ -1110,7 +1111,7 @@ Theorem exec_seq_sinner_then_sincr:
     exec_stmt ge f sp e m sinner E0 einner minner Out_normal ->
     exec_stmt ge f sp e m (Sseq sinner (s_incr_by_1 ivname)) E0 eseq mseq o ->
     mseq = minner /\ o = Out_normal /\
-    eseq = PTree.set ivname (Vint (Int.add ivprev Int.one)) einner.
+    eseq = incr_env_by_1 einner ivname ivprev .
 Proof.
   intros until eseq.
   intros e_at_ivname.
@@ -1149,6 +1150,7 @@ Proof.
   eassumption.
   exact exec_incr.
   destruct incr_equalities as [meq [oeq [_ eeq]]].
+  unfold incr_env_by_1.
   subst.
   auto.
 
@@ -1166,7 +1168,7 @@ Example continue_sblock_incr_by_1_sseq_sif:
     (e e' einner: env)
     (f: function) (sp: val) (ge: genv)
     (o: outcome),
-  forall (n ivval: nat) (sinner: stmt) (econd: expr) (ivname: ident),
+  forall (n: nat) (sinner: stmt) (econd: expr) (ivname: ident) (ivval: int),
     eval_expr ge sp e m econd Vtrue ->
     exec_stmt ge f sp e m sinner E0 einner minner Out_normal ->
     exec_stmt ge f sp e m
@@ -1181,13 +1183,13 @@ Example continue_sblock_incr_by_1_sseq_sif:
                        (s_incr_by_1 ivname)
                     )))
               E0 e' m' o ->
-    e ! ivname = Some (nat_to_val ivval) ->
+    e ! ivname = Some (Vint ivval) ->
     stmt_does_not_alias sinner ivname ->
     m' = minner /\
     o = Out_normal /\
-    e' = PTree.set ivname (Vint (Int.add (nat_to_int ivval) Int.one)) einner.
+    e' = incr_env_by_1 einner ivname ivval.
 Proof.
-  intros until ivname.
+  intros until ivval.
   intros econd_is_true.
   intros exec_inner.
   intros block.
@@ -1212,10 +1214,8 @@ Proof.
   subst.
 
   assert (m' = minner /\ out = Out_normal /\
-          e' = PTree.set
-                 ivname
-                 (Vint (Int.add (nat_to_int ivval) Int.one))
-                 einner) as seq_sinner_sincr_eq.
+          e' = incr_env_by_1 einner ivname ivval) as
+      seq_sinner_sincr_eq.
   eapply exec_seq_sinner_then_sincr; eassumption.
 
   destruct  seq_sinner_sincr_eq as [meq [oeq eeq]].
