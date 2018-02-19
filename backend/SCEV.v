@@ -1094,6 +1094,68 @@ Proof.
   auto.
 Qed.
 
+Theorem exec_seq_sinner_then_sincr:
+  forall (ivname: ident) (ivprev: int) (sinner: Cminor.stmt),
+  forall (f: function)
+    (sp: val)
+    (ge: genv)
+    (o: outcome)
+    (m minner mseq: mem)
+    (e einner eseq: env),
+    e ! ivname = Some (Vint ivprev) ->
+    stmt_does_not_alias sinner ivname ->
+    exec_stmt ge f sp e m sinner E0 einner minner Out_normal ->
+    exec_stmt ge f sp e m (Sseq sinner (s_incr_by_1 ivname)) E0 eseq mseq o ->
+    mseq = minner /\ o = Out_normal /\
+    eseq = PTree.set ivname (Vint (Int.add ivprev Int.one)) einner.
+Proof.
+  intros until eseq.
+  intros e_at_ivname.
+  intros does_not_alias.
+  intros exec_inner.
+  intros exec_seq.
+  inversion exec_seq; subst.
+
+  assert (t1 = E0 /\ t2 = E0) as t1_t2_e0.
+  apply destruct_trace_app_eq_E0. assumption.
+  destruct t1_t2_e0 as [t1e0 t2e0].
+  subst.
+
+  rename H1 into exec_inner'.
+  
+  assert (minner = m1 /\ Out_normal = Out_normal /\ einner = e1)
+         as innereq.
+  eapply exec_stmt_funcall_with_no_effect_is_function.
+  exact exec_inner.
+  auto.
+  exact exec_inner'.
+  destruct innereq as [meq [_ eeq]].
+  subst.
+
+  rename H6 into exec_incr.
+  assert (mseq = m1/\
+          o = Out_normal /\
+          E0 = E0 /\
+          eseq = PTree.set ivname (Vint (Int.add ivprev Int.one)) e1) as
+      incr_equalities.
+  eapply exec_s_incr_by_1.
+  unfold stmt_does_not_alias in does_not_alias.
+  erewrite does_not_alias.
+  auto.
+  exact e_at_ivname.
+  eassumption.
+  exact exec_incr.
+  destruct incr_equalities as [meq [oeq [_ eeq]]].
+  subst.
+  auto.
+
+  assert (o = Out_normal).
+  eapply exec_stmt_funcall_with_no_effect_is_function.
+  eassumption.
+  auto.
+  eassumption.
+  contradiction.
+Qed.
   
   
 Example continue_sblock_incr_by_1_sseq_sif:
@@ -1138,6 +1200,7 @@ Proof.
   assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
   eapply destruct_trace_app_eq_E0. assumption.
   destruct t1_t2_E0. subst.
+
   admit.
 
   -  rename H5 into exec_cond.
