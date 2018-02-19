@@ -27,7 +27,7 @@ Definition nat_to_val (n: nat): val := Vint (nat_to_int  n).
 
 Record loop : Type :=
   mkLoop { loopub: upperbound;
-           loopub_in_range_witness: Z.of_nat loopub < 10;
+           loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned;
            loopivname: ident;
            loopstmt: stmt;
            loopschedule: vindvar -> vindvar;
@@ -240,59 +240,6 @@ Proof.
   auto.
 Qed.
 
-(* When we have a loop that is in bounds, shit will work out *)
-Theorem match_loop_inner_block_has_same_effect_when_loop_in_bounds:
-  forall (le: loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m' m'': mem) (ge: genv) (e e': env) (t: trace) (o: outcome),
-    (viv le < loopub l)%nat ->
-    match_env l e le ->
-    Cminor.exec_stmt ge f sp e m
-                     (oned_loop_inner_block (nat_to_int (loopub l))
-                                            (loopivname l)
-                        cms) t e' m' o ->
-    exec_stmt le l m s m'' ->
-    match_stmt l cms s ->
-    m' = m'' /\
-    e' = env_bump_indvar le l e /\
-    match_env l e' (loopenv_bump_vindvar le).
-Proof.
-  admit.
-Admitted.
-
-
-Section MATCHLOOP.
-  Inductive match_loop: Cminor.stmt -> loop -> Prop :=
-  | match_oned_loop: forall (l: loop)
-                       (cm_inner_stmt: Cminor.stmt)
-                       (inner_stmt: stmt),
-      loopschedule l = id ->
-      loopscheduleinv l = id ->
-      match_stmt l cm_inner_stmt (loopstmt l) ->
-      match_loop (oned_loop
-                    (nat_to_int (loopub l))
-                    (loopivname l)
-                    (cm_inner_stmt))
-                 l.
-End MATCHLOOP.
-
-Theorem exec_loop_when_iv_gt_ub_has_no_effect:
-  forall (ub: nat) (iv: nat),
-  forall (le le': loopenv) (l: loop) (m m': mem),
-    loopub l = ub ->
-    viv le = iv ->
-    (iv >= ub)%nat -> 
-    exec_loop le  m l  m' le' ->
-    le = le' /\ m = m'.
-Proof.
-  intros until m'.
-  intros loopub.
-  intros viv.
-  intros iv_gt_ub.
-  intros execloop.
-  induction execloop.
-  -  auto.
-  - omega.
-Qed.
-
 Lemma transfer_nat_lt_to_int_lt:
   forall (n1 n2: nat),
     (n1 < n2)%nat ->
@@ -325,32 +272,171 @@ Proof.
   apply Nat2Z.is_nonneg.
   apply n1_lt_max_unsigned.
 Qed.
+
+Lemma eval_iv_lt_ub_true:
+  forall (ge: genv) (sp: val) (m: mem),
+  forall (e: env) (ivname: ident) (viv: nat) (ub: upperbound),
+    Z.of_nat ub < Int.max_unsigned ->
+    (viv < ub)%nat ->
+    e ! ivname = Some (nat_to_val viv) ->
+    eval_expr ge sp e m 
+              (Ebinop
+                 (Ocmpu Clt)
+                 (Evar ivname)
+                 (Econst (Ointconst (nat_to_int ub)))) Vtrue.
+Proof.
+  intros until ub.
+  intros ub_lt_max_unsigned.
+  intros viv_lt_ub.
+  intros e_at_ivname_is_viv.
+  eapply eval_Ebinop.
+  eapply eval_Evar.
+  eassumption.
+  eapply eval_Econst.
+  unfold eval_constant.
+  auto.
+
+  unfold eval_binop.
+  unfold Val.cmpu.
+  unfold Val.cmpu_bool.
+  unfold nat_to_val.
+  unfold Val.of_optbool.
+  unfold Int.cmpu.
+  rewrite transfer_nat_lt_to_int_lt.
+  reflexivity.
+  eassumption.
+
+  assert (Z.of_nat viv0 < Z.of_nat ub) as z_viv0_lt_ub.
+  apply Znat.inj_lt.
+  assumption.
+
+  eapply Z.le_trans with (m := Z.of_nat ub).
+  omega.
+  omega.
+  omega.
+Qed.
+
+  
+
+Section MATCHLOOP.
+  Inductive match_loop: Cminor.stmt -> loop -> Prop :=
+  | match_oned_loop: forall (l: loop)
+                       (cm_inner_stmt: Cminor.stmt)
+                       (inner_stmt: stmt),
+      loopschedule l = id ->
+      loopscheduleinv l = id ->
+      match_stmt l cm_inner_stmt (loopstmt l) ->
+      match_loop (oned_loop_incr_1
+                    (nat_to_int (loopub l))
+                    (loopivname l)
+                    (cm_inner_stmt))
+                 l.
+End MATCHLOOP.
+
+
+(* When we have a loop that is in bounds, shit will work out *)
+Theorem match_loop_inner_block_has_same_effect_when_loop_in_bounds:
+  forall (le: loopenv) (l: loop)(f: function) (sp: val)
+    (cms: Cminor.stmt) (s: stmt)
+    (m mloop mblock mstmt: mem)
+    (ge: genv)
+    (e eblock estmt: env)
+    (t: trace)
+    (o: outcome),
+    match_loop cms l ->
+    (Z.of_nat (loopub l) < Int.max_unsigned) ->
+    (viv le < loopub l)%nat ->
+    match_env l e le ->
+    loopschedule l = id ->
+    Cminor.exec_stmt ge f sp e m
+                     (oned_loop_inner_block (nat_to_int (loopub l))
+                                            (loopivname l)
+                                            cms) E0 eblock mblock o ->
+    Cminor.exec_stmt ge f sp e m cms E0 estmt mstmt Out_normal ->
+    exec_stmt le l m s mloop ->
+    match_stmt l cms s ->
+    mblock = mstmt /\
+    mloop = mblock /\
+    eblock = estmt /\
+    eblock = env_bump_indvar le l e /\
+    match_env l eblock (loopenv_bump_vindvar le).
+Proof.
+  intros until o.
+  intros matchloop.
+  intros loopub_lt_max_unsigned.
+  intros viv_le_ub.
+  intros matchenv.
+  intros loopsched_l_id.
+  intros exec_cm_block.
+  intros exec_cm_stmt.
+  intros exec_polyir_stmt.
+  intros matchstmt.
+  assert (o = Out_normal /\ eblock = estmt /\ mblock = mstmt ) as eqs.
+  eapply continue_sblock_sseq_sif.
+  eapply eval_iv_lt_ub_true.
+  exact loopub_lt_max_unsigned.
+  exact viv_le_ub.
+  inversion matchenv.
+  rewrite loopsched_l_id in H0.
+  unfold id in H0.
+  exact H0.
+  exact exec_cm_stmt.
+  exact exec_cm_block.
+  destruct eqs as [out_normal [eeq meq]].
+  subst.
+  assert (mstmt = mloop).
+  eapply match_stmt_has_same_effect; eassumption.
+  subst.
+  
+Admitted.
+
+
+Theorem exec_loop_when_iv_gt_ub_has_no_effect:
+  forall (ub: nat) (iv: nat),
+  forall (le le': loopenv) (l: loop) (m m': mem),
+    loopub l = ub ->
+    viv le = iv ->
+    (iv >= ub)%nat -> 
+    exec_loop le  m l  m' le' ->
+    le = le' /\ m = m'.
+Proof.
+  intros until m'.
+  intros loopub.
+  intros viv.
+  intros iv_gt_ub.
+  intros execloop.
+  induction execloop.
+  -  auto.
+  - omega.
+Qed.
+
   
 Theorem match_loop_has_same_effect:
-  forall le m l m'' le',
-    exec_loop le m l  m'' le' ->
+  forall le m l mloop le',
+    exec_loop le m l  mloop le' ->
     forall (lub: nat)
       (iv: vindvar)
       (ivname: ident)
       (lsched lschedinv: vindvar -> vindvar)
+      (lub_in_range: Z.of_nat lub < Int.max_unsigned)
       (loopstmt: stmt),
     forall (f: function)
       (sp: val)
       (cms: Cminor.stmt)
-      (m': mem)
+      (mblock: mem)
       (ge: genv)
-      (e e': env),
+      (e eblock: env),
     le = mkLenv iv ->
-    l = mkLoop lub ivname loopstmt lsched lschedinv ->
+    l = mkLoop lub lub_in_range ivname loopstmt lsched lschedinv ->
     match_env l e le ->
-    Cminor.exec_stmt ge f sp e m cms E0 e' m' Out_normal ->
+    Cminor.exec_stmt ge f sp e m cms E0 eblock mblock Out_normal ->
     match_loop cms l ->
-    m' = m'' /\  match_env l e' le'.
+    mloop = mblock /\  match_env l eblock le'.
 Proof.
   intros until le'.
   intros execl.
   induction execl.
-  - intros until e'.
+  - intros until eblock.
     intros leval.
     intros lval.
     intros matchenv.
@@ -362,7 +448,7 @@ Proof.
     inversion matchloop. subst.
     intros lval.
     intros leval.
-    assert (e = e' /\ m = m') as mem_env_unchanged.
+    assert (e = eblock /\ m = mblock) as mem_env_unchanged.
     eapply exit_oned_loop.
     assert (eval_expr ge sp e m
                       (Ebinop
@@ -380,7 +466,7 @@ Proof.
   - rename H into viv_inbounds.
     rename H0 into exec_stmt.
 
-    intros until e'.
+    intros until eblock.
     intros leval.
     intros lval.
     intros matchenv.
@@ -416,10 +502,10 @@ Proof.
 
     
 
-    assert(m1 = m' /\
+    assert(mblock = m'' /\
     e1 = env_bump_indvar le l e /\
     match_env l e1 (loopenv_bump_vindvar le)) as match_prev_stmt.
-    eapply match_loop_inner_block_has_same_effect_when_loop_in_bounds;
+    eapply match_loop_inner_block_has_same_effect_when_loop_in_bounds.
       eassumption.
     destruct match_prev_stmt as [meq [eeq matchenve1]].
     subst m1.

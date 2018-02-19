@@ -52,9 +52,9 @@ Definition oned_loop (n: int) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.
       oned_loop_inner_block n ivname inner_stmt
   ).
 
+  
 Definition z_init (ivname: ident) (z_init_val: Z): Cminor.stmt :=
   Sassign ivname (Econst (Ointconst (Int.repr z_init_val))).
-
 
 
 Definition oned_loop_add_rec (n: int)
@@ -72,6 +72,24 @@ Definition oned_loop_add_rec (n: int)
                       (Sassign scevname (Ebinop Oadd (Evar scevname) (Econst (Ointconst (z_to_int scev_add_val)))))
        ))
     ).
+
+(* one-d loop with increment by 1 *)
+Definition oned_loop_incr_by_1
+           (n: int) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt :=
+  Cminor.Sseq
+    (z_init ivname 0)
+    (oned_loop n
+               ivname
+               (Cminor.Sseq
+                  (Sassign
+                     ivname
+                     (Ebinop (Oadd)
+                             (Evar ivname)
+                             (Econst (Ointconst (z_to_int 1))))
+                  )
+                  inner_stmt
+    )).
+
 
 Lemma z_init_sets_z_value: forall (ivname: ident)
                                (z_init_val: Z),
