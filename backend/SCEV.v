@@ -997,6 +997,43 @@ Proof.
   auto.
 Qed.
 
+
+Example continue_sblock_sseq_sif:
+  forall (m m' minner: mem)
+    (e e' einner: env)
+    (f: function) (sp: val) (ge: genv)
+    (o: outcome),
+  forall (n exitn: nat) (sinner: stmt) (econd: expr),
+    (n > 0)%nat ->
+    eval_expr ge sp e m econd Vtrue ->
+    exec_stmt ge f sp e m sinner E0 einner minner Out_normal ->
+    exec_stmt ge f sp e m
+              (Cminor.Sblock
+                 (Cminor.Sseq 
+                    (Sifthenelse econd
+                                 (Sskip)
+                                 (Sexit n)
+                    )
+                    sinner)
+              )
+              E0 e' m' o ->
+    o = Out_normal /\ e' = einner /\ m' = minner.
+Proof.
+  intros until econd.
+  intros n_gt_0.
+  intros econd_is_true.
+  intros exec_inner.
+  intros block.
+  inversion block; subst.
+  assert (out = Out_normal /\ e' = einner /\ m' = minner).
+  eapply continue_sseq_sif;
+  eassumption.
+  destruct H as [outeq [eeq meq]].
+  subst.
+  unfold outcome_block.
+  auto.
+Qed.
+
   
 (* Definition oned_loop_inner_block
 (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt := *)
