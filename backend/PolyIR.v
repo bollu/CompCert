@@ -301,12 +301,11 @@ Theorem match_loop_has_same_effect:
       (cms: Cminor.stmt)
       (m': mem)
       (ge: genv)
-      (e e': env)
-      (o: outcome),
+      (e e': env),
     le = mkLenv iv ->
     l = mkLoop lub ivname loopstmt lsched lschedinv ->
     match_env l e le ->
-    Cminor.exec_stmt ge f sp e m cms E0 e' m' o ->
+    Cminor.exec_stmt ge f sp e m cms E0 e' m' Out_normal ->
     match_loop cms l ->
     m' = m'' /\  match_env l e' le'.
 Proof.
@@ -317,7 +316,7 @@ Proof.
   - rename H into viv_inbounds.
     rename H0 into exec_stmt.
 
-    intros until o.
+    intros until e'.
     intros leval.
     intros lval.
     intros matchenv.
@@ -369,12 +368,8 @@ Proof.
     exact exec_cms_loop.
     exact matchloop.
 
-    +  inversion matchloop.
-       subst.
-       (* This should succeed, because we know that iv < loopub *)
-       assert (o = Out_normal).
-       admit.
-       contradiction.
+    + rename H8 into out_neq_normal.
+      contradiction.
 Admitted.
        
       
