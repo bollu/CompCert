@@ -150,10 +150,6 @@ Proof.
 Qed.
   
 
-Check(eval_exprlist).
-Check (eval_funcall_ind2).
-Check (exec_stmt_ind2).
-
 (* genv -> val -> env -> mem -> list expr -> list val *)
 Lemma eval_exprlist_is_function:
   forall  (list_a: list expr) (sp: val) (ge: genv) (e: env) (m: mem) (vs vs': list val),
@@ -265,7 +261,6 @@ Qed.
 
 
   
-Check (external_call).
 
 
 Lemma int_eq_dec': forall (i i': int), i = i' \/ i <> i'.
@@ -308,9 +303,6 @@ Proof.
   apply val_eq_dec.
 Qed.
   
-
-Check (eval_funcall).
-Check (eval_funcall_exec_stmt_ind2).
 
 Lemma destruct_trace_app_eq_E0:
   forall (t1 t2: trace),
@@ -1003,8 +995,7 @@ Example continue_sblock_sseq_sif:
     (e e' einner: env)
     (f: function) (sp: val) (ge: genv)
     (o: outcome),
-  forall (n exitn: nat) (sinner: stmt) (econd: expr),
-    (n > 0)%nat ->
+  forall (n: nat) (sinner: stmt) (econd: expr),
     eval_expr ge sp e m econd Vtrue ->
     exec_stmt ge f sp e m sinner E0 einner minner Out_normal ->
     exec_stmt ge f sp e m
@@ -1020,7 +1011,6 @@ Example continue_sblock_sseq_sif:
     o = Out_normal /\ e' = einner /\ m' = minner.
 Proof.
   intros until econd.
-  intros n_gt_0.
   intros econd_is_true.
   intros exec_inner.
   intros block.
@@ -1060,18 +1050,24 @@ Qed.
 
 Lemma no_exit_oned_loop_inner_block_has_out_normal:
   forall (n: int) (ivname: ident) (inner_stmt: Cminor.stmt),
-  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
+  forall (m m' minner: mem)
+    (e e' einner: env) (f: function) (sp: val) (ge: genv) (o: outcome),
     eval_expr ge sp e m (Ebinop
        (Ocmpu Clt)
        (Evar ivname)
        (Econst (Ointconst n))) Vtrue ->
+    exec_stmt ge f sp e m inner_stmt E0 einner minner Out_normal ->
     exec_stmt ge f sp e m (oned_loop_inner_block n ivname inner_stmt)
               E0 e' m' o ->
     o = Out_normal.
 Proof.
   intros until o.
   intros ival_lte_n.
+  intros exec_inner_stmt.
   intros exec_block.
+  eapply continue_sblock_sseq_sif; eassumption.
+Qed.
+  
 
 
 Lemma exit_oned_loop:
@@ -1111,8 +1107,6 @@ Proof.
     eassumption.
     specialize (force_out_exit e1 m1 _ exec_block).
     inversion force_out_exit.
-
-  unfold Int.cmpu.
   - (* The loop does not execute, since we exit from the previous loop iteration *)
     eapply exit_oned_loop_inner_block.
      eassumption.
@@ -1169,7 +1163,7 @@ Theorem oned_loop_add_rec_matches_addrec_scev_n_eq_0:
     scevname <> ivname ->
     scevz = eval_scev (SCEVAddRec scevinit scevrec) 0 ->
     exec_stmt ge f sp e m
-              (oned_loop_add_rec 0 ivname scevname scevinit scevrec) E0
+              (oned_loop_add_rec (nat_to_int 0) ivname scevname scevinit scevrec) E0
               e' m' Out_normal ->
     e' ! scevname =  Some (z_to_val (scevz)).
 Proof.
@@ -1219,7 +1213,7 @@ Proof.
   auto.
 
   assert (Out_normal = Out_exit 0).
-  eapply exit_oned_loop with (ivname := ivname) (n := 0%nat).
+  eapply exit_oned_loop with (ivname := ivname) (n := nat_to_int 0%nat).
   eapply eval_Ebinop.
   eapply eval_Evar.
   exact e2_at_ivname_is_0.
