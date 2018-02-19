@@ -690,6 +690,19 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma bool_of_val_to_bool_true: forall (b: bool),
+    Val.bool_of_val Vtrue b -> b = true.
+Proof.
+  intros b b_val.
+  inversion b_val.
+  assert (Int.eq Int.one Int.zero = false) as Ieq.
+  apply Int.eq_false.
+  destruct (Int.eq_dec Int.one Int.zero).
+  - inversion e.
+  - assumption.
+  - rewrite Ieq. auto.
+Qed.
+
 (* Why do I need to phrase this as:
 <hypothesis> -> aRb -> aRc -> b = c?
 
@@ -819,6 +832,39 @@ Proof.
   auto.
 Qed.
 
+
+Example continue_sif:
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
+  forall (n: nat) (econd: expr),
+    eval_expr ge sp e m econd Vtrue ->
+    exec_stmt ge f sp e m
+              (Sifthenelse econd
+                 (Sskip)
+                 (Sexit n)
+              )
+              E0 e' m' o ->
+    o = Out_normal /\ e = e' /\ m = m'.
+Proof.
+  intros until econd.
+  intros econd_is_true.
+  intros execif.
+  inversion execif.
+  subst.
+  rename H12 into execif_bool.
+
+  assert (v = Vtrue).
+  eapply eval_expr_is_function; eassumption.
+  subst.
+  
+  assert (b = true) as bf.
+  apply bool_of_val_to_bool_true. eassumption.
+  subst.
+
+  inversion execif_bool.
+  subst.
+  auto.
+Qed.
+
 (* Yes, this helped get me unstuck! I now realise that the first clause
 provides us with a contradiciton that Out_normal = Out_exit n.
 This is because of us inverting the "seq"
@@ -862,6 +908,57 @@ Proof.
     destruct out_exit as [oeq [eeq meq]].
     subst.
     auto.
+Qed.
+
+
+Example continue_sseq_sif:
+  forall (m m' msinner: mem) (e e' esinner: env) (f: function) (sp: val) (ge: genv)
+    (o osinner: outcome),
+  forall (n: nat) (sinner: stmt) (econd: expr),
+    eval_expr ge sp e m econd Vtrue ->
+    exec_stmt ge f sp e m sinner E0 esinner msinner osinner ->
+    exec_stmt ge f sp e m
+              (Cminor.Sseq 
+                 (Sifthenelse econd
+                    (Sskip)
+                    (Sexit n)
+                 )
+                 sinner)
+              E0 e' m' o ->
+    o = osinner /\ e' = esinner /\ m' = msinner.
+Proof.
+  intros until econd.
+  intros econd_true.
+  intros exec_sinner.
+  intros seq.
+  assert (forall o' m1 e1, exec_stmt ge f sp e m
+         (Sifthenelse econd Sskip (Sexit n)) E0 e1
+         m1 o' -> o' = Out_normal /\ e = e1 /\ m = m1) as out_cont.
+  intros.
+  eapply continue_sif; eassumption.
+
+  inversion seq.
+  - (* normal trace of S1 in SSeq. not happening *)
+    subst.
+  assert (t1 = E0 /\ t2 = E0) as ht1t2. eapply destruct_trace_app_eq_E0; eassumption.
+  destruct ht1t2 as [t1E0 t2E0]. subst.
+  specialize (out_cont _ _ _  H1).
+  destruct out_cont as [_ [eeq meq]].
+  subst.
+  assert (m' = msinner) as meq.
+  eapply exec_stmt_funcall_with_no_effect_is_function; eassumption.
+  assert (e' = esinner) as eeq.
+  eapply exec_stmt_funcall_with_no_effect_is_function; eassumption.
+  assert (o = osinner) as oeq.
+  eapply exec_stmt_funcall_with_no_effect_is_function; eassumption.
+  subst.
+  auto.
+  
+  - (* Early quit of S1. correct case *)
+    subst.
+    specialize (out_cont _ _ _ H5).
+    destruct out_cont as [ocontra _].
+    contradiction.
 Qed.
 
 Example exit_sblock_sseq_sif:
@@ -923,6 +1020,21 @@ Proof.
   eassumption.
   eassumption.
 Qed.
+
+Lemma no_exit_oned_loop_inner_block_has_out_normal:
+  forall (n: int) (ivname: ident) (inner_stmt: Cminor.stmt),
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
+    eval_expr ge sp e m (Ebinop
+       (Ocmpu Clt)
+       (Evar ivname)
+       (Econst (Ointconst n))) Vtrue ->
+    exec_stmt ge f sp e m (oned_loop_inner_block n ivname inner_stmt)
+              E0 e' m' o ->
+    o = Out_normal.
+Proof.
+  intros until o.
+  intros ival_lte_n.
+  intros exec_block.
 
 
 Lemma exit_oned_loop:
