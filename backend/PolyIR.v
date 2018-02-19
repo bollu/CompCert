@@ -32,6 +32,13 @@ Record loopenv : Type := mkLenv { viv: vindvar }.
 Definition loopenv_bump_vindvar (le: loopenv) : loopenv :=
   mkLenv ((viv le) + 1)%nat.
 
+Definition env_bump_indvar (le: loopenv) (l: loop) (e: env) : env :=
+  PTree.set (loopivname l)
+            (nat_to_val(loopschedule l (viv le + 1)%nat))
+            e.
+  
+
+
 Section EVAL_AFFINEEXPR.
 
   Variable le: loopenv.
@@ -121,19 +128,23 @@ Section MATCHENV.
   Definition match_env (l: loop) (e: env) (le: loopenv) : Prop :=
     e ! (loopivname  l) = Some (nat_to_val (loopschedule l (viv le))).
 
-  Lemma match_env_on_bump_indvar: forall (l: loop) (e': env) (le: loopenv),
-      e' ! (loopivname l) = Some (nat_to_val (loopschedule l (viv le + 1))%nat) ->
-      match_env l e' (loopenv_bump_vindvar le).
-  Proof.
-    intros until le.
-    intros matchle.
-    unfold match_env.
-    unfold loopenv_bump_vindvar.
-    rewrite  matchle.
-    simpl.
-    reflexivity.
-  Qed.
-End MATCHENV.
+
+(* Transform a previous match_env into a new match_env *)
+Lemma match_env_bump_indvar':
+     forall (l: loop) (e: env) (le: loopenv),
+  match_env l e le ->
+  match_env l (env_bump_indvar le l e) (loopenv_bump_vindvar le).
+Proof.
+  intros until le.
+  intros me.
+  unfold match_env in *.
+  unfold env_bump_indvar.
+  rewrite PTree.gss.
+  unfold loopenv_bump_vindvar.
+  simpl.
+  reflexivity.
+Qed.
+  
 
 
 
@@ -233,8 +244,10 @@ Theorem match_loop_inner_block_has_same_effect_when_loop_in_bounds:
                                             (loopivname l)
                         cms) t e' m' o ->
     exec_stmt le l m s m'' ->
-    match_stmt l  cms s ->
-    m' = m'' /\ match_env l e' le.
+    match_stmt l cms s ->
+    m' = m'' /\
+    e' = env_bump_indvar le l e /\
+    match_env l e' (loopenv_bump_vindvar le).
 Proof.
   admit.
 Admitted.
@@ -274,16 +287,6 @@ Proof.
   - omega.
 Qed.
 
-(* 
-Theorem match_loop_induction_on_bump_indvar:
-  forall (lub: nat) (iv: vindvar) (ivname: ident) (lsched lschedinv: vindvar -> vindvar)
-    (loopstmt: stmt),
-  forall (le le': loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m' m'': mem) (ge: genv) (e e': env) (o: outcome),
-    le = mkLenv iv ->
-    l = mkLoop lub ivname loopstmt lsched lschedinv ->
-    exec_loop le m l m' (loopenv_bump_vindvar) ->
-    exec_loop (loopenv_bump_vindvar le) m'0 l m'' le' ->
-*)
 
 Theorem match_loop_has_same_effect:
   forall le m l m'' le',
@@ -328,7 +331,10 @@ Proof.
     revert lval leval.
     
     subst.
-    inversion exec_cms. subst.
+    (* inversion from exec_loop *)
+    inversion exec_cms; subst.
+
+    + (* Loop succeeds an iteration *)
     rename H into loopsched.
     rename H0 into loopschedinv.
     rename H1 into match_cm_inner_stmt.
@@ -344,28 +350,36 @@ Proof.
     clear t1t2val.
     
     intros leval lval.
-    assert (m1 = m' /\ match_env l e1 le) as match_prev_stmt.
+
+    
+
+    assert(m1 = m' /\
+    e1 = env_bump_indvar le l e /\
+    match_env l e1 (loopenv_bump_vindvar le)) as match_prev_stmt.
     eapply match_loop_inner_block_has_same_effect_when_loop_in_bounds;
       eassumption.
-    destruct match_prev_stmt as [meq matchenv1].
+    destruct match_prev_stmt as [meq [eeq matchenve1]].
     subst m1.
+    subst e1.
+    
     eapply IHexecl.
     unfold loopenv_bump_vindvar. auto.
     exact leval.
-    apply match_env_on_bump_indvar with
-        (e' := PTree.set (loopivname l)
-                         (nat_to_val(loopschedule l (viv le + 1)%nat))
-                         e).
-    erewrite PTree.gss.
-    reflexivity.
-    (* Show that on e', the new e = e with loop value updated *)
+    exact matchenve1.
     exact exec_cms_loop.
-    eassumption.
-    
-    
-    (* Done *)
+    exact matchloop.
 
-    assert ()
+    +  inversion matchloop.
+       subst.
+       (* This should succeed, because we know that iv < loopub *)
+       assert (o = Out_normal).
+       admit.
+       contradiction.
+Admitted.
+       
+      
+    
+    
   
 
 
