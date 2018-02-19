@@ -6,6 +6,9 @@ Require Import Cop.
 Require Import Cminor.
 Require Import Integers.
 Require Import SCEV.
+Require Import Znat.
+Require Import Nat.
+Require Import PeanoNat.
 
 Inductive affineexpr: Type :=
 | Eindvar: affineexpr
@@ -287,7 +290,34 @@ Proof.
   - omega.
 Qed.
 
+Lemma transfer_nat_lt_to_int_lt:
+  forall (n1 n2: nat),
+    (n1 < n2)%nat ->
+    Int.ltu (nat_to_int n1) (nat_to_int n2) = true.
+Proof.
+  intros until n2.
+  intros n1_lt_n2.
+  unfold nat_to_int.
+  unfold Int.ltu.
+  rewrite Int.unsigned_repr.
+  rewrite Int.unsigned_repr.
+  rewrite zlt_true.
+  reflexivity.
+  rewrite <- Z.compare_lt_iff.
+  rewrite  Znat.inj_compare.
+  rewrite Nat.compare_lt_iff.
+  assumption.
+  split.
+  apply Nat2Z.is_nonneg.
+  
+  
+  
+  reflexivity.
 
+
+
+
+  
 Theorem match_loop_has_same_effect:
   forall le m l m'' le',
     exec_loop le m l  m'' le' ->
@@ -312,7 +342,33 @@ Proof.
   intros until le'.
   intros execl.
   induction execl.
-  - admit.
+  - intros until e'.
+    intros leval.
+    intros lval.
+    intros matchenv.
+    intros exec_cms.
+    intros matchloop.
+
+    revert lval.
+    revert leval.
+    inversion matchloop. subst.
+    intros lval.
+    intros leval.
+    assert (e = e' /\ m = m') as mem_env_unchanged.
+    eapply exit_oned_loop.
+    assert (eval_expr ge sp e m
+                      (Ebinop
+                         (Ocmpu Clt)
+                         (Evar (loopivname l))
+                         (Econst (Ointconst (nat_to_int (loopub l))))) Vfalse)
+           as iv_geq_ub.
+    admit.
+    exact iv_geq_ub.
+    exact exec_cms.
+    destruct mem_env_unchanged as [meq eeq].
+    subst e m.
+    auto.
+    
   - rename H into viv_inbounds.
     rename H0 into exec_stmt.
 
