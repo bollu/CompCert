@@ -38,11 +38,6 @@ Record loopenv : Type := mkLenv { viv: vindvar }.
 Definition loopenv_bump_vindvar (le: loopenv) : loopenv :=
   mkLenv ((viv le) + 1)%nat.
 
-Definition env_bump_indvar (le: loopenv) (l: loop) (e: env) : env :=
-  PTree.set (loopivname l)
-            (nat_to_val(loopschedule l (viv le + 1)%nat))
-            e.
-  
 
 
 Section EVAL_AFFINEEXPR.
@@ -326,7 +321,7 @@ Section MATCHLOOP.
       loopschedule l = id ->
       loopscheduleinv l = id ->
       match_stmt l cm_inner_stmt (loopstmt l) ->
-      match_loop (oned_loop_incr_1
+      match_loop (oned_loop_incr_by_1
                     (nat_to_int (loopub l))
                     (loopivname l)
                     (cm_inner_stmt))
@@ -341,17 +336,21 @@ Theorem match_loop_inner_block_has_same_effect_when_loop_in_bounds:
     (m mloop mblock mstmt: mem)
     (ge: genv)
     (e eblock estmt: env)
-    (t: trace)
     (o: outcome),
     match_loop cms l ->
     (Z.of_nat (loopub l) < Int.max_unsigned) ->
     (viv le < loopub l)%nat ->
     match_env l e le ->
     loopschedule l = id ->
-    Cminor.exec_stmt ge f sp e m
-                     (oned_loop_inner_block (nat_to_int (loopub l))
-                                            (loopivname l)
-                                            cms) E0 eblock mblock o ->
+ Cminor.exec_stmt ge f sp e m
+                           (oned_loop_inner_block (nat_to_int (loopub l))
+                              (loopivname l)
+                              (Sseq
+                                 (Sassign (loopivname l)
+                                    (Ebinop Oadd (Evar (loopivname l))
+                                       (Econst (Ointconst (z_to_int 1)))))
+                                 cms)) E0 eblock mblock o ->
+
     Cminor.exec_stmt ge f sp e m cms E0 estmt mstmt Out_normal ->
     exec_stmt le l m s mloop ->
     match_stmt l cms s ->
@@ -449,7 +448,7 @@ Proof.
     intros lval.
     intros leval.
     assert (e = eblock /\ m = mblock) as mem_env_unchanged.
-    eapply exit_oned_loop.
+    eapply exit_oned_loop_incr_by_1.
     assert (eval_expr ge sp e m
                       (Ebinop
                          (Ocmpu Clt)

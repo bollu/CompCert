@@ -73,22 +73,23 @@ Definition oned_loop_add_rec (n: int)
        ))
     ).
 
+Definition s_incr_by_1 (ivname: ident): Cminor.stmt :=
+  Sassign
+    ivname
+    (Ebinop (Oadd)
+            (Evar ivname)
+            (Econst (Ointconst (z_to_int 1)))).
+    
+
 (* one-d loop with increment by 1 *)
 Definition oned_loop_incr_by_1
            (n: int) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt :=
-  Cminor.Sseq
-    (z_init ivname 0)
-    (oned_loop n
-               ivname
-               (Cminor.Sseq
-                  (Sassign
-                     ivname
-                     (Ebinop (Oadd)
-                             (Evar ivname)
-                             (Econst (Ointconst (z_to_int 1))))
-                  )
-                  inner_stmt
-    )).
+  oned_loop n
+            ivname
+            (Cminor.Sseq
+               (s_incr_by_1 ivname)
+               inner_stmt
+            ).
 
 
 Lemma z_init_sets_z_value: forall (ivname: ident)
@@ -1042,6 +1043,111 @@ Proof.
   auto.
 Qed.
 
+Definition stmt_does_not_alias (s: Cminor.stmt) (loc: ident) : Prop :=
+  forall (ge: genv) (f: function) (sp: val) (e e': env) (m m': mem)(locv: val),
+    e ! loc = Some locv ->
+    exec_stmt ge f sp e m s E0 e' m' Out_normal  ->
+    e' ! loc = Some locv.
+
+
+Theorem exec_s_incr_by_1:
+  forall (ivname: ident) (ivprev: int),
+  forall (f: function)
+    (sp: val)
+    (ge: genv)
+    (t: trace)
+    (o: outcome)
+    (m m': mem)
+    (e e': env),
+      e ! ivname = Some (Vint ivprev) ->
+      exec_stmt ge f sp e m (s_incr_by_1 ivname) t e' m' o ->
+      m' = m /\ o = Out_normal /\ t = E0 /\
+      e' = PTree.set ivname (Vint (Int.add ivprev Int.one)) e.
+Proof.
+  intros until e'.
+  intros e_at_ivname.
+  intros exec_incr.
+  inversion exec_incr. subst.
+  rename H9 into eval_add.
+  inversion eval_add.
+  subst.
+  rename H2 into eval_ivname.
+  rename H4 into eval_one.
+  rename H5 into eval_binop_add.
+
+  inversion eval_ivname. subst.
+  rename H0 into e_at_ivname'.
+  
+  rewrite  e_at_ivname in e_at_ivname'.
+  inversion e_at_ivname'.
+  subst.
+  inversion eval_one. subst.
+  rename H0 into eval_one'.
+  inversion eval_one'.
+  subst.
+
+  unfold eval_binop in eval_binop_add.
+  unfold Val.add in eval_binop_add.
+  inversion eval_binop_add.
+  unfold Int.one.
+  unfold z_to_int.
+  auto.
+Qed.
+
+  
+  
+Example continue_sblock_incr_by_1_sseq_sif:
+  forall (m m' minner: mem)
+    (e e' einner: env)
+    (f: function) (sp: val) (ge: genv)
+    (o: outcome),
+  forall (n ivval: nat) (sinner: stmt) (econd: expr) (ivname: ident),
+    eval_expr ge sp e m econd Vtrue ->
+    exec_stmt ge f sp e m sinner E0 einner minner Out_normal ->
+    exec_stmt ge f sp e m
+              (Cminor.Sblock
+                 (Cminor.Sseq 
+                    (Sifthenelse econd
+                                 (Sskip)
+                                 (Sexit n)
+                    )
+                    (Cminor.Sseq
+                       sinner
+                       (s_incr_by_1 ivname)
+                    )))
+              E0 e' m' o ->
+    e ! ivname = Some (nat_to_val ivval) ->
+    stmt_does_not_alias sinner ivname ->
+    o = Out_normal /\ e' = einner /\ m' = minner.
+Proof.
+  intros until ivname.
+  intros econd_is_true.
+  intros exec_inner.
+  intros block.
+  intros e_at_ivname.
+  intros sinner_does_not_alias_ivname.
+  inversion block; subst.
+  
+
+  rename H4 into exec_ite_then_inner_and_incr.
+  inversion exec_ite_then_inner_and_incr; subst.
+
+  - rename H1 into exec_ite.
+  rename H6 into exec_sinner_then_incr.
+
+  assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
+  eapply destruct_trace_app_eq_E0. assumption.
+  destruct t1_t2_E0. subst.
+  admit.
+
+  -  rename H5 into exec_cond.
+     assert (out = Out_normal).
+     eapply continue_sif.
+     eassumption.
+     exact exec_cond.
+     contradiction.
+Qed.
+
   
 (* Definition oned_loop_inner_block
 (n: nat) (ivname: ident) (inner_stmt: Cminor.stmt): Cminor.stmt := *)
@@ -1132,6 +1238,23 @@ Proof.
 Qed.
 
 
+Lemma exit_oned_loop_incr_by_1:
+  forall (n: int) (ivname: ident) (inner_stmt: Cminor.stmt),
+  forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv) (o: outcome),
+    eval_expr ge sp e m (Ebinop
+       (Ocmpu Clt)
+       (Evar ivname)
+       (Econst (Ointconst n))) Vfalse ->
+    exec_stmt ge f sp e m (oned_loop_incr_by_1 n ivname inner_stmt)
+              E0 e' m' o ->
+    o = Out_exit 0 /\ e = e' /\ m = m'.
+Proof.
+  unfold oned_loop_incr_by_1.
+  intros.
+  eapply exit_oned_loop.
+  eassumption.
+  eassumption.
+Qed.
 
 
 Lemma oned_loop_with_iv_gt_ub_will_not_execute:
