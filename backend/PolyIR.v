@@ -775,6 +775,18 @@ Proof.
     unfold nat_to_val.
     unfold nat_to_int.
     rewrite lval. simpl.
+    assert (lsched = id) as lsched_id.
+    rewrite <- loopsched.
+    rewrite lval.
+    simpl.
+    reflexivity.
+    rewrite lsched_id.
+    unfold id.
+    rewrite transfer_nat_add_to_int_add.
+    rewrite leval. simpl.
+    reflexivity.
+    rewrite leval. simpl.
+    assumption.
     
     
     (* --- *)
