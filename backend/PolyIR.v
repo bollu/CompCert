@@ -526,82 +526,6 @@ Section MATCHLOOP.
 End MATCHLOOP.
 
 
-(* When we have a loop that is in bounds, shit will work out *)
-(*
-Theorem match_loop_inner_block_has_same_effect_when_loop_in_bounds:
-  forall (le le': loopenv) (l: loop)(f: function) (sp: val)
-    (cms: Cminor.stmt) (s: stmt)
-    (m mloop mblock minner: mem)
-    (ge: genv)
-    (e eblock einner: env)
-    (o: outcome),
-    match_loop cms l ->
-    match_stmt l cms s ->
-    exec_loop le m l  mloop le' ->
-    match_env l e le ->
-    loopschedule l = id ->
-    (Z.of_nat (loopub l) < Int.max_unsigned) ->
-    (viv le < loopub l)%nat ->
-    Cminor.exec_stmt ge f sp e m
-                     (oned_loop_inner_block (nat_to_int (loopub l))
-                                            (loopivname l)
-                                            (Sseq
-                                               cms
-                                               (s_incr_by_1 (loopivname l))
-                     )) E0 eblock mblock o ->
-    Cminor.exec_stmt ge f sp e m cms E0 einner minner Out_normal ->
-     (*exec_stmt le l m s mloop -> *)
-    mloop = mblock.
-Proof.
-  intros until o.
-  intros matchloop.
-  intros matchstmt.
-  intros execloop.
-  intros matchenv.
-  intros loopsched_l_id.
-
-  
-  intros loopub_lt_max_unsigned.
-  intros viv_le_ub.
-  
-  intros exec_cm_block.
-  intros exec_cm_stmt.
-
-  inversion matchenv. subst.
-  rename H0 into e_at_loopiv.
-  rewrite loopsched_l_id in e_at_loopiv.
-  unfold id in e_at_loopiv.
-
-
-
-  (* assert (mblock = minner  /\
-          o = Out_normal /\
-         eblock = incr_env_by_1 einner (loopivname l) (nat_to_int (viv le))) as eqs. *)
-  assert (mblock = minner) as eqs.
-  eapply continue_sblock_incr_by_1_sseq_sif.
-  eapply eval_iv_lt_ub_true.
-  exact loopub_lt_max_unsigned.
-  exact viv_le_ub.
-  exact e_at_loopiv.
-  exact exec_cm_stmt.
-  exact exec_cm_block.
-  exact e_at_loopiv.
-  eapply match_stmt_does_not_alias.
-  exact matchstmt.
-
-  destruct eqs as [meq [oeq eeq]].
-  subst.
-
-  inversion execloop. subst.
-  omega.
-  subst.
-
-  assert ()
-
-  assert (mloop = minner /\ )
-Admitted.
-*)
-
 
 Theorem exec_loop_when_iv_gt_ub_has_no_effect:
   forall (ub: nat) (iv: nat),
@@ -750,9 +674,23 @@ Proof.
     eapply IHexecl with (iv := (iv+ 1)%nat).
     exact lub_in_range'.
 
-    assert (Z.of_nat (iv + 1) < Int.max_unsigned) as iv_plus_1_lt_max_unsigned.
-    admit. (* figure out how to control this *)
-    exact iv_plus_1_lt_max_unsigned.
+    assert (Z.of_nat iv < Z.of_nat lub) as iv_lt_ub_over_int.
+    rewrite <- Z.compare_lt_iff.
+    rewrite Nat2Z.inj_compare.
+    rewrite Nat.compare_lt_iff.
+    rewrite lval, leval in viv_inbounds.
+    simpl in viv_inbounds.
+    exact viv_inbounds.
+
+    assert (Z.of_nat iv + 1 < Z.of_nat lub + 1) as
+        iv_plus_1_lt_ub_plus_1_over_int.
+    omega.
+
+    eapply Z.lt_trans.
+    rewrite Nat2Z.inj_add.
+    exact iv_plus_1_lt_ub_plus_1_over_int.
+    eassumption.
+
     unfold loopenv_bump_vindvar.
     rewrite leval. simpl. reflexivity.
     exact lval.
@@ -824,7 +762,7 @@ Proof.
 
     + rename H8 into out_neq_normal.
       contradiction.
-Admitted.
+Qed.
        
       
     
