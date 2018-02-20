@@ -129,17 +129,22 @@ Section MATCHENV.
   Definition match_env (l: loop) (e: env) (le: loopenv) : Prop :=
     e ! (loopivname  l) = Some (nat_to_val (loopschedule l (viv le))).
 
+Definition env_incr_iv_wrt_loop (le: loopenv) (l: loop) (e: env) : env :=
+  PTree.set (loopivname l)
+            (nat_to_val(loopschedule l (viv le + 1)%nat))
+            e.
+
 
 (* Transform a previous match_env into a new match_env *)
-Lemma match_env_bump_indvar':
+Lemma match_env_incr_iv_wrt_loop':
      forall (l: loop) (e: env) (le: loopenv),
   match_env l e le ->
-  match_env l (env_bump_indvar le l e) (loopenv_bump_vindvar le).
+  match_env l (env_incr_iv_wrt_loop le l e) (loopenv_bump_vindvar le).
 Proof.
   intros until le.
   intros me.
   unfold match_env in *.
-  unfold env_bump_indvar.
+  unfold env_incr_iv_wrt_loop.
   rewrite PTree.gss.
   unfold loopenv_bump_vindvar.
   simpl.
@@ -234,6 +239,28 @@ Proof.
   inversion meq. subst.
   auto.
 Qed.
+
+(* NOTE: this may need to be changed later on and become some dynamic
+condition we extract out from the code. For now, we know that all
+the statements we allow do not modify the environment *)
+Theorem match_stmt_does_not_alias:
+  forall (l: loop) (name: ident) (s: stmt) (cms: Cminor.stmt),
+    match_stmt l cms s ->
+    stmt_does_not_alias cms name.
+Proof.
+  intros until cms.
+  intros matchstmt.
+  unfold stmt_does_not_alias.
+  intros until locv.
+  intros e_at_name.
+  intros exec_s.
+
+  inversion matchstmt; subst.
+
+  - inversion exec_s. subst.
+    auto.
+Qed.
+  
 
 Lemma transfer_nat_lt_to_int_lt:
   forall (n1 n2: nat),
@@ -346,10 +373,9 @@ Theorem match_loop_inner_block_has_same_effect_when_loop_in_bounds:
                            (oned_loop_inner_block (nat_to_int (loopub l))
                               (loopivname l)
                               (Sseq
-                                 (Sassign (loopivname l)
-                                    (Ebinop Oadd (Evar (loopivname l))
-                                       (Econst (Ointconst (z_to_int 1)))))
-                                 cms)) E0 eblock mblock o ->
+                                 cms
+                                 (s_incr_by_1 (loopivname l))
+                           )) E0 eblock mblock o ->
 
     Cminor.exec_stmt ge f sp e m cms E0 estmt mstmt Out_normal ->
     exec_stmt le l m s mloop ->
@@ -357,7 +383,7 @@ Theorem match_loop_inner_block_has_same_effect_when_loop_in_bounds:
     mblock = mstmt /\
     mloop = mblock /\
     eblock = estmt /\
-    eblock = env_bump_indvar le l e /\
+    eblock = env_incr_iv_wrt_loop le l e /\
     match_env l eblock (loopenv_bump_vindvar le).
 Proof.
   intros until o.
@@ -370,17 +396,23 @@ Proof.
   intros exec_cm_stmt.
   intros exec_polyir_stmt.
   intros matchstmt.
-  assert (o = Out_normal /\ eblock = estmt /\ mblock = mstmt ) as eqs.
-  eapply continue_sblock_sseq_sif.
+
+  inversion matchenv. subst.
+  rename H0 into e_at_loopiv.
+  rewrite loopsched_l_id in e_at_loopiv.
+  unfold id in e_at_loopiv.
+
+  assert (mblock = mstmt  /\
+          o = Out_normal /\
+         eblock = incr_env_by_1 estmt (loopivname l) (nat_to_int (viv le))) as eqs.
+  eapply continue_sblock_incr_by_1_sseq_sif.
   eapply eval_iv_lt_ub_true.
   exact loopub_lt_max_unsigned.
   exact viv_le_ub.
-  inversion matchenv.
-  rewrite loopsched_l_id in H0.
-  unfold id in H0.
-  exact H0.
+  exact e_at_loopiv.
   exact exec_cm_stmt.
   exact exec_cm_block.
+  exact e_at_loopiv.
   destruct eqs as [out_normal [eeq meq]].
   subst.
   assert (mstmt = mloop).
@@ -502,7 +534,7 @@ Proof.
     
 
     assert(mblock = m'' /\
-    e1 = env_bump_indvar le l e /\
+    e1 = env_incr_iv_wrt_loop le l e /\
     match_env l e1 (loopenv_bump_vindvar le)) as match_prev_stmt.
     eapply match_loop_inner_block_has_same_effect_when_loop_in_bounds.
       eassumption.
