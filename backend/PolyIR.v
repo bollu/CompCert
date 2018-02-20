@@ -631,6 +631,7 @@ Theorem match_loop_has_same_effect:
       (ivname: ident)
       (lsched lschedinv: vindvar -> vindvar)
       (lub_in_range: Z.of_nat lub < Int.max_unsigned)
+      (lub_in_range': Z.of_nat lub + 1 < Int.max_unsigned)
       (viv_in_range: Z.of_nat iv < Int.max_unsigned)
       (loopstmt: stmt),
     forall (f: function)
@@ -705,6 +706,9 @@ Proof.
     
     subst.
 
+
+    
+
     
     (* inversion from exec_loop *)
     inversion exec_cms_full_loop; subst.
@@ -726,8 +730,29 @@ Proof.
 
     
     intros lval leval.
-    eapply IHexecl with (iv := (iv + 1)%nat).
+
+    assert (eval_expr ge sp e m 
+                      (Ebinop (Ocmpu Clt)
+                              (Evar (loopivname l))
+                              (Econst (Ointconst (nat_to_int (loopub l)))))
+                      Vtrue) as iv_lt_ub_true.
+    eapply eval_iv_lt_ub_true.
+    rewrite lval. simpl.
+    eassumption.
+    eassumption.
+    inversion matchenv. rewrite H0.
+    rewrite loopsched.
+    unfold id.
+    reflexivity.
+
+    
+    
+    eapply IHexecl with (iv := (iv+ 1)%nat).
+    exact lub_in_range'.
+
+    assert (Z.of_nat (iv + 1) < Int.max_unsigned) as iv_plus_1_lt_max_unsigned.
     admit. (* figure out how to control this *)
+    exact iv_plus_1_lt_max_unsigned.
     unfold loopenv_bump_vindvar.
     rewrite leval. simpl. reflexivity.
     exact lval.
@@ -736,7 +761,7 @@ Proof.
     (* this should be matched with exec_cms_loop *)
     assert (m1 = m') as meq.
     eapply continue_sblock_incr_by_1_sseq_sif.
-    admit. (* admit the condition thing for this case *)
+    eapply iv_lt_ub_true.
     eapply match_stmt_has_same_effect'.
     eassumption.
     eassumption.
@@ -759,7 +784,7 @@ Proof.
     assert (e1 = incr_env_by_1 e (loopivname l) (nat_to_int iv)) as
         e1_is_incr_e_at_loopivname.
     eapply continue_sblock_incr_by_1_sseq_sif.
-    admit.
+    eapply iv_lt_ub_true.
     eapply match_stmt_has_same_effect'.
     eassumption.
     eassumption.

@@ -1379,7 +1379,7 @@ Proof.
 Qed.
 
 
-Theorem  continue_oned_loop_incr_by_1:
+Theorem  continue_oned_loop_inner_block_incr_by_1:
   forall (m mblock minner: mem)
     (e eblock einner: env)
     (f: function) (sp: val) (ge: genv)
