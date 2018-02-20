@@ -1378,7 +1378,35 @@ Proof.
   eapply exit_oned_loop; eassumption.
 Qed.
 
-(* Theorem on how a 1-D loop with match that of a SCEV Value *)
+
+Theorem  continue_oned_loop_incr_by_1:
+  forall (m mblock minner: mem)
+    (e eblock einner: env)
+    (f: function) (sp: val) (ge: genv)
+    (o: outcome),
+  forall (sinner: stmt) (econd: expr) (ivname: ident) (ivval ubval: int),
+    eval_expr ge sp e m
+                      (Ebinop
+                         (Ocmpu Clt)
+                         (Evar ivname)
+                         (Econst (Ointconst (ubval)))) Vtrue ->
+    exec_stmt ge f sp e m sinner E0 einner minner Out_normal ->
+    Cminor.exec_stmt ge f sp e m
+                     (oned_loop_inner_block
+                        (ubval)
+                        (ivname)
+                        (Sseq sinner (s_incr_by_1 ivname ))) 
+                   E0 eblock mblock o ->
+    e ! ivname = Some (Vint ivval) ->
+    stmt_does_not_alias sinner ivname ->
+    mblock = minner /\
+    o = Out_normal /\
+    eblock = incr_env_by_1 einner ivname ivval.
+Proof.
+Admitted.
+
+
+(* Theorem on how a 1-D loop with match that of a SCEV Value, for practise *)
 
 Theorem oned_loop_add_rec_matches_addrec_scev_n_eq_0:
   forall  (ivname scevname: ident),

@@ -275,7 +275,32 @@ Theorem match_stmt_has_same_effect':
     match_stmt l  cms s ->
     Cminor.exec_stmt ge f sp e m cms E0 e m' Out_normal.
 Proof.
-Admitted.
+  intros until e.
+  intros matchenv.
+  inversion matchenv.
+  rename H0 into e_at_loopivname.
+
+  intros execstmt.
+  intros matchstmt.
+  induction s.
+
+  - (* Store *)
+    
+    inversion execstmt. subst.
+    
+    inversion matchstmt. subst.
+    eapply Cminor.exec_Sstore.
+    eapply match_expr_have_same_value'.
+    eassumption.
+    eassumption.
+    eassumption.
+
+    eapply eval_Econst.
+    unfold eval_constant.
+    auto.
+
+    assumption.
+Qed.
      
      
 
@@ -681,8 +706,23 @@ Proof.
     eapply match_env_incr_iv_wrt_loop'. eassumption.
 
     (* this should be matched with exec_cms_loop *)
-    assert (m' = m1) as meq. admit.
-    assert (env_incr_iv_wrt_loop le l e = e1) as eeq. admit.
+    assert (m1 = m') as meq.
+    eapply continue_sblock_incr_by_1_sseq_sif.
+    admit. (* admit the condition thing for this case *)
+    eapply match_stmt_has_same_effect'.
+    eassumption.
+    eassumption.
+    eassumption.
+    eassumption.
+    eassumption.
+    eapply match_stmt_does_not_alias.
+    eassumption.
+    (* ---- *)
+
+    assert (env_incr_iv_wrt_loop le l e = e1) as eeq.
+    
+    
+    (* --- *)
     subst m1 e1.
     eapply exec_cms_loop.
     eassumption.
