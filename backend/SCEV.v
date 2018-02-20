@@ -87,8 +87,8 @@ Definition oned_loop_incr_by_1
   oned_loop n
             ivname
             (Cminor.Sseq
-               (s_incr_by_1 ivname)
                inner_stmt
+               (s_incr_by_1 ivname)
             ).
 
 
@@ -1164,8 +1164,8 @@ Qed.
   
   
 Example continue_sblock_incr_by_1_sseq_sif:
-  forall (m m' minner: mem)
-    (e e' einner: env)
+  forall (m mblock minner: mem)
+    (e eblock einner: env)
     (f: function) (sp: val) (ge: genv)
     (o: outcome),
   forall (n: nat) (sinner: stmt) (econd: expr) (ivname: ident) (ivval: int),
@@ -1182,12 +1182,12 @@ Example continue_sblock_incr_by_1_sseq_sif:
                        sinner
                        (s_incr_by_1 ivname)
                     )))
-              E0 e' m' o ->
+              E0 eblock mblock o ->
     e ! ivname = Some (Vint ivval) ->
     stmt_does_not_alias sinner ivname ->
-    m' = minner /\
+    mblock = minner /\
     o = Out_normal /\
-    e' = incr_env_by_1 einner ivname ivval.
+    eblock = incr_env_by_1 einner ivname ivval.
 Proof.
   intros until ivval.
   intros econd_is_true.
@@ -1213,8 +1213,8 @@ Proof.
   destruct if_eq as [eeq meq].
   subst.
 
-  assert (m' = minner /\ out = Out_normal /\
-          e' = incr_env_by_1 einner ivname ivval) as
+  assert (mblock = minner /\ out = Out_normal /\
+          eblock = incr_env_by_1 einner ivname ivval) as
       seq_sinner_sincr_eq.
   eapply exec_seq_sinner_then_sincr; eassumption.
 

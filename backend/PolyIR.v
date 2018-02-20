@@ -192,6 +192,34 @@ Proof.
 Qed.
 
 
+(* match_expr in terms of synthesizing the eval_expr *)
+Theorem match_expr_have_same_value':
+  forall (l:loop) (le:loopenv) (a:expr) (sp: val) (m: mem) (ae:affineexpr) (e:env) (ge: genv) (v:val),
+    match_affineexpr l a ae ->
+    match_env l e le ->
+    eval_affineexpr le l ae v ->
+    eval_expr ge sp e m a v.
+Proof.
+  intros until v.
+  intros match_exprs.
+  intros match_envs.
+  intros eval_affineexpr.
+  
+  induction match_exprs;
+    inversion eval_affineexpr;
+    inversion match_envs;
+    subst.
+  - (* eval indvar *)
+    eapply eval_Evar.
+    assumption.
+
+  -  (* eval const int *)
+    eapply eval_Econst.
+    unfold eval_constant.
+    reflexivity.
+Qed.
+
+
 
 Section MATCHSTMT.
   Variable le: loopenv.
@@ -240,10 +268,23 @@ Proof.
   auto.
 Qed.
 
+Theorem match_stmt_has_same_effect':
+  forall (le: loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m':mem) (ge: genv) (e: env),
+    match_env l e le ->
+    exec_stmt le l m s m' ->
+    match_stmt l  cms s ->
+    Cminor.exec_stmt ge f sp e m cms E0 e m' Out_normal.
+Proof.
+Admitted.
+     
+     
+
+  
+
 (* NOTE: this may need to be changed later on and become some dynamic
 condition we extract out from the code. For now, we know that all
 the statements we allow do not modify the environment *)
-Theorem match_stmt_does_not_alias:
+Theorem match_stmt_does_not_alias: 
   forall (l: loop) (name: ident) (s: stmt) (cms: Cminor.stmt),
     match_stmt l cms s ->
     stmt_does_not_alias cms name.
@@ -293,6 +334,82 @@ Proof.
   split.
   apply Nat2Z.is_nonneg.
   apply n1_lt_max_unsigned.
+Qed.
+
+
+Lemma transfer_nat_ge_to_int_ltu:
+  forall (n1 n2: nat),
+    (n1 >= n2)%nat ->
+    Z.of_nat n1 <= Int.max_unsigned ->
+    Z.of_nat n2 <= Int.max_unsigned ->
+    Int.ltu (nat_to_int n1) (nat_to_int n2) = false.
+Proof.
+  intros until n2.
+  intros n1_lt_n2.
+
+  intros n1_lt_max_unsigned.
+  intros n2_lt_max_unsigned.
+  
+  unfold nat_to_int.
+  unfold Int.ltu.
+  rewrite Int.unsigned_repr.
+  rewrite Int.unsigned_repr.
+  rewrite zlt_false.
+  reflexivity.
+  apply Z.le_ge.
+  rewrite <- Z.compare_ge_iff.
+  rewrite  Znat.inj_compare.
+  rewrite Nat.compare_lt_iff.
+  omega.
+
+  split.
+  apply Nat2Z.is_nonneg.
+  apply n2_lt_max_unsigned.
+
+  split.
+  apply Nat2Z.is_nonneg.
+  apply n1_lt_max_unsigned.
+Qed.
+
+Lemma eval_iv_lt_ub_false:
+  forall (ge: genv) (sp: val) (m: mem),
+  forall (e: env) (ivname: ident) (viv: nat) (ub: upperbound),
+    Z.of_nat viv <= Int.max_unsigned ->
+    (viv >= ub)%nat ->
+    e ! ivname = Some (nat_to_val viv) ->
+    eval_expr ge sp e m 
+              (Ebinop
+                 (Ocmpu Clt)
+                 (Evar ivname)
+                 (Econst (Ointconst (nat_to_int ub)))) Vfalse.
+Proof.
+  intros until ub.
+  intros ub_lt_max_unsigned.
+  intros viv_lt_ub.
+  intros e_at_ivname_is_viv.
+  eapply eval_Ebinop.
+  eapply eval_Evar.
+  eassumption.
+  eapply eval_Econst.
+  unfold eval_constant.
+  auto.
+
+  unfold eval_binop.
+  unfold Val.cmpu.
+  unfold Val.cmpu_bool.
+  unfold nat_to_val.
+  unfold Val.of_optbool.
+  unfold Int.cmpu.
+  rewrite transfer_nat_ge_to_int_ltu.
+  reflexivity.
+  eassumption.
+
+  eassumption.
+
+
+  eapply Z.le_trans with (m := Z.of_nat viv0).
+  omega.
+  omega.
 Qed.
 
 Lemma eval_iv_lt_ub_true:
@@ -357,54 +474,57 @@ End MATCHLOOP.
 
 
 (* When we have a loop that is in bounds, shit will work out *)
+(*
 Theorem match_loop_inner_block_has_same_effect_when_loop_in_bounds:
-  forall (le: loopenv) (l: loop)(f: function) (sp: val)
+  forall (le le': loopenv) (l: loop)(f: function) (sp: val)
     (cms: Cminor.stmt) (s: stmt)
-    (m mloop mblock mstmt: mem)
+    (m mloop mblock minner: mem)
     (ge: genv)
-    (e eblock estmt: env)
+    (e eblock einner: env)
     (o: outcome),
     match_loop cms l ->
-    (Z.of_nat (loopub l) < Int.max_unsigned) ->
-    (viv le < loopub l)%nat ->
+    match_stmt l cms s ->
+    exec_loop le m l  mloop le' ->
     match_env l e le ->
     loopschedule l = id ->
- Cminor.exec_stmt ge f sp e m
-                           (oned_loop_inner_block (nat_to_int (loopub l))
-                              (loopivname l)
-                              (Sseq
-                                 cms
-                                 (s_incr_by_1 (loopivname l))
-                           )) E0 eblock mblock o ->
-
-    Cminor.exec_stmt ge f sp e m cms E0 estmt mstmt Out_normal ->
-    exec_stmt le l m s mloop ->
-    match_stmt l cms s ->
-    mblock = mstmt /\
-    mloop = mblock /\
-    eblock = estmt /\
-    eblock = env_incr_iv_wrt_loop le l e /\
-    match_env l eblock (loopenv_bump_vindvar le).
+    (Z.of_nat (loopub l) < Int.max_unsigned) ->
+    (viv le < loopub l)%nat ->
+    Cminor.exec_stmt ge f sp e m
+                     (oned_loop_inner_block (nat_to_int (loopub l))
+                                            (loopivname l)
+                                            (Sseq
+                                               cms
+                                               (s_incr_by_1 (loopivname l))
+                     )) E0 eblock mblock o ->
+    Cminor.exec_stmt ge f sp e m cms E0 einner minner Out_normal ->
+     (*exec_stmt le l m s mloop -> *)
+    mloop = mblock.
 Proof.
   intros until o.
   intros matchloop.
-  intros loopub_lt_max_unsigned.
-  intros viv_le_ub.
+  intros matchstmt.
+  intros execloop.
   intros matchenv.
   intros loopsched_l_id.
+
+  
+  intros loopub_lt_max_unsigned.
+  intros viv_le_ub.
+  
   intros exec_cm_block.
   intros exec_cm_stmt.
-  intros exec_polyir_stmt.
-  intros matchstmt.
 
   inversion matchenv. subst.
   rename H0 into e_at_loopiv.
   rewrite loopsched_l_id in e_at_loopiv.
   unfold id in e_at_loopiv.
 
-  assert (mblock = mstmt  /\
+
+
+  (* assert (mblock = minner  /\
           o = Out_normal /\
-         eblock = incr_env_by_1 estmt (loopivname l) (nat_to_int (viv le))) as eqs.
+         eblock = incr_env_by_1 einner (loopivname l) (nat_to_int (viv le))) as eqs. *)
+  assert (mblock = minner) as eqs.
   eapply continue_sblock_incr_by_1_sseq_sif.
   eapply eval_iv_lt_ub_true.
   exact loopub_lt_max_unsigned.
@@ -413,13 +533,21 @@ Proof.
   exact exec_cm_stmt.
   exact exec_cm_block.
   exact e_at_loopiv.
-  destruct eqs as [out_normal [eeq meq]].
+  eapply match_stmt_does_not_alias.
+  exact matchstmt.
+
+  destruct eqs as [meq [oeq eeq]].
   subst.
-  assert (mstmt = mloop).
-  eapply match_stmt_has_same_effect; eassumption.
+
+  inversion execloop. subst.
+  omega.
   subst.
-  
+
+  assert ()
+
+  assert (mloop = minner /\ )
 Admitted.
+*)
 
 
 Theorem exec_loop_when_iv_gt_ub_has_no_effect:
@@ -450,6 +578,7 @@ Theorem match_loop_has_same_effect:
       (ivname: ident)
       (lsched lschedinv: vindvar -> vindvar)
       (lub_in_range: Z.of_nat lub < Int.max_unsigned)
+      (viv_in_range: Z.of_nat iv < Int.max_unsigned)
       (loopstmt: stmt),
     forall (f: function)
       (sp: val)
@@ -477,17 +606,28 @@ Proof.
     revert lval.
     revert leval.
     inversion matchloop. subst.
-    intros lval.
     intros leval.
+    intros lval.
     assert (e = eblock /\ m = mblock) as mem_env_unchanged.
     eapply exit_oned_loop_incr_by_1.
+
+    assert (viv le = iv) as viv_le_is_iv. rewrite leval.
+    auto.
+    
     assert (eval_expr ge sp e m
                       (Ebinop
                          (Ocmpu Clt)
                          (Evar (loopivname l))
                          (Econst (Ointconst (nat_to_int (loopub l))))) Vfalse)
-           as iv_geq_ub.
-    admit.
+      as iv_geq_ub.
+    eapply eval_iv_lt_ub_false with (viv := iv).
+    omega.
+    rewrite <- viv_le_is_iv.
+    omega.
+    inversion matchenv. rewrite H4.
+    inversion matchloop. rewrite H10.
+    unfold id. rewrite <- viv_le_is_iv.
+    reflexivity.
     exact iv_geq_ub.
     exact exec_cms.
     destruct mem_env_unchanged as [meq eeq].
@@ -501,7 +641,7 @@ Proof.
     intros leval.
     intros lval.
     intros matchenv.
-    intros exec_cms.
+    intros exec_cms_full_loop.
     intros matchloop.
 
     (* Extract as much information we can get from matchloop *)
@@ -511,8 +651,10 @@ Proof.
     revert lval leval.
     
     subst.
+
+    
     (* inversion from exec_loop *)
-    inversion exec_cms; subst.
+    inversion exec_cms_full_loop; subst.
 
     + (* Loop succeeds an iteration *)
     rename H into loopsched.
@@ -528,26 +670,25 @@ Proof.
     destruct t1_t2_e0.
     subst.
     clear t1t2val.
-    
-    intros leval lval.
 
     
+    intros lval leval.
+    eapply IHexecl with (iv := (iv + 1)%nat).
+    admit. (* figure out how to control this *)
+    unfold loopenv_bump_vindvar.
+    rewrite leval. simpl. reflexivity.
+    exact lval.
+    eapply match_env_incr_iv_wrt_loop'. eassumption.
 
-    assert(mblock = m'' /\
-    e1 = env_incr_iv_wrt_loop le l e /\
-    match_env l e1 (loopenv_bump_vindvar le)) as match_prev_stmt.
-    eapply match_loop_inner_block_has_same_effect_when_loop_in_bounds.
-      eassumption.
-    destruct match_prev_stmt as [meq [eeq matchenve1]].
-    subst m1.
-    subst e1.
-    
-    eapply IHexecl.
-    unfold loopenv_bump_vindvar. auto.
-    exact leval.
-    exact matchenve1.
-    exact exec_cms_loop.
-    exact matchloop.
+    (* this should be matched with exec_cms_loop *)
+    assert (m' = m1) as meq. admit.
+    assert (env_incr_iv_wrt_loop le l e = e1) as eeq. admit.
+    subst m1 e1.
+    eapply exec_cms_loop.
+    eassumption.
+
+
+
 
     + rename H8 into out_neq_normal.
       contradiction.
