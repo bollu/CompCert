@@ -328,6 +328,34 @@ Proof.
 Qed.
   
 
+Lemma transfer_nat_add_to_int_add:
+  forall (n: nat),
+    Z.of_nat n < Int.max_unsigned ->
+    Int.repr (Z.of_nat (n + 1)%nat) =
+    (Int.add (Int.repr (Z.of_nat n)) Int.one).
+Proof.
+  intros n.
+  intros n_lt_unsigned.
+  rewrite Int.add_unsigned.
+  unfold Int.one.
+  rewrite Int.unsigned_repr.
+  rewrite Int.unsigned_repr.
+  rewrite Nat2Z.inj_add.
+  simpl.
+  reflexivity.
+  split.
+  omega.
+  unfold Int.max_unsigned.
+  unfold Int.modulus.
+  unfold Int.wordsize.
+  simpl.
+  omega.
+
+  split.
+  omega.
+  omega.
+Qed.
+
 Lemma transfer_nat_lt_to_int_lt:
   forall (n1 n2: nat),
     (n1 < n2)%nat ->
@@ -719,7 +747,34 @@ Proof.
     eassumption.
     (* ---- *)
 
+    inversion matchenv.
+    rename H0 into e_at_ivname.
+    rewrite loopsched in e_at_ivname.
+    rewrite lval in e_at_ivname.
+    rewrite leval in e_at_ivname.
+    simpl in e_at_ivname.
+    unfold id in e_at_ivname.
+    
     assert (env_incr_iv_wrt_loop le l e = e1) as eeq.
+    assert (e1 = incr_env_by_1 e (loopivname l) (nat_to_int iv)) as
+        e1_is_incr_e_at_loopivname.
+    eapply continue_sblock_incr_by_1_sseq_sif.
+    admit.
+    eapply match_stmt_has_same_effect'.
+    eassumption.
+    eassumption.
+    eassumption.
+    exact exec_cms_inner_block.
+    rewrite lval. simpl.
+    eassumption.
+    eapply match_stmt_does_not_alias.
+    eassumption.
+    rewrite e1_is_incr_e_at_loopivname.
+    unfold env_incr_iv_wrt_loop.
+    unfold incr_env_by_1.
+    unfold nat_to_val.
+    unfold nat_to_int.
+    rewrite lval. simpl.
     
     
     (* --- *)
