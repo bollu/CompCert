@@ -9,6 +9,7 @@ Require Import SCEV.
 Require Import Znat.
 Require Import Nat.
 Require Import PeanoNat.
+Require Import Coq.Logic.Classical_Prop.
 
 Inductive affineexpr: Type :=
 | Eindvar: affineexpr
@@ -34,6 +35,25 @@ Record loop : Type :=
            loopscheduleinv: vindvar -> vindvar
          }.
 
+Definition loop_id_schedule (loopub: upperbound)
+           (loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned)
+           (loopivname: ident)
+           (loopstmt: stmt) :=
+  mkLoop loopub loopub_in_range_witness loopivname loopstmt id id.
+
+Definition n_minus_x (n x: nat) := (n - x)%nat.
+
+Definition loop_reversed_schedule (loopub: upperbound)
+           (loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned)
+           (loopivname: ident)
+           (loopstmt: stmt) :=
+  mkLoop loopub
+         loopub_in_range_witness
+         loopivname
+         loopstmt
+         (n_minus_x loopub)
+         (n_minus_x loopub).
+
 Record loopenv : Type := mkLenv { viv: vindvar }.
 Definition loopenv_bump_vindvar (le: loopenv) : loopenv :=
   mkLenv ((viv le) + 1)%nat.
@@ -55,6 +75,7 @@ Section EXEC_STMT.
   Inductive exec_stmt: loopenv -> loop -> mem -> stmt -> mem -> Prop :=
   | exec_Sstore: forall (le: loopenv) (l: loop) (m m': mem)
                    (chunk: memory_chunk) (addr: affineexpr) (i: int) (vaddr: val),
+      (viv le < loopub l)%nat ->
       eval_affineexpr le l addr vaddr ->
       Mem.storev chunk m vaddr (Vint i) = Some m' ->
       exec_stmt le l m (Sstore chunk addr i) m'.
@@ -100,7 +121,7 @@ Proof.
   eapply eval_affineexpr_is_function; eassumption.
   subst.
   assert (Some m' = Some m'') as meq.
-  rewrite <- H7. rewrite <- H16.
+  rewrite <- H8. rewrite <- H18.
   reflexivity.
   inversion meq. subst.
   auto.
@@ -124,6 +145,8 @@ Proof.
      eapply IHexec_l1.
      eassumption.
 Qed.
+
+
 
 Section MATCHENV.
   Definition match_env (l: loop) (e: env) (le: loopenv) : Prop :=
@@ -254,15 +277,15 @@ Proof.
   subst.
 
   assert (v = Vint i) as veq.
-  inversion H21.
+  inversion H22.
   subst.
   inversion H1. subst.
   reflexivity.
   subst.
   
   assert (Some m' = Some m'') as meq.
-  rewrite <- H22.
-  rewrite <- H8.
+  rewrite <- H23.
+  rewrite <- H9.
   auto.
   inversion meq. subst.
   auto.
@@ -763,12 +786,155 @@ Proof.
     + rename H8 into out_neq_normal.
       contradiction.
 Qed.
-       
-      
-    
-    
+
+Definition is_affineexpr_injective (ae: affineexpr): bool :=
+  match ae with
+  | Eindvar => true
+  | Econstint _ => false
+  end.
+
+Definition is_stmt_store_injective(s: stmt) : bool :=
+  match s with
+  | Sstore  _  ae _ => is_affineexpr_injective ae
+  end.
+
+
+Lemma store_inj_implies_affine_expr_indvar:
+  forall (mc: memory_chunk)
+    (ae: affineexpr)
+    (i: int),
+    is_stmt_store_injective (Sstore mc ae i) = true ->
+    ae = Eindvar.
+Proof.
+  intros until i.
+  intros store_inj.
+  subst.
+Abort.
+  
+         
   
 
+(* Wow, I actually proved the useful induction principle that lets us
+peel of a loop iteration from the beginning of the loop
+*)
+Lemma eval_loop_peel_off_iter:
+  forall (le lefinal: loopenv)
+    (m mpeel mfinal: mem)
+    (l: loop)
+    (s: stmt),
+    loopstmt l = s ->
+    (viv le < loopub l)%nat ->
+  exec_loop le m l mfinal lefinal ->
+  exec_stmt le l m s mpeel ->
+  exec_loop (loopenv_bump_vindvar le) mpeel l mfinal lefinal.
+Proof.
+  intros until s.
+  intros s_l_stmt.
+  intros viv_lt_ub.
+  intros exec_l_fully.
+  intros exec_s.
 
+  assert ((viv le + 1 = loopub l \/ viv le + 1 < loopub l))%nat as viv_succ_cases.  omega.
+  destruct viv_succ_cases as [viv_succ_eq_loopub | viv_succ_lt_loopub].
 
+  - assert ((loopenv_bump_vindvar le) = lefinal /\ mpeel = mfinal ) as eqs.
+  inversion exec_l_fully; subst.
+  + omega.
+  + assert (m' = mpeel) as m_eq_mpeel.
+  eapply exec_stmt_is_function; eassumption.
+  subst.
+  eapply exec_loop_when_iv_gt_ub_has_no_effect with
+      (l := l)
+      (le := (loopenv_bump_vindvar le)).
+  auto.
+  auto.
+  simpl. omega.
+  eassumption.
 
+  + destruct eqs.
+    subst.
+    eapply eval_loop_stop.
+    simpl.
+    omega.
+
+  -  (* viv le + 1 < loopub l *)
+    inversion exec_l_fully; subst.
+    + omega.
+    + assert (m' = mpeel) as m_eq_mpeel.
+      eapply exec_stmt_is_function; eassumption.
+      subst.
+      eassumption.
+Qed.
+  
+
+      
+Theorem loop_reversal_correct_if_ix_injective:
+  forall (lub: upperbound)
+    (lub_in_range: Z.of_nat lub < Int.max_unsigned)
+    (ivname: ident)
+    (s: stmt),
+    is_stmt_store_injective s = true ->
+    forall (l: loop)
+      (le leid: loopenv)
+      (m mid: mem),
+      l = (loop_id_schedule lub lub_in_range ivname s) ->
+      exec_loop le m l  mid leid ->
+      forall (lrev: loop)
+        (lerev: loopenv)
+        (mrev: mem),
+    lrev =  (loop_reversed_schedule lub lub_in_range ivname s) ->
+    exec_loop le m lrev  mrev lerev ->
+    leid = lerev /\ mid = mrev.
+Proof.
+  intros until s.
+  intros s_inj.
+  intros until mid.
+
+  intros ldesc.
+  intros exec_id.
+
+  induction exec_id;
+  
+  revert ldesc.
+  subst;
+    intros ldesc;
+    intros until mrev;
+    intros lrevdesc;
+    intros exec_rev.
+
+  - (* id is out of bounds *)
+    eapply exec_loop_when_iv_gt_ub_has_no_effect with (l := lrev).
+    simpl.
+    auto.
+    auto.
+    rewrite ldesc in H.
+    simpl in H.
+    rewrite lrevdesc.
+    simpl.
+    omega.
+    eassumption.
+
+  - intros ldesc.
+    intros until mrev.
+    intros lrev_desc exec_lrev.
+    + assert (exec_stmt le lrev m (loopstmt lrev) m') as lrev_match_l.
+      admit.
+      eapply IHexec_id.
+      assumption.
+      eassumption.
+
+      eapply eval_loop_peel_off_iter.
+      rewrite lrev_desc. auto.
+      replace (loopub lrev) with (loopub l).
+      eassumption.
+      rewrite lrev_desc. rewrite ldesc. simpl. auto.
+      simpl.
+      replace (loopstmt lrev) with s in lrev_match_l.
+      eassumption.
+      rewrite lrev_desc. simpl. auto.
+Admitted.
+
+      
+      
+
+    
