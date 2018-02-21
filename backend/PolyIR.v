@@ -9,7 +9,68 @@ Require Import SCEV.
 Require Import Znat.
 Require Import Nat.
 Require Import PeanoNat.
-Require Import Coq.Logic.Classical_Prop.
+Require Import ExtensionalityFacts.
+
+
+(* Useful facts about functions that are inverses *)
+Theorem is_inverse_injective: forall (A B:Set) (f: A -> B) (g: B -> A) (a b: A), is_inverse f g -> f a = f b -> a = b.
+Proof.
+  intros.
+  assert (g (f a) = g (f b)) as gcall.
+  rewrite H0. reflexivity.
+  unfold is_inverse in H. destruct H.
+  cut (a = g (f a)).
+  cut (b = g (f b)).
+  intros.
+  rewrite H2. rewrite H3. auto.
+  intuition. intuition.
+Qed.
+
+Theorem injective_preimg_neq_implies_img_neq: forall (A B: Set)
+                                    (f: A -> B)
+                                    (g: B -> A)
+                                    (a b: A),
+    (forall (b1 b2: B), {b1 = b2} + {b1 <> b2}) ->
+    is_inverse f g -> a <> b -> f a <> f b.
+Proof.
+  intros until b.
+  intros dec.
+  intros inv.
+  intros preimg_neq.
+  assert ({f a = f b} + {f a <> f b}) as decide_f.
+  eapply dec.
+
+  destruct decide_f as [f_eq | f_neq].
+  assert (a = b) as contra.
+  eapply is_inverse_injective; eassumption.
+
+  contradiction.
+
+  assumption.
+Qed.
+
+  
+  
+  
+    
+
+Theorem is_inverse_symmetric: forall (A B:Set) (f: A -> B) (g: B -> A), is_inverse f g -> is_inverse g f.
+Proof.
+  intros.
+  unfold is_inverse in *.
+  intuition.
+Qed.
+
+
+Theorem is_inverse_cancellation: forall (A: Set) (s s': A -> A) (a: A),
+    is_inverse s s' -> ((s (s' a)) = a).
+Proof.
+  intros.
+  unfold is_inverse in H.
+  destruct H.
+  apply H0.
+Qed.
+
 
 Inductive affineexpr: Type :=
 | Eindvar: affineexpr
@@ -26,22 +87,78 @@ Notation upperbound := nat.
 Definition nat_to_int (n: nat): int := (Int.repr (Z.of_nat n)).
 Definition nat_to_val (n: nat): val := Vint (nat_to_int  n).
 
+Theorem int_repr_injective_in_range:
+  forall (z1 z2: Z),
+    z1 < Int.max_unsigned ->
+    z2 < Int.max_unsigned ->
+    z1 <> z2 ->
+    Int.repr z1 <> Int.repr z2.
+Proof.
+  intros until z2.
+  intros z1_lt_max z2_lt_max.
+  intros z1_neq_z2.
+  assert ({Int.repr z1 = Int.repr z2} + {Int.repr z1 <> Int.repr z2}) as zcases.
+
+  eapply Int.eq_dec.
+  destruct zcases as [zeq | zneq].
+  (* need theorems about integers *)
+Abort.
+
+Definition is_inverse_till_ub (ub: upperbound)
+           (a: vindvar -> vindvar)
+           (ainv: vindvar -> vindvar): Prop :=
+  forall (n: vindvar), (n < ub)%nat -> a  (ainv n) = n /\ ainv (a n) = n.
+    
 Record loop : Type :=
   mkLoop { loopub: upperbound;
            loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned;
            loopivname: ident;
            loopstmt: stmt;
            loopschedule: vindvar -> vindvar;
-           loopscheduleinv: vindvar -> vindvar
+           loopscheduleinv: vindvar -> vindvar;
+           loopschedulewitness: is_inverse_till_ub loopub loopschedule loopscheduleinv;
          }.
+
+
+Definition id_vindvar : vindvar -> vindvar := id.
+
+Lemma id_vindvar_self_inverse: forall (n: nat),
+    is_inverse_till_ub n id_vindvar id_vindvar.
+Proof.
+  intros n.
+  unfold is_inverse_till_ub.
+  split;
+  unfold id_vindvar;
+  unfold id;
+  omega.
+Qed.
 
 Definition loop_id_schedule (loopub: upperbound)
            (loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned)
            (loopivname: ident)
            (loopstmt: stmt) :=
-  mkLoop loopub loopub_in_range_witness loopivname loopstmt id id.
+  mkLoop loopub
+         loopub_in_range_witness
+         loopivname
+         loopstmt
+         id
+         id
+         (id_vindvar_self_inverse loopub).
+
 
 Definition n_minus_x (n x: nat) := (n - x)%nat.
+
+Lemma n_minus_x_self_inverse: forall n,
+    is_inverse_till_ub n (n_minus_x n) (n_minus_x n).
+Proof.
+  intros n.
+  unfold is_inverse_till_ub.
+  split;
+  unfold n_minus_x;
+  omega.
+Qed.
+
+
 
 Definition loop_reversed_schedule (loopub: upperbound)
            (loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned)
@@ -52,7 +169,8 @@ Definition loop_reversed_schedule (loopub: upperbound)
          loopivname
          loopstmt
          (n_minus_x loopub)
-         (n_minus_x loopub).
+         (n_minus_x loopub)
+         (n_minus_x_self_inverse loopub).
 
 Record loopenv : Type := mkLenv { viv: vindvar }.
 Definition loopenv_bump_vindvar (le: loopenv) : loopenv :=
@@ -580,7 +698,8 @@ Theorem match_loop_has_same_effect:
       (lub_in_range: Z.of_nat lub < Int.max_unsigned)
       (lub_in_range': Z.of_nat lub + 1 < Int.max_unsigned)
       (viv_in_range: Z.of_nat iv < Int.max_unsigned)
-      (loopstmt: stmt),
+      (loopstmt: stmt)
+      (lschedwitness: is_inverse lsched lschedinv),
     forall (f: function)
       (sp: val)
       (cms: Cminor.stmt)
@@ -588,7 +707,7 @@ Theorem match_loop_has_same_effect:
       (ge: genv)
       (e eblock: env),
     le = mkLenv iv ->
-    l = mkLoop lub lub_in_range ivname loopstmt lsched lschedinv ->
+    l = mkLoop lub lub_in_range ivname loopstmt lsched lschedinv lschedwitness ->
     match_env l e le ->
     Cminor.exec_stmt ge f sp e m cms E0 eblock mblock Out_normal ->
     match_loop cms l ->
@@ -787,31 +906,38 @@ Proof.
       contradiction.
 Qed.
 
-Definition is_affineexpr_injective (ae: affineexpr): bool :=
-  match ae with
-  | Eindvar => true
-  | Econstint _ => false
-  end.
+Definition injective_affineexpr (ae: affineexpr): Prop:= ae = Eindvar.
 
-Definition is_stmt_store_injective(s: stmt) : bool :=
-  match s with
-  | Sstore  _  ae _ => is_affineexpr_injective ae
-  end.
-
-
-Lemma store_inj_implies_affine_expr_indvar:
-  forall (mc: memory_chunk)
-    (ae: affineexpr)
-    (i: int),
-    is_stmt_store_injective (Sstore mc ae i) = true ->
-    ae = Eindvar.
+Lemma injective_affinexpr_is_unique_per_loopiter:
+  forall (le le': loopenv) (l: loop) (ae: affineexpr) (v v': val),
+    injective_affineexpr ae  ->
+    eval_affineexpr le l ae v ->
+    eval_affineexpr le' l ae v' ->
+    viv le <> viv le' -> v <> v'.
 Proof.
-  intros until i.
-  intros store_inj.
+  intros until v'.
+  intros ae_inj.
+  inversion ae_inj as [ae_is_indvar].
+  intros eval_indvar_at_le.
+  intros eval_indvar_at_le'.
+  intros le_neq_le'.
+  inversion eval_indvar_at_le.
+  inversion eval_indvar_at_le'.
   subst.
+  assert (loopschedule l (viv le) <> loopschedule l (viv le')).
+  eapply injective_preimg_neq_implies_img_neq.
+  apply Nat.eq_dec.
+  exact (loopschedulewitness l).
+  assumption.
 Abort.
-  
-         
+
+(* This statement has different effects on different loop iterations *)
+Inductive injective_stmt: stmt -> Prop :=
+  injective_Sstore: forall (chunk: memory_chunk) (i: int) (ae: affineexpr),
+    injective_affineexpr ae ->
+    injective_stmt (Sstore chunk ae i).
+
+
   
 
 (* Wow, I actually proved the useful induction principle that lets us
@@ -823,16 +949,15 @@ Lemma eval_loop_peel_off_iter:
     (l: loop)
     (s: stmt),
     loopstmt l = s ->
-    (viv le < loopub l)%nat ->
   exec_loop le m l mfinal lefinal ->
   exec_stmt le l m s mpeel ->
   exec_loop (loopenv_bump_vindvar le) mpeel l mfinal lefinal.
 Proof.
   intros until s.
   intros s_l_stmt.
-  intros viv_lt_ub.
   intros exec_l_fully.
   intros exec_s.
+  inversion exec_s. subst.
 
   assert ((viv le + 1 = loopub l \/ viv le + 1 < loopub l))%nat as viv_succ_cases.  omega.
   destruct viv_succ_cases as [viv_succ_eq_loopub | viv_succ_lt_loopub].
@@ -866,6 +991,48 @@ Proof.
       eassumption.
 Qed.
   
+(* This is probably not correct. What I actually need to show is
+something like this:
+    1. every time point has a matching time point ( n - i)
+    2. No write will alias because the affine function is injective
+    3. Therefore, every write will have a complementary write.
+*)
+Lemma loop_reversal_correct_for_one_iter:
+  forall (l: loop)
+    (lub: upperbound)
+    (lub_in_range: Z.of_nat lub < Int.max_unsigned)
+    (le: loopenv)
+    (m m': mem)
+    (ivname: ident),
+  forall (lrev: loop)
+    (s: stmt),
+    injective_stmt s ->
+    l = (loop_id_schedule lub lub_in_range ivname s) ->
+    lrev =  (loop_reversed_schedule lub lub_in_range ivname s) ->
+    exec_stmt le l m (loopstmt l) m' ->
+    exec_stmt le lrev m (loopstmt lrev) m'.
+Proof.
+  intros  until s.
+  intros s_inj.
+  intros l_desc.
+  intros lrev_desc.
+  replace (loopstmt l) with s.
+  replace (loopstmt lrev) with s.
+  intros exec_s.
+  induction exec_s.
+
+  - rename H into viv_le_lt_loopub.
+    rename H0 into eval_addr.
+    rename H1 into eval_store.
+    eapply exec_Sstore.
+    replace (loopub lrev) with (loopub l).
+    auto.
+    rewrite l_desc, lrev_desc. auto.
+    induction eval_addr.
+    + eapply eval_Eindvar.
+    + inversion s_inj.
+    +
+Abort.
 
       
 Theorem loop_reversal_correct_if_ix_injective:
@@ -937,4 +1104,4 @@ Admitted.
       
       
 
-    
+
