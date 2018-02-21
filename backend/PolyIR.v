@@ -176,8 +176,6 @@ Record loopenv : Type := mkLenv { viv: vindvar }.
 Definition loopenv_bump_vindvar (le: loopenv) : loopenv :=
   mkLenv ((viv le) + 1)%nat.
 
-
-
 Section EVAL_AFFINEEXPR.
 
   Variable le: loopenv.
@@ -699,7 +697,7 @@ Theorem match_loop_has_same_effect:
       (lub_in_range': Z.of_nat lub + 1 < Int.max_unsigned)
       (viv_in_range: Z.of_nat iv < Int.max_unsigned)
       (loopstmt: stmt)
-      (lschedwitness: is_inverse lsched lschedinv),
+      (lschedwitness: is_inverse_till_ub lub lsched lschedinv),
     forall (f: function)
       (sp: val)
       (cms: Cminor.stmt)
@@ -927,8 +925,6 @@ Proof.
   assert (loopschedule l (viv le) <> loopschedule l (viv le')).
   eapply injective_preimg_neq_implies_img_neq.
   apply Nat.eq_dec.
-  exact (loopschedulewitness l).
-  assumption.
 Abort.
 
 (* This statement has different effects on different loop iterations *)
@@ -1031,8 +1027,10 @@ Proof.
     induction eval_addr.
     + eapply eval_Eindvar.
     + inversion s_inj.
-    +
 Abort.
+
+
+  
 
       
 Theorem loop_reversal_correct_if_ix_injective:
@@ -1040,7 +1038,7 @@ Theorem loop_reversal_correct_if_ix_injective:
     (lub_in_range: Z.of_nat lub < Int.max_unsigned)
     (ivname: ident)
     (s: stmt),
-    is_stmt_store_injective s = true ->
+    injective_stmt s ->
     forall (l: loop)
       (le leid: loopenv)
       (m mid: mem),
@@ -1085,7 +1083,8 @@ Proof.
     intros until mrev.
     intros lrev_desc exec_lrev.
     + assert (exec_stmt le lrev m (loopstmt lrev) m') as lrev_match_l.
-      admit.
+      replace (loopstmt lrev) with (loopstmt l).
+      
       eapply IHexec_id.
       assumption.
       eassumption.
