@@ -227,6 +227,96 @@ Definition is_inverse_till_ub (ub: upperbound)
            (a: vindvar -> vindvar)
            (ainv: vindvar -> vindvar): Prop :=
   forall (n: vindvar), (n < ub)%nat -> a  (ainv n) = n /\ ainv (a n) = n.
+
+Lemma is_inverse_till_ub_symmetry:
+  forall (ub: upperbound)
+    (a ainv: vindvar -> vindvar),
+    is_inverse_till_ub ub a ainv <-> is_inverse_till_ub ub ainv a.
+Proof.
+  assert (
+      forall (ub: upperbound)
+        (a ainv: vindvar -> vindvar),
+        is_inverse_till_ub ub a ainv -> is_inverse_till_ub ub ainv a) as
+      proof_onedir.
+  intros ub a ainv.
+  intros isinv.
+  unfold is_inverse_till_ub in *.
+  intros n n_lt_ub.
+  specialize (isinv _ n_lt_ub).
+  destruct isinv as [a_ainv ainv_a].
+  split; omega.
+
+  intros.
+  split; apply proof_onedir.
+Qed.
+
+Lemma is_inverse_till_ub_inj_1:
+  forall (ub: upperbound) (a ainv: vindvar -> vindvar)
+    (iv iv': vindvar),
+    is_inverse_till_ub ub a ainv ->
+    (iv < ub)%nat ->
+    (iv' < ub)%nat ->
+    a iv = a iv' -> iv = iv'.
+Proof.
+  intros until iv'.
+  intros isinv ivinrange iv'inrange aeq.
+  unfold is_inverse_till_ub in isinv.
+
+  assert (ainv (a iv) = ainv (a iv')) as ainveq.
+  rewrite aeq.
+  reflexivity.
+
+  assert (ainv (a iv) = iv /\ ainv (a iv') = iv') as simpl_inv.
+  split; apply isinv; eassumption.
+
+  destruct simpl_inv as [simpl_iv simpl_iv'].
+  rewrite <- simpl_iv.
+  rewrite <- simpl_iv'.
+  assumption.
+Qed.
+
+
+Lemma is_inverse_till_ub_inj_2:
+  forall (ub: upperbound) (a ainv: vindvar -> vindvar)
+    (iv iv': vindvar),
+    is_inverse_till_ub ub a ainv ->
+    (iv < ub)%nat ->
+    (iv' < ub)%nat ->
+    iv <> iv' -> a iv <> a iv'.
+Proof.
+  intros until iv'.
+  intros isinv ivinrange iv'inrange aneq.
+  unfold is_inverse_till_ub in isinv.
+
+  assert (a iv = a iv' \/ a iv <> a iv') as a_iv_cases.
+  omega.
+
+  destruct a_iv_cases as [a_iv_eq | a_iv_neq].
+  - assert (iv = iv').
+    eapply is_inverse_till_ub_inj_1;
+      eassumption.
+    omega.
+  - auto.
+Qed.
+
+(* For any type A on which equality is decidable, it lets us convert
+inequality in the codomain to inequality in the domain.
+TODO: what is this called? *)
+Lemma eq_decidable_implies_fn_pointwise_eq_decidable:
+  forall (A B: Set) (f: A -> B) (a1 a2: A)
+    (adec: forall (a a': A), a = a' \/ a <> a'),
+    f a1 <> f a2 -> a1 <> a2.
+Proof.
+  intros.
+  assert (a1 = a2 \/ a1 <> a2).
+  auto.
+  destruct H0.
+  apply (f_equal f) in H0.
+  contradiction.
+  assumption.
+Qed.
+  
+    
     
 Record loop : Type :=
   mkLoop { loopub: upperbound;
@@ -562,10 +652,6 @@ Proof.
     assumption.
 Qed.
      
-     
-
-  
-
 (* NOTE: this may need to be changed later on and become some dynamic
 condition we extract out from the code. For now, we know that all
 the statements we allow do not modify the environment *)
@@ -928,51 +1014,96 @@ Proof.
       contradiction.
 Qed.
 
-Definition injective_affineexpr (ae: affineexpr): Prop:= ae = Eindvar.
-
-Lemma injective_affinexpr_is_unique_per_loopiter:
-  forall (le le': loopenv) (l: loop) (ae: affineexpr) (v v': val),
-    injective_affineexpr ae  ->
-    eval_affineexpr le l ae v ->
-    eval_affineexpr le' l ae v' ->
-    viv le <> viv le' -> v <> v'.
-Proof.
-  intros until v'.
-  intros ae_inj.
-  inversion ae_inj as [ae_is_indvar].
-  intros eval_indvar_at_le.
-  intros eval_indvar_at_le'.
-  intros le_neq_le'.
-  inversion eval_indvar_at_le.
-  inversion eval_indvar_at_le'.
-  subst.
-  assert (loopschedule l (viv le) <> loopschedule l (viv le')).
-Abort.
+(* =================================== *)
+(* Using proof sketch to show that loop reversal works *)
 
 
-Lemma dependences_are_always_Econstint:
-  forall l le le' e v,
-    eval_affineexpr l le e v ->
-    eval_affineexpr l le' e v ->
+
+
+(* show that indvar across loop iterations take distinct values *)
+Lemma indvar_distinct_per_iteration:
+  forall (l: loop) (le le':loopenv) ,
     le <> le' ->
-    exists i, e = Econstint i.
+    (viv le < loopub l)%nat ->
+    (viv le' < loopub l)%nat ->
+    loopschedule l (viv le) <> loopschedule l (viv le').
 Proof.
-  intros until v.
-  intros eval_at_le.
-  intros eval_at_le'.
+  intros until le'.
   intros le_neq_le'.
+  intros viv_inrange viv'_inrange.
+  assert (viv le <> viv le') as viv_neq.
+  destruct le.
+  destruct le'.
+  simpl.
+  auto.
+  eapply is_inverse_till_ub_inj_2.
+  apply (loopschedulewitness l); eassumption.
+  eassumption.
+  eassumption.
+  auto.
+Qed.
 
-  induction e.
 
-  - inversion eval_at_le. inversion eval_at_le'.
-    rewrite <- H1 in H0.
-    assert (loopschedule le (viv l) = loopschedule le' (viv l)).
-    apply nat_to_int_inj.
-Abort.
+(* An expression ae takes a value v in loop l,
+if there exists a value for the virtual loop indvar such that
+if executed, the loop will take that value *)
+Definition affineexpr_takes_value_in_loop
+           (l: loop)
+           (ae: affineexpr)
+           (v: val) : Prop :=
+  exists (vivval: nat), (0 <= vivval < (loopub l))%nat /\
+                 eval_affineexpr (mkLenv vivval) l ae v.
+
+(* A statement writes to an index in a loop if
+it is a store statement, and the index expression takes
+on the value in the loop
+*) 
+Definition stmt_writes_ix_in_loop
+           (l: loop)
+           (s: stmt)
+           (v: val) : Prop :=
+  match s with
+  | Sstore _ ae _ => affineexpr_takes_value_in_loop l ae v
+  end.
+
+
+(* After the loop is run, when we access the final state of
+memory, if the index of access memix has *not* been written to
+by the loop, then the memory remains the same *)
+Lemma mem_unchanged_if_stmt_does_not_write_to_ix_in_loop:
+  forall (l: loop) (le le': loopenv) (m m': mem)
+    (chunk: memory_chunk)(readix: val),
+    exec_loop le m l m' le' ->
+    ~ (stmt_writes_ix_in_loop l (loopstmt l) readix) ->
+    Mem.loadv chunk m readix = Mem.loadv chunk m' readix.
+Proof.
+  intros until readix.
+  intros execl.
+  intros nowrite.
+  induction execl.
+  -  reflexivity.
+  -
+    rename H into viv_inrange.
+    rename H0 into execstmt.
+    destruct (loopstmt l) as [wchunk writeae writeix].
+    specialize (IHexecl nowrite).
+    assert (Mem.loadv chunk m readix = Mem.loadv chunk m' readix).
+    inversion execstmt. subst.
+    rename vaddr into writeaddr.
+    rename H7 into evalwriteexpr.
+    rename H8 into m'_as_store_m.
+    
+    assert (writeaddr <> readix).
+    unfold stmt_writes_ix_in_loop in nowrite.
+    unfold affineexpr_takes_value_in_loop in nowrite.
     
     
   
+
+    
   
+ 
+           
 
 (* This statement has different effects on different loop iterations *)
 Inductive injective_stmt: stmt -> Prop :=
@@ -1051,12 +1182,4 @@ Theorem loop_reversal_correct_if_ix_injective:
     exec_loop le m lrev  mrev lerev ->
     leid = lerev /\ mid = mrev.
 Proof.
-  intros until s.
-  intros s_inj.
-  intros until mid.
-
-  intros ldesc.
-  intros exec_id.
-
-  induction exec_id.
 Abort.
