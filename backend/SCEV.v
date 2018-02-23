@@ -93,12 +93,12 @@ Definition oned_loop_incr_by_1
 
 
 Lemma z_init_sets_z_value: forall (ivname: ident)
-                               (z_init_val: Z),
+                             (z_init_val: Z),
     
-   forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
-    exec_stmt ge f sp e m
-              (z_init ivname z_init_val) E0
-              e' m' Out_normal -> e' ! ivname = Some (z_to_val z_init_val).
+    forall (m m': mem) (e e': env) (f: function) (sp: val) (ge: genv),
+      exec_stmt ge f sp e m
+                (z_init ivname z_init_val) E0
+                e' m' Out_normal -> e' ! ivname = Some (z_to_val z_init_val).
   intros until ge.
   intros exec.
   inversion exec.

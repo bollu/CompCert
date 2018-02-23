@@ -49,11 +49,6 @@ Proof.
   assumption.
 Qed.
 
-  
-  
-  
-    
-
 Theorem is_inverse_symmetric: forall (A B:Set) (f: A -> B) (g: B -> A), is_inverse f g -> is_inverse g f.
 Proof.
   intros.
@@ -87,22 +82,146 @@ Notation upperbound := nat.
 Definition nat_to_int (n: nat): int := (Int.repr (Z.of_nat n)).
 Definition nat_to_val (n: nat): val := Vint (nat_to_int  n).
 
-Theorem int_repr_injective_in_range:
-  forall (z1 z2: Z),
-    z1 < Int.max_unsigned ->
-    z2 < Int.max_unsigned ->
-    z1 <> z2 ->
-    Int.repr z1 <> Int.repr z2.
+Lemma nat_to_int_inj:
+  forall (n n': nat),
+    Z.of_nat n < Int.modulus ->
+    Z.of_nat n' < Int.modulus -> 
+    nat_to_int n = nat_to_int n' -> n = n'.
 Proof.
-  intros until z2.
-  intros z1_lt_max z2_lt_max.
-  intros z1_neq_z2.
-  assert ({Int.repr z1 = Int.repr z2} + {Int.repr z1 <> Int.repr z2}) as zcases.
+  intros until n'.
+  intros n_inrange n'_inrange.
+  
+  intros eq_as_int.
+  unfold nat_to_int in eq_as_int.
+  apply Int.repr_of_nat_inj.
+  omega.
+  omega.
+  eassumption.
+Qed.
 
-  eapply Int.eq_dec.
-  destruct zcases as [zeq | zneq].
-  (* need theorems about integers *)
-Abort.
+Lemma nat_to_val_inj:
+  forall (n n': nat),
+    Z.of_nat n < Int.modulus ->
+    Z.of_nat n' < Int.modulus -> 
+    nat_to_val n = nat_to_val n' -> n = n'.
+Proof.
+  intros until n'.
+  intros untiil n_lt_mod n'_lt_mod.
+  unfold nat_to_val in n'_lt_mod.
+
+  assert (forall i j, Vint i = Vint j -> i = j) as inversion_Vint.
+  intros until j.
+  intros vint_eq.
+  inversion vint_eq.
+  reflexivity.
+  
+  (* TODO: why do I need this? *)
+  assert (nat_to_int n = nat_to_int n').
+  eapply inversion_Vint.
+  assumption.
+
+  apply nat_to_int_inj; assumption.
+Qed.
+
+  
+
+Lemma transfer_nat_add_to_int_add:
+  forall (n: nat),
+    Z.of_nat n < Int.max_unsigned ->
+    Int.repr (Z.of_nat (n + 1)%nat) =
+    (Int.add (Int.repr (Z.of_nat n)) Int.one).
+Proof.
+  intros n.
+  intros n_lt_unsigned.
+  rewrite Int.add_unsigned.
+  unfold Int.one.
+  rewrite Int.unsigned_repr.
+  rewrite Int.unsigned_repr.
+  rewrite Nat2Z.inj_add.
+  simpl.
+  reflexivity.
+  split.
+  omega.
+  unfold Int.max_unsigned.
+  unfold Int.modulus.
+  unfold Int.wordsize.
+  simpl.
+  omega.
+
+  split.
+  omega.
+  omega.
+Qed.
+
+Lemma transfer_nat_lt_to_int_lt:
+  forall (n1 n2: nat),
+    (n1 < n2)%nat ->
+    Z.of_nat n1 <= Int.max_unsigned ->
+    Z.of_nat n2 <= Int.max_unsigned ->
+    Int.ltu (nat_to_int n1) (nat_to_int n2) = true.
+Proof.
+  intros until n2.
+  intros n1_lt_n2.
+
+  intros n1_lt_max_unsigned.
+  intros n2_lt_max_unsigned.
+  
+  unfold nat_to_int.
+  unfold Int.ltu.
+  rewrite Int.unsigned_repr.
+  rewrite Int.unsigned_repr.
+  rewrite zlt_true.
+  reflexivity.
+  rewrite <- Z.compare_lt_iff.
+  rewrite  Znat.inj_compare.
+  rewrite Nat.compare_lt_iff.
+  assumption.
+
+  split.
+  apply Nat2Z.is_nonneg.
+  apply n2_lt_max_unsigned.
+
+  split.
+  apply Nat2Z.is_nonneg.
+  apply n1_lt_max_unsigned.
+Qed.
+
+
+Lemma transfer_nat_ge_to_int_ltu:
+  forall (n1 n2: nat),
+    (n1 >= n2)%nat ->
+    Z.of_nat n1 <= Int.max_unsigned ->
+    Z.of_nat n2 <= Int.max_unsigned ->
+    Int.ltu (nat_to_int n1) (nat_to_int n2) = false.
+Proof.
+  intros until n2.
+  intros n1_lt_n2.
+
+  intros n1_lt_max_unsigned.
+  intros n2_lt_max_unsigned.
+  
+  unfold nat_to_int.
+  unfold Int.ltu.
+  rewrite Int.unsigned_repr.
+  rewrite Int.unsigned_repr.
+  rewrite zlt_false.
+  reflexivity.
+  apply Z.le_ge.
+  rewrite <- Z.compare_ge_iff.
+  rewrite  Znat.inj_compare.
+  rewrite Nat.compare_lt_iff.
+  omega.
+
+  split.
+  apply Nat2Z.is_nonneg.
+  apply n2_lt_max_unsigned.
+
+  split.
+  apply Nat2Z.is_nonneg.
+  apply n1_lt_max_unsigned.
+Qed.
+
+
 
 Definition is_inverse_till_ub (ub: upperbound)
            (a: vindvar -> vindvar)
@@ -289,6 +408,8 @@ Proof.
   simpl.
   reflexivity.
 Qed.
+
+End MATCHENV.
   
 
 
@@ -464,103 +585,6 @@ Proof.
 
   - inversion exec_s. subst.
     auto.
-Qed.
-  
-
-Lemma transfer_nat_add_to_int_add:
-  forall (n: nat),
-    Z.of_nat n < Int.max_unsigned ->
-    Int.repr (Z.of_nat (n + 1)%nat) =
-    (Int.add (Int.repr (Z.of_nat n)) Int.one).
-Proof.
-  intros n.
-  intros n_lt_unsigned.
-  rewrite Int.add_unsigned.
-  unfold Int.one.
-  rewrite Int.unsigned_repr.
-  rewrite Int.unsigned_repr.
-  rewrite Nat2Z.inj_add.
-  simpl.
-  reflexivity.
-  split.
-  omega.
-  unfold Int.max_unsigned.
-  unfold Int.modulus.
-  unfold Int.wordsize.
-  simpl.
-  omega.
-
-  split.
-  omega.
-  omega.
-Qed.
-
-Lemma transfer_nat_lt_to_int_lt:
-  forall (n1 n2: nat),
-    (n1 < n2)%nat ->
-    Z.of_nat n1 <= Int.max_unsigned ->
-    Z.of_nat n2 <= Int.max_unsigned ->
-    Int.ltu (nat_to_int n1) (nat_to_int n2) = true.
-Proof.
-  intros until n2.
-  intros n1_lt_n2.
-
-  intros n1_lt_max_unsigned.
-  intros n2_lt_max_unsigned.
-  
-  unfold nat_to_int.
-  unfold Int.ltu.
-  rewrite Int.unsigned_repr.
-  rewrite Int.unsigned_repr.
-  rewrite zlt_true.
-  reflexivity.
-  rewrite <- Z.compare_lt_iff.
-  rewrite  Znat.inj_compare.
-  rewrite Nat.compare_lt_iff.
-  assumption.
-
-  split.
-  apply Nat2Z.is_nonneg.
-  apply n2_lt_max_unsigned.
-
-  split.
-  apply Nat2Z.is_nonneg.
-  apply n1_lt_max_unsigned.
-Qed.
-
-
-Lemma transfer_nat_ge_to_int_ltu:
-  forall (n1 n2: nat),
-    (n1 >= n2)%nat ->
-    Z.of_nat n1 <= Int.max_unsigned ->
-    Z.of_nat n2 <= Int.max_unsigned ->
-    Int.ltu (nat_to_int n1) (nat_to_int n2) = false.
-Proof.
-  intros until n2.
-  intros n1_lt_n2.
-
-  intros n1_lt_max_unsigned.
-  intros n2_lt_max_unsigned.
-  
-  unfold nat_to_int.
-  unfold Int.ltu.
-  rewrite Int.unsigned_repr.
-  rewrite Int.unsigned_repr.
-  rewrite zlt_false.
-  reflexivity.
-  apply Z.le_ge.
-  rewrite <- Z.compare_ge_iff.
-  rewrite  Znat.inj_compare.
-  rewrite Nat.compare_lt_iff.
-  omega.
-
-  split.
-  apply Nat2Z.is_nonneg.
-  apply n2_lt_max_unsigned.
-
-  split.
-  apply Nat2Z.is_nonneg.
-  apply n1_lt_max_unsigned.
 Qed.
 
 Lemma eval_iv_lt_ub_false:
@@ -923,9 +947,32 @@ Proof.
   inversion eval_indvar_at_le'.
   subst.
   assert (loopschedule l (viv le) <> loopschedule l (viv le')).
-  eapply injective_preimg_neq_implies_img_neq.
-  apply Nat.eq_dec.
 Abort.
+
+
+Lemma dependences_are_always_Econstint:
+  forall l le le' e v,
+    eval_affineexpr l le e v ->
+    eval_affineexpr l le' e v ->
+    le <> le' ->
+    exists i, e = Econstint i.
+Proof.
+  intros until v.
+  intros eval_at_le.
+  intros eval_at_le'.
+  intros le_neq_le'.
+
+  induction e.
+
+  - inversion eval_at_le. inversion eval_at_le'.
+    rewrite <- H1 in H0.
+    assert (loopschedule le (viv l) = loopschedule le' (viv l)).
+    apply nat_to_int_inj.
+Abort.
+    
+    
+  
+  
 
 (* This statement has different effects on different loop iterations *)
 Inductive injective_stmt: stmt -> Prop :=
@@ -933,8 +980,6 @@ Inductive injective_stmt: stmt -> Prop :=
     injective_affineexpr ae ->
     injective_stmt (Sstore chunk ae i).
 
-
-  
 
 (* Wow, I actually proved the useful induction principle that lets us
 peel of a loop iteration from the beginning of the loop
@@ -986,51 +1031,6 @@ Proof.
       subst.
       eassumption.
 Qed.
-  
-(* This is probably not correct. What I actually need to show is
-something like this:
-    1. every time point has a matching time point ( n - i)
-    2. No write will alias because the affine function is injective
-    3. Therefore, every write will have a complementary write.
-*)
-Lemma loop_reversal_correct_for_one_iter:
-  forall (l: loop)
-    (lub: upperbound)
-    (lub_in_range: Z.of_nat lub < Int.max_unsigned)
-    (le: loopenv)
-    (m m': mem)
-    (ivname: ident),
-  forall (lrev: loop)
-    (s: stmt),
-    injective_stmt s ->
-    l = (loop_id_schedule lub lub_in_range ivname s) ->
-    lrev =  (loop_reversed_schedule lub lub_in_range ivname s) ->
-    exec_stmt le l m (loopstmt l) m' ->
-    exec_stmt le lrev m (loopstmt lrev) m'.
-Proof.
-  intros  until s.
-  intros s_inj.
-  intros l_desc.
-  intros lrev_desc.
-  replace (loopstmt l) with s.
-  replace (loopstmt lrev) with s.
-  intros exec_s.
-  induction exec_s.
-
-  - rename H into viv_le_lt_loopub.
-    rename H0 into eval_addr.
-    rename H1 into eval_store.
-    eapply exec_Sstore.
-    replace (loopub lrev) with (loopub l).
-    auto.
-    rewrite l_desc, lrev_desc. auto.
-    induction eval_addr.
-    + eapply eval_Eindvar.
-    + inversion s_inj.
-Abort.
-
-
-  
 
       
 Theorem loop_reversal_correct_if_ix_injective:
@@ -1058,49 +1058,5 @@ Proof.
   intros ldesc.
   intros exec_id.
 
-  induction exec_id;
-  
-  revert ldesc.
-  subst;
-    intros ldesc;
-    intros until mrev;
-    intros lrevdesc;
-    intros exec_rev.
-
-  - (* id is out of bounds *)
-    eapply exec_loop_when_iv_gt_ub_has_no_effect with (l := lrev).
-    simpl.
-    auto.
-    auto.
-    rewrite ldesc in H.
-    simpl in H.
-    rewrite lrevdesc.
-    simpl.
-    omega.
-    eassumption.
-
-  - intros ldesc.
-    intros until mrev.
-    intros lrev_desc exec_lrev.
-    + assert (exec_stmt le lrev m (loopstmt lrev) m') as lrev_match_l.
-      replace (loopstmt lrev) with (loopstmt l).
-      
-      eapply IHexec_id.
-      assumption.
-      eassumption.
-
-      eapply eval_loop_peel_off_iter.
-      rewrite lrev_desc. auto.
-      replace (loopub lrev) with (loopub l).
-      eassumption.
-      rewrite lrev_desc. rewrite ldesc. simpl. auto.
-      simpl.
-      replace (loopstmt lrev) with s in lrev_match_l.
-      eassumption.
-      rewrite lrev_desc. simpl. auto.
-Admitted.
-
-      
-      
-
-
+  induction exec_id.
+Abort.

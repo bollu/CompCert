@@ -718,8 +718,57 @@ Proof.
 Qed.
 Hint Resolve repr_signed: ints.
 
+(* Not required 
+Lemma of_nat_ge_0: forall (n: nat),
+    Z.of_nat n >= 0.
+Proof.
+  intros n.
+  omega.
+Qed.
+*)
+Lemma repr_inj:
+  forall i i',
+    0 <= i < modulus ->
+    0 <= i' < modulus ->
+    repr i = repr i' -> i = i'.
+Proof.
+  intros until i'.
+  intros i_inrange.
+  intros i'_inrange.
+  
+  intros repr_eq.
+  unfold repr in repr_eq.
+  inversion repr_eq.
+
+  rewrite Z_mod_modulus_eq in H0.
+  rewrite Z_mod_modulus_eq in H0.
+  erewrite Z.mod_small in H0.
+  erewrite Z.mod_small in H0.
+  assumption.
+  omega. omega.
+Qed.
+  
+Lemma repr_of_nat_inj: forall n n',
+    Z.of_nat n < modulus ->
+    Z.of_nat n' < modulus ->
+    repr (Z.of_nat n) = repr (Z.of_nat n') -> n = n'.
+Proof.
+  intros until n'.
+  intros n_lt_mod.
+  intros n'_lt_mod.
+
+  
+  intros repr_eq.
+  assert (Z.of_nat n = Z.of_nat n').
+  apply repr_inj.
+  omega. omega. assumption.
+  eapply Nat2Z.inj.
+  assumption.
+Qed.
+
 Opaque repr.
 
+  
 Lemma eqm_repr_eq: forall x y, eqm x (unsigned y) -> repr x = y.
 Proof.
   intros. rewrite <- (repr_unsigned y). apply eqm_samerepr; auto.
@@ -5254,3 +5303,4 @@ Hint Resolve Ptrofs.modulus_pos Ptrofs.eqm_refl Ptrofs.eqm_refl2 Ptrofs.eqm_sym 
   Ptrofs.unsigned_range Ptrofs.unsigned_range_2
   Ptrofs.repr_unsigned Ptrofs.repr_signed Ptrofs.unsigned_repr : ints.
 
+Transparent Int.repr.
