@@ -1184,29 +1184,21 @@ Proof.
 Qed.
 
 (* WIP: currently working on this lemma *)
-Lemma unchanged_store_value:
-  forall (m m': mem) (chunk: memory_chunk) (writeaddr readaddr writeval readval_new readval_old: val),
-    Mem.loadv STORE_CHUNK_SIZE m readaddr = Some readval_old ->
+Lemma loadv_storev_other:
+  forall (m m': mem) (writeaddr readaddr writeval: val),
     Mem.storev STORE_CHUNK_SIZE m writeaddr writeval = Some m' ->
-    Mem.loadv STORE_CHUNK_SIZE m' readaddr = Some readval_new ->
     writeaddr <> readaddr ->
-    readval_old = readval_new.
+    Mem.loadv STORE_CHUNK_SIZE m' readaddr = Mem.loadv STORE_CHUNK_SIZE m readaddr.
 Proof.
-  intros until readval_old.
-  intros load_at_old.
+  intros until writeval.
   intros write.
-  intros load_at_new.
   intros noalias.
 
-  unfold Mem.loadv in *.
+  unfold Mem.loadv in *; destruct readaddr; try auto.
   unfold Mem.storev in *.
 
-  destruct readaddr; try(inversion load_at_new).
   destruct writeaddr; try (inversion write).
 
-  (* Good, now we have load, store, and not loadv, storev. We can now start using
-     Memory machinery *)
-  assert (Mem.load STORE_CHUNK_SIZE m' b (Ptrofs.unsigned i) =  Mem.load STORE_CHUNK_SIZE m b (Ptrofs.unsigned i)) as load_punchthrough.
   eapply Mem.load_store_other.
   eassumption.
 
@@ -1230,20 +1222,11 @@ Proof.
   apply Ptrofs.unsigned_eq_to_int_eq.
   assumption.
   contradiction.
-
-  assert (Some readval_old = Some readval_new) as some_readval_eq.
-  rewrite <- load_at_old.
-  rewrite <- load_at_new.
-  auto.
-
-  inversion some_readval_eq.
-  auto.
 Qed.
 
   
 
-(* WIP: currently working on this lemma *)
-Lemma same_store_value:
+Lemma loadv_storev_same:
   forall (m m': mem) (chunk: memory_chunk) (writeaddr readaddr writeval readval_new: val),
     Mem.storev STORE_CHUNK_SIZE m writeaddr writeval = Some m' ->
     Mem.loadv STORE_CHUNK_SIZE m' readaddr = Some readval_new ->
@@ -1283,10 +1266,10 @@ memory, if the index of access memix has *not* been written to
 by the loop, then the memory remains the same *)
 Lemma mem_unchanged_if_stmt_does_not_write_to_ix_in_loop:
   forall (l: loop) (le le': loopenv) (m m': mem)
-    (chunk: memory_chunk)(readix: val),
+    (readix: val),
     exec_loop le m l m' le' ->
     (stmt_does_not_write_to_ix_in_loop l (loopstmt l) readix) ->
-    Mem.loadv chunk m readix = Mem.loadv chunk m' readix.
+    Mem.loadv STORE_CHUNK_SIZE m readix = Mem.loadv STORE_CHUNK_SIZE m' readix.
 Proof.
   intros until readix.
   intros execl.
@@ -1298,13 +1281,17 @@ Proof.
     rename H0 into execstmt.
     destruct (loopstmt l) as [wchunk writeae writeix].
     specialize (IHexecl nowrite).
-    assert (Mem.loadv chunk m readix = Mem.loadv chunk m' readix).
+    assert (Mem.loadv STORE_CHUNK_SIZE m' readix = Mem.loadv STORE_CHUNK_SIZE m readix ).
+
     inversion execstmt. subst.
     rename vaddr into writeaddr.
     rename H5 into evalwriteexpr.
     rename H7 into m'_as_store_m.
 
+    eapply loadv_storev_other.
+    eassumption.
     
+
     assert (writeaddr <> readix) as write_ix_neq_readix.
     unfold stmt_does_not_write_to_ix_in_loop in nowrite.
     unfold affineexpr_does_not_take_value_in_loop in nowrite.
@@ -1317,32 +1304,12 @@ Proof.
     rewrite viv_le_eq.
     eassumption.
     unfold Mem.loadv.
-    destruct readix; try reflexivity.
 
-    
-    unfold Mem.storev in m'_as_store_m.
-    destruct writeaddr; try inversion m'_as_store_m.
-
-
-    remember (Mem.load chunk m b (Ptrofs.unsigned i)) as m_at_i.
-    symmetry.
-
-    (* TODO: make this a generic tactic *)
-    destruct m_at_i.
-
-    assert (Mem.unchanged_on (fun _ _ => ~ (Some v = Mem.load chunk m b (Ptrofs.unsigned i))) m m').
-    eapply Mem.store_unchanged_on.
-    eassumption.
-    intros. 
-
-      
-      
-    
-    
-
-    
-
-Abort.
+    auto.
+    rewrite <- H.
+    rewrite IHexecl.
+    auto.
+Qed.
     
     
 
