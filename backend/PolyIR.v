@@ -1157,7 +1157,106 @@ Proof.
   -  eapply not_affineexpr_takes_value_equivalence.
 Qed.
 
-Definition dummy : block -> Z -> Prop := fun b => fun z => 1 = 1.
+
+
+(* The implications from two Vptrs being unequal *)
+Lemma vptr_neq_implications:
+  forall (b b' : block) (i i': ptrofs),
+    Vptr b i <> Vptr b' i' ->
+    (b <> b' \/ i <> i').
+Proof.
+  intros until i'.
+  intros neq.
+
+  assert ({b = b'} + {b <> b'}) as bcases.
+  eapply Pos.eq_dec.
+
+  assert ({i = i'} + {i <> i'}) as icases.
+  eapply Ptrofs.eq_dec.
+
+  destruct bcases as [beq | bneq];
+    destruct icases as [ieq | ineq]; try auto.
+
+  - assert (Vptr b i = Vptr b' i') as contra.
+    subst.
+    reflexivity.
+    contradiction.
+Qed.
+
+Definition ptrofs_in_range (v: val) : Prop :=
+  match v with
+  | Vptr _ ofs => False
+  | _ => True
+  end.
+
+
+(* WIP: currently working on this lemma *)
+Lemma unchanged_store_value:
+  forall (m m': mem) (chunk: memory_chunk) (writeaddr readaddr writeval readval_new readval_old: val),
+    Mem.loadv STORE_CHUNK_SIZE m readaddr = Some readval_old ->
+    Mem.storev STORE_CHUNK_SIZE m writeaddr writeval = Some m' ->
+    Mem.loadv STORE_CHUNK_SIZE m' readaddr = Some readval_new ->
+    writeaddr <> readaddr ->
+    ptrofs_in_range readaddr ->
+    ptrofs_in_range writeaddr ->
+    readval_old = readval_new.
+Proof.
+  intros until readval_old.
+  intros load_at_old.
+  intros write.
+  intros load_at_new.
+  intros noalias.
+  intros read_in_range.
+  intros write_in_range.
+
+  unfold Mem.loadv in *.
+  unfold Mem.storev in *.
+
+  destruct readaddr; try(inversion load_at_new).
+  destruct writeaddr; try (inversion write).
+
+  (* Good, now we have load, store, and not loadv, storev. We can now start using
+     Memory machinery *)
+  assert (Mem.load STORE_CHUNK_SIZE m' b (Ptrofs.unsigned i) =  Mem.load STORE_CHUNK_SIZE m b (Ptrofs.unsigned i)) as load_punchthrough.
+  eapply Mem.load_store_other.
+  eassumption.
+
+  assert (b <> b0 \/ i <> i0) as b_i_cases.
+  apply vptr_neq_implications.
+  auto.
+
+  unfold STORE_CHUNK_SIZE.
+  unfold size_chunk.
+  
+  destruct b_i_cases as [bneq | ineq].
+  auto.
+  right.
+
+  
+  assert (Ptrofs.unsigned i <> Ptrofs.unsigned i0 ) as lift_i_fact.
+  remember (Ptrofs.unsigned i) as pi.
+  remember (Ptrofs.unsigned i0) as pi0.
+  
+  assert ({pi = pi0} + {pi <> pi0}) as ptrofs_icases.
+  apply Z.eq_dec.
+  destruct ptrofs_icases as [pi_eq | pi_neq].
+  rewrite Heqpi, Heqpi0.
+  admit.
+  auto.
+  omega.
+
+  assert (Some readval_old = Some readval_new) as some_readval_eq.
+  rewrite <- load_at_old.
+  rewrite <- load_at_new.
+  auto.
+
+  inversion some_readval_eq.
+  auto.
+Admitted.
+
+  
+
+  
 
 (* After the loop is run, when we access the final state of
 memory, if the index of access memix has *not* been written to
@@ -1210,21 +1309,14 @@ Proof.
 
     (* TODO: make this a generic tactic *)
     destruct m_at_i.
-    + admit.
-    +  
-      
 
-    (* We need this sort of a statement to use unchanged_on *)
-    assert (forall (blockcur: block) (icur: Z), 1 =1 ) as
-        unchanged_on_prop. intros. reflexivity.
-
-    assert (Mem.unchanged_on (fun block => fun i => i <> (Ptrofs.unsigned i0)) m m').
+    assert (Mem.unchanged_on (fun _ _ => ~ (Some v = Mem.load chunk m b (Ptrofs.unsigned i))) m m').
     eapply Mem.store_unchanged_on.
-    eapply H0.
-    intros ptr_in_block ptr_in_block_range.
-    unfold STORE_CHUNK_SIZE in ptr_in_block_range.
-    unfold size_chunk in ptr_in_block_range.
-    omega.
+    eassumption.
+    intros. omega.
+
+      
+      
     
     
 
