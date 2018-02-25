@@ -71,8 +71,9 @@ Inductive affineexpr: Type :=
 | Eindvar: affineexpr
 | Econstint: int -> affineexpr.
 
+Definition STORE_CHUNK_SIZE: memory_chunk := Mint8unsigned.
 Inductive stmt: Type :=
-| Sstore:  memory_chunk -> affineexpr -> int -> stmt.
+| Sstore:  affineexpr -> int -> stmt.
 
 
 Notation vindvar := nat.
@@ -399,11 +400,11 @@ End EVAL_AFFINEEXPR.
 Section EXEC_STMT.
   Inductive exec_stmt: loopenv -> loop -> mem -> stmt -> mem -> Prop :=
   | exec_Sstore: forall (le: loopenv) (l: loop) (m m': mem)
-                   (chunk: memory_chunk) (addr: affineexpr) (i: int) (vaddr: val),
+                   (addr: affineexpr) (i: int) (vaddr: val),
       (viv le < loopub l)%nat ->
       eval_affineexpr le l addr vaddr ->
-      Mem.storev chunk m vaddr (Vint i) = Some m' ->
-      exec_stmt le l m (Sstore chunk addr i) m'.
+      Mem.storev STORE_CHUNK_SIZE m vaddr (Vint i) = Some m' ->
+      exec_stmt le l m (Sstore addr i) m'.
 End EXEC_STMT.
 
 Section EXEC_LOOP.
@@ -446,7 +447,12 @@ Proof.
   eapply eval_affineexpr_is_function; eassumption.
   subst.
   assert (Some m' = Some m'') as meq.
-  rewrite <- H8. rewrite <- H18.
+
+  rename H7 into store_m'.
+  rename H16 into store_m''.
+  
+  rewrite <- store_m'. rewrite <- store_m''.
+
   reflexivity.
   inversion meq. subst.
   auto.
@@ -575,11 +581,11 @@ Section MATCHSTMT.
   Variable le: loopenv.
   Variable l: loop.
   Inductive match_stmt: Cminor.stmt -> stmt -> Prop :=
-  | match_Sstore: forall (chunk: memory_chunk) (addre: expr) (i: int)
+  | match_Sstore: forall (addre: expr) (i: int)
                     (addrae: affineexpr),
       match_affineexpr l addre addrae ->
-      match_stmt (Cminor.Sstore chunk addre (Econst (Ointconst i)))
-                 (Sstore chunk addrae i).
+      match_stmt (Cminor.Sstore STORE_CHUNK_SIZE addre (Econst (Ointconst i)))
+                 (Sstore addrae i).
 End MATCHSTMT.
 
 Theorem match_stmt_has_same_effect:
@@ -604,15 +610,20 @@ Proof.
   subst.
 
   assert (v = Vint i) as veq.
-  inversion H22.
+  rename H21 into eval_v.
+  inversion eval_v.
   subst.
   inversion H1. subst.
   reflexivity.
   subst.
   
   assert (Some m' = Some m'') as meq.
-  rewrite <- H23.
-  rewrite <- H9.
+  rename H22 into store_into_m'.
+  rename H8 into store_into_m''.
+  
+  rewrite <- store_into_m'.
+  rewrite <- store_into_m''.
+  
   auto.
   inversion meq. subst.
   auto.
@@ -1054,18 +1065,99 @@ Definition affineexpr_takes_value_in_loop
   exists (vivval: nat), (0 <= vivval < (loopub l))%nat /\
                  eval_affineexpr (mkLenv vivval) l ae v.
 
+
+
+Definition affineexpr_does_not_take_value_in_loop
+           (l: loop)
+           (ae: affineexpr)
+           (val_notake: val) : Prop :=
+  forall (vivval: nat) (v: val), (0 <= vivval < (loopub l))%nat /\
+                          eval_affineexpr (mkLenv vivval) l ae v ->
+                          v <> val_notake.
+  
+
+(* Show constructive proof equivalence between the forall form and the exists form
+of loop induction variable not taking a value *)
+Lemma not_affineexpr_takes_value_equivalence:
+  forall (l: loop)
+    (ae: affineexpr)
+    (v: val),
+    ~affineexpr_takes_value_in_loop l ae v <->  affineexpr_does_not_take_value_in_loop l ae v.
+Proof.
+  intros until v.
+  split.
+
+  (* -> *)
+  - unfold affineexpr_takes_value_in_loop.
+  unfold affineexpr_does_not_take_value_in_loop.
+  intros not_takes_value_in_loop.
+
+  intros.
+  unfold not in not_takes_value_in_loop.
+  assert (v0 = v \/ v0 <> v) as v0_cases.
+  apply val_eq_dec.
+
+  destruct v0_cases as [v0_eq | v0_neq].
+  + subst.
+  cut (False).
+  contradiction.
+  eapply not_takes_value_in_loop.
+  exists vivval.
+  auto.
+
+  + eassumption.
+
+    (* <- *)
+
+  - unfold affineexpr_takes_value_in_loop.
+    unfold affineexpr_does_not_take_value_in_loop.
+    unfold not.
+    intros all_v exists_v.
+    
+    destruct exists_v as [viv viv_conditions].
+    destruct viv_conditions as [viv_inrange eval_viv_is_v].
+    eapply all_v.
+    split.
+    exact viv_inrange.
+    exact eval_viv_is_v.
+    reflexivity.
+Qed.
+
+                        
+Definition stmt_does_not_write_to_ix_in_loop
+           (l: loop)
+           (s: stmt)
+           (val_notake: val) : Prop :=
+  match s with
+  | Sstore ae _ => affineexpr_does_not_take_value_in_loop l ae val_notake
+  end.
+
 (* A statement writes to an index in a loop if
 it is a store statement, and the index expression takes
 on the value in the loop
-*) 
+ *) 
 Definition stmt_writes_ix_in_loop
            (l: loop)
            (s: stmt)
            (v: val) : Prop :=
   match s with
-  | Sstore _ ae _ => affineexpr_takes_value_in_loop l ae v
+  | Sstore ae _ => affineexpr_takes_value_in_loop l ae v
   end.
 
+Lemma not_stmt_writes_ix_in_loop_equivalence:
+  forall (l: loop) (s: stmt) (v: val),
+    ~ (stmt_writes_ix_in_loop l s v) <-> stmt_does_not_write_to_ix_in_loop l s v.
+Proof.
+  intros.
+  unfold not.
+  unfold stmt_writes_ix_in_loop.
+  unfold stmt_does_not_write_to_ix_in_loop.
+
+  destruct s.
+  -  eapply not_affineexpr_takes_value_equivalence.
+Qed.
+
+Definition dummy : block -> Z -> Prop := fun b => fun z => 1 = 1.
 
 (* After the loop is run, when we access the final state of
 memory, if the index of access memix has *not* been written to
@@ -1074,7 +1166,7 @@ Lemma mem_unchanged_if_stmt_does_not_write_to_ix_in_loop:
   forall (l: loop) (le le': loopenv) (m m': mem)
     (chunk: memory_chunk)(readix: val),
     exec_loop le m l m' le' ->
-    ~ (stmt_writes_ix_in_loop l (loopstmt l) readix) ->
+    (stmt_does_not_write_to_ix_in_loop l (loopstmt l) readix) ->
     Mem.loadv chunk m readix = Mem.loadv chunk m' readix.
 Proof.
   intros until readix.
@@ -1090,27 +1182,57 @@ Proof.
     assert (Mem.loadv chunk m readix = Mem.loadv chunk m' readix).
     inversion execstmt. subst.
     rename vaddr into writeaddr.
-    rename H7 into evalwriteexpr.
-    rename H8 into m'_as_store_m.
-    
-    assert (writeaddr <> readix).
-    unfold stmt_writes_ix_in_loop in nowrite.
-    unfold affineexpr_takes_value_in_loop in nowrite.
-    
-    
-  
+    rename H5 into evalwriteexpr.
+    rename H7 into m'_as_store_m.
 
     
-  
- 
-           
+    assert (writeaddr <> readix) as write_ix_neq_readix.
+    unfold stmt_does_not_write_to_ix_in_loop in nowrite.
+    unfold affineexpr_does_not_take_value_in_loop in nowrite.
+    eapply nowrite  with (vivval := (viv le)).
+    split.
+    omega.
 
-(* This statement has different effects on different loop iterations *)
-Inductive injective_stmt: stmt -> Prop :=
-  injective_Sstore: forall (chunk: memory_chunk) (i: int) (ae: affineexpr),
-    injective_affineexpr ae ->
-    injective_stmt (Sstore chunk ae i).
+    assert ({| viv := viv le|} = le) as viv_le_eq.
+    destruct le. simpl. reflexivity.
+    rewrite viv_le_eq.
+    eassumption.
+    unfold Mem.loadv.
+    destruct readix; try reflexivity.
 
+    
+    unfold Mem.storev in m'_as_store_m.
+    destruct writeaddr; try inversion m'_as_store_m.
+
+
+    remember (Mem.load chunk m b (Ptrofs.unsigned i)) as m_at_i.
+    symmetry.
+
+    (* TODO: make this a generic tactic *)
+    destruct m_at_i.
+    + admit.
+    +  
+      
+
+    (* We need this sort of a statement to use unchanged_on *)
+    assert (forall (blockcur: block) (icur: Z), 1 =1 ) as
+        unchanged_on_prop. intros. reflexivity.
+
+    assert (Mem.unchanged_on (fun block => fun i => i <> (Ptrofs.unsigned i0)) m m').
+    eapply Mem.store_unchanged_on.
+    eapply H0.
+    intros ptr_in_block ptr_in_block_range.
+    unfold STORE_CHUNK_SIZE in ptr_in_block_range.
+    unfold size_chunk in ptr_in_block_range.
+    omega.
+    
+    
+
+    
+
+Abort.
+    
+    
 
 (* Wow, I actually proved the useful induction principle that lets us
 peel of a loop iteration from the beginning of the loop
