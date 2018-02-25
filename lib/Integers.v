@@ -718,6 +718,21 @@ Proof.
 Qed.
 Hint Resolve repr_signed: ints.
 
+Theorem unsigned_eq_to_int_eq:
+  forall (i i': int),
+    unsigned i = unsigned i' ->
+    i = i'.
+Proof.
+  intros until i'.
+  intros unsigned_eq.
+  assert (repr (unsigned i) = repr (unsigned i')) as repr_us_eq.
+  rewrite unsigned_eq. auto.
+
+  rewrite repr_unsigned in repr_us_eq.
+  rewrite repr_unsigned in repr_us_eq.
+  auto.
+Qed.
+
 (* Not required 
 Lemma of_nat_ge_0: forall (n: nat),
     Z.of_nat n >= 0.

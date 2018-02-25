@@ -1183,13 +1183,6 @@ Proof.
     contradiction.
 Qed.
 
-Definition ptrofs_in_range (v: val) : Prop :=
-  match v with
-  | Vptr _ ofs => False
-  | _ => True
-  end.
-
-
 (* WIP: currently working on this lemma *)
 Lemma unchanged_store_value:
   forall (m m': mem) (chunk: memory_chunk) (writeaddr readaddr writeval readval_new readval_old: val),
@@ -1197,8 +1190,6 @@ Lemma unchanged_store_value:
     Mem.storev STORE_CHUNK_SIZE m writeaddr writeval = Some m' ->
     Mem.loadv STORE_CHUNK_SIZE m' readaddr = Some readval_new ->
     writeaddr <> readaddr ->
-    ptrofs_in_range readaddr ->
-    ptrofs_in_range writeaddr ->
     readval_old = readval_new.
 Proof.
   intros until readval_old.
@@ -1206,8 +1197,6 @@ Proof.
   intros write.
   intros load_at_new.
   intros noalias.
-  intros read_in_range.
-  intros write_in_range.
 
   unfold Mem.loadv in *.
   unfold Mem.storev in *.
@@ -1231,19 +1220,16 @@ Proof.
   destruct b_i_cases as [bneq | ineq].
   auto.
   right.
-
-  
-  assert (Ptrofs.unsigned i <> Ptrofs.unsigned i0 ) as lift_i_fact.
-  remember (Ptrofs.unsigned i) as pi.
-  remember (Ptrofs.unsigned i0) as pi0.
-  
-  assert ({pi = pi0} + {pi <> pi0}) as ptrofs_icases.
-  apply Z.eq_dec.
-  destruct ptrofs_icases as [pi_eq | pi_neq].
-  rewrite Heqpi, Heqpi0.
-  admit.
-  auto.
+  assert (Ptrofs.unsigned i < Ptrofs.unsigned i0 \/
+          Ptrofs.unsigned i > Ptrofs.unsigned i0 \/
+          Ptrofs.unsigned i = Ptrofs.unsigned i0)as pi_cases.
   omega.
+  destruct pi_cases as [pl | [pg | peq]];
+    try omega.
+  assert (i = i0).
+  apply Ptrofs.unsigned_eq_to_int_eq.
+  assumption.
+  contradiction.
 
   assert (Some readval_old = Some readval_new) as some_readval_eq.
   rewrite <- load_at_old.
@@ -1252,9 +1238,43 @@ Proof.
 
   inversion some_readval_eq.
   auto.
-Admitted.
+Qed.
 
   
+
+(* WIP: currently working on this lemma *)
+Lemma same_store_value:
+  forall (m m': mem) (chunk: memory_chunk) (writeaddr readaddr writeval readval_new: val),
+    Mem.storev STORE_CHUNK_SIZE m writeaddr writeval = Some m' ->
+    Mem.loadv STORE_CHUNK_SIZE m' readaddr = Some readval_new ->
+    writeaddr = readaddr ->
+    readval_new = (Val.load_result STORE_CHUNK_SIZE writeval).
+Proof.
+  intros until readval_new. intros write.
+  intros read.
+  intros alias.
+
+  unfold Mem.loadv in *.
+  unfold Mem.storev in *.
+
+  destruct readaddr; try(inversion read).
+  destruct writeaddr; try (inversion write).
+
+  (* Good, now we have load, store, and not loadv, storev. We can now start using
+     Memory machinery *)
+  assert (Mem.load STORE_CHUNK_SIZE m' b (Ptrofs.unsigned i) = Some (Val.load_result STORE_CHUNK_SIZE writeval)) as load_eq_store.
+  inversion alias. subst.
+  eapply Mem.load_store_same.
+  eassumption.
+
+  rewrite read in load_eq_store.
+
+  assert (forall {A: Type} (x y: A), Some x = Some y -> x = y) as some_inversion.
+  intros. inversion H. auto.
+
+  eapply some_inversion.
+  assumption.
+Qed.
 
   
 
@@ -1313,7 +1333,7 @@ Proof.
     assert (Mem.unchanged_on (fun _ _ => ~ (Some v = Mem.load chunk m b (Ptrofs.unsigned i))) m m').
     eapply Mem.store_unchanged_on.
     eassumption.
-    intros. omega.
+    intros. 
 
       
       
@@ -1377,6 +1397,18 @@ Proof.
       eassumption.
 Qed.
 
+Definition injective_affineexpr_b (ae: affineexpr) : bool :=
+  match ae with
+  | Eindvar => true
+  | Econstint _ => false
+  end.
+
+Definition injective_stmt (s: stmt) : Prop :=
+  match s with
+  | Sstore ae _ => injective_affineexpr_b ae = true
+  end.
+                    
+  
       
 Theorem loop_reversal_correct_if_ix_injective:
   forall (lub: upperbound)
