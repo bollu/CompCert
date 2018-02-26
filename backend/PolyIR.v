@@ -100,6 +100,28 @@ Proof.
   eassumption.
 Qed.
 
+Lemma nat_to_int_neq:
+  forall (n n': nat),
+    Z.of_nat n < Int.modulus ->
+    Z.of_nat n' < Int.modulus ->
+    n <> n' ->
+    nat_to_int n <> nat_to_int n'.
+  intros until n'.
+  intros n_inrange n'_inrange.
+
+  intros neq_as_nat.
+  assert ({nat_to_int n = nat_to_int n'} + {nat_to_int n <> nat_to_int n'}) as nat_to_int_cases.
+  apply Int.eq_dec.
+  destruct nat_to_int_cases as [n_eq | n_neq].
+
+  - assert (n = n') as contra.
+  apply nat_to_int_inj; assumption.
+  omega.
+  -  auto.
+Qed.
+
+
+
 Lemma nat_to_val_inj:
   forall (n n': nat),
     Z.of_nat n < Int.modulus ->
@@ -125,6 +147,47 @@ Proof.
 Qed.
 
   
+Lemma nat_to_val_neq_1:
+  forall (n n': nat),
+    nat_to_val n <> nat_to_val n' -> n <> n'.
+Proof.
+  intros until n'.
+
+  intros nat_to_val_neq.
+
+  assert (n = n' \/ n <> n') as ncases.
+  omega.
+  destruct ncases as [n_eq | n_neq].
+  - assert (nat_to_val n = nat_to_val n') as contra.
+    rewrite n_eq. reflexivity.
+    contradiction.
+  -  auto.
+Qed.
+
+
+Lemma nat_to_val_neq_2:
+  forall (n n': nat),
+    Z.of_nat n < Int.modulus ->
+    Z.of_nat n' < Int.modulus ->
+    n <> n' ->
+    nat_to_val n <> nat_to_val n'.
+Proof.
+  intros until n'.
+  intros n_lt_mod.
+  intros n'_lt_mod.
+
+  intros neq.
+
+  assert (nat_to_val n = nat_to_val n' \/ nat_to_val n <> nat_to_val n') as
+      nat_to_val_cases.
+  apply val_eq_dec.
+
+  destruct nat_to_val_cases as [v_eq | v_neq].
+  - assert (n = n') as contra.
+    apply nat_to_val_inj; assumption.
+    omega.
+  -  auto.
+Qed.
 
 Lemma transfer_nat_add_to_int_add:
   forall (n: nat),
@@ -224,44 +287,45 @@ Qed.
 
 
 
-Definition is_inverse_till_ub (ub: upperbound)
+Record inverseTillUb (ub: upperbound)
            (a: vindvar -> vindvar)
-           (ainv: vindvar -> vindvar): Prop :=
-  forall (n: vindvar), (n < ub)%nat -> a  (ainv n) = n /\ ainv (a n) = n.
+           (ainv: vindvar -> vindvar) :=
+  mkInverseTillUb {
+      inverse_forward: forall (n: vindvar), (n < ub)%nat -> a  (ainv n) = n;
+      inverse_backward: forall (n: vindvar), (n < ub)%nat -> ainv (a n) = n;
+      inrange_forward: forall (n: vindvar), (n < ub)%nat -> (a n < ub)%nat;
+      inrange_backward: forall (n: vindvar), (n < ub)%nat ->  (ainv n < ub)%nat;
+    }.
 
-Lemma is_inverse_till_ub_symmetry:
+Lemma inverseTillUb_symmetry:
   forall (ub: upperbound)
     (a ainv: vindvar -> vindvar),
-    is_inverse_till_ub ub a ainv <-> is_inverse_till_ub ub ainv a.
+    inverseTillUb ub a ainv <-> inverseTillUb ub ainv a.
 Proof.
   assert (
       forall (ub: upperbound)
         (a ainv: vindvar -> vindvar),
-        is_inverse_till_ub ub a ainv -> is_inverse_till_ub ub ainv a) as
+        inverseTillUb ub a ainv -> inverseTillUb ub ainv a) as
       proof_onedir.
   intros ub a ainv.
   intros isinv.
-  unfold is_inverse_till_ub in *.
-  intros n n_lt_ub.
-  specialize (isinv _ n_lt_ub).
-  destruct isinv as [a_ainv ainv_a].
-  split; omega.
-
-  intros.
+  destruct isinv.
+  apply mkInverseTillUb; auto.
+  
   split; apply proof_onedir.
 Qed.
 
-Lemma is_inverse_till_ub_inj_1:
+Lemma inverseTillUb_inj_1:
   forall (ub: upperbound) (a ainv: vindvar -> vindvar)
     (iv iv': vindvar),
-    is_inverse_till_ub ub a ainv ->
+    inverseTillUb ub a ainv ->
     (iv < ub)%nat ->
     (iv' < ub)%nat ->
     a iv = a iv' -> iv = iv'.
 Proof.
   intros until iv'.
   intros isinv ivinrange iv'inrange aeq.
-  unfold is_inverse_till_ub in isinv.
+  inversion isinv.
 
   assert (ainv (a iv) = ainv (a iv')) as ainveq.
   rewrite aeq.
@@ -277,24 +341,24 @@ Proof.
 Qed.
 
 
-Lemma is_inverse_till_ub_inj_2:
+Lemma inverseTillUb_inj_2:
   forall (ub: upperbound) (a ainv: vindvar -> vindvar)
     (iv iv': vindvar),
-    is_inverse_till_ub ub a ainv ->
+    inverseTillUb ub a ainv ->
     (iv < ub)%nat ->
     (iv' < ub)%nat ->
     iv <> iv' -> a iv <> a iv'.
 Proof.
   intros until iv'.
   intros isinv ivinrange iv'inrange aneq.
-  unfold is_inverse_till_ub in isinv.
+  inversion isinv.
 
   assert (a iv = a iv' \/ a iv <> a iv') as a_iv_cases.
   omega.
 
   destruct a_iv_cases as [a_iv_eq | a_iv_neq].
   - assert (iv = iv').
-    eapply is_inverse_till_ub_inj_1;
+    eapply inverseTillUb_inj_1;
       eassumption.
     omega.
   - auto.
@@ -326,18 +390,18 @@ Record loop : Type :=
            loopstmt: stmt;
            loopschedule: vindvar -> vindvar;
            loopscheduleinv: vindvar -> vindvar;
-           loopschedulewitness: is_inverse_till_ub loopub loopschedule loopscheduleinv;
+           loopschedulewitness: inverseTillUb loopub loopschedule loopscheduleinv;
          }.
 
 
 Definition id_vindvar : vindvar -> vindvar := id.
 
 Lemma id_vindvar_self_inverse: forall (n: nat),
-    is_inverse_till_ub n id_vindvar id_vindvar.
+    inverseTillUb n id_vindvar id_vindvar.
 Proof.
   intros n.
-  unfold is_inverse_till_ub.
-  split;
+  apply mkInverseTillUb;
+  intros;
   unfold id_vindvar;
   unfold id;
   omega.
@@ -356,16 +420,17 @@ Definition loop_id_schedule (loopub: upperbound)
          (id_vindvar_self_inverse loopub).
 
 
-Definition n_minus_x (n x: nat) := (n - x)%nat.
+Definition n_minus_x (n x: nat) := (n - x - 1)%nat.
 
 Lemma n_minus_x_self_inverse: forall n,
-    is_inverse_till_ub n (n_minus_x n) (n_minus_x n).
+    inverseTillUb n (n_minus_x n) (n_minus_x n).
 Proof.
   intros n.
-  unfold is_inverse_till_ub.
-  split;
-  unfold n_minus_x;
-  omega.
+  apply mkInverseTillUb;
+    intros;
+    (* really weird, omega number crunches for a *while* here *)
+    unfold n_minus_x; omega.
+
 Qed.
 
 
@@ -818,7 +883,7 @@ Theorem match_loop_has_same_effect:
       (lub_in_range': Z.of_nat lub + 1 < Int.max_unsigned)
       (viv_in_range: Z.of_nat iv < Int.max_unsigned)
       (loopstmt: stmt)
-      (lschedwitness: is_inverse_till_ub lub lsched lschedinv),
+      (lschedwitness: inverseTillUb lub lsched lschedinv),
     forall (f: function)
       (sp: val)
       (cms: Cminor.stmt)
@@ -1047,12 +1112,46 @@ Proof.
   destruct le'.
   simpl.
   auto.
-  eapply is_inverse_till_ub_inj_2.
+  eapply inverseTillUb_inj_2.
   apply (loopschedulewitness l); eassumption.
   eassumption.
   eassumption.
   auto.
 Qed.
+
+Lemma indvar_in_range_1:
+  forall (l: loop) (le: loopenv),
+    (viv le < loopub l)%nat ->
+    (loopschedule l (viv le) < loopub l)%nat.
+Proof.
+  intros until le.
+  intros viv_in_range.
+  assert (inverseTillUb (loopub l) (loopschedule l) (loopscheduleinv l))
+         as loop_inverse_till_ub.
+  apply (loopschedulewitness l).
+
+  destruct loop_inverse_till_ub.
+  apply inrange_forward0.
+  assumption.
+Qed.
+
+
+Lemma indvar_in_range_2:
+  forall (l: loop) (le: loopenv),
+    (viv le < loopub l)%nat ->
+    (loopscheduleinv l (viv le) < loopub l)%nat.
+Proof.
+  intros until le.
+  intros viv_in_range.
+  assert (inverseTillUb (loopub l) (loopschedule l) (loopscheduleinv l))
+         as loop_inverse_till_ub.
+  apply (loopschedulewitness l).
+
+  destruct loop_inverse_till_ub.
+  apply inrange_backward0.
+  assumption.
+Qed.
+  
 
 
 (* An expression ae takes a value v in loop l,
@@ -1370,24 +1469,142 @@ Definition injective_affineexpr_b (ae: affineexpr) : bool :=
   | Econstint _ => false
   end.
 
-Definition injective_stmt (s: stmt) : Prop :=
+Definition injective_stmt_b (s: stmt) : bool :=
   match s with
-  | Sstore ae _ => injective_affineexpr_b ae = true
+  | Sstore ae _ => injective_affineexpr_b ae
   end.
-                    
+
+Lemma injective_affineexpr_1:
+  forall (ae: affineexpr) (l: loop) (le1 le2: loopenv)
+    (v1 v2: val),
+    injective_affineexpr_b ae = true ->
+    le1 <> le2 ->
+    (viv le1 < loopub l)%nat ->
+    (viv le2 < loopub l)%nat ->
+    eval_affineexpr le1 l ae v1 ->
+    eval_affineexpr le2 l ae v2 ->
+    v1 <> v2.
+Proof.
+  intros until v2.
+  intros inj.
+  intros le_neq.
+  intros le1_inrange le2_inrange.
+  intros eval_le1 eval_le2.
+
+  induction ae.
+
+  - (* Eindvar *)
+    inversion eval_le1.
+    inversion eval_le2.
+
+    assert (loopschedule l (viv le1) <>
+            loopschedule l (viv le2)) as indvar_neq. 
+    apply indvar_distinct_per_iteration;
+      eassumption.
+
+    assert (loopschedule l (viv le1) < loopub l)%nat as indvar1_inrange.
+    apply indvar_in_range_1. assumption.
+
+    
+    assert (loopschedule l (viv le2) < loopub l)%nat as indvar2_inrange.
+    apply indvar_in_range_1. assumption.
+
+    assert (Z.of_nat (loopub l) < Int.max_unsigned).
+    apply (loopub_in_range_witness l).
+
+    
+    assert (Int.max_unsigned < Int.modulus).
+    unfold Int.max_unsigned.
+    omega.
+    
+    apply nat_to_val_neq_2; omega.
+
+  - (* Econstint, not injective *)
+    inversion inj.
+Qed.
+    
   
+
+Lemma injective_affineexpr_2:
+  forall (ae: affineexpr) (l: loop) (le1 le2: loopenv)
+    (v: val),
+    injective_affineexpr_b ae = true ->
+    (viv le1 < loopub l)%nat ->
+    (viv le2 < loopub l)%nat ->
+    eval_affineexpr le1 l ae v ->
+    eval_affineexpr le2 l ae v ->
+    le1 = le2.
+Proof.
+  intros until v.
+  intros inj.
+  intros le1_inrange le2_inrange.
+  intros eval_le1 eval_le2.
+
+
+  induction ae.
+
+  - (* Eindvar *)
+    inversion eval_le1.
+    inversion eval_le2.
+
+    rename H0 into v_as_le1.
+    rename H1 into v_as_le2.
+
+    assert (Int.max_unsigned < Int.modulus).
+    unfold Int.max_unsigned.
+    omega.
+
+    
+    destruct (loopschedulewitness l).
+
+    assert ((loopschedule l (viv le1)) < loopub l)%nat.
+    apply inrange_forward0. auto.
+
+    
+    assert ((loopschedule l (viv le2)) < loopub l)%nat.
+    apply inrange_forward0. auto.
+
+    assert (Z.of_nat (loopub l) < Int.max_unsigned).
+    apply (loopub_in_range_witness l).
+
+
+    
+    assert (loopschedule l (viv le1) = loopschedule l (viv le2)) as indvar_eq.
+    apply nat_to_val_inj.
+    omega.
+    omega.
+    rewrite v_as_le1, v_as_le2.
+    auto.
+
+    assert (viv le1 = viv le2) as viv_eq.
+    eapply inverseTillUb_inj_1.
+    apply (loopschedulewitness l).
+    auto.
+    auto.
+    auto.
+
+    destruct le1, le2.
+    simpl in viv_eq.
+    rewrite viv_eq.
+    reflexivity.
+
+
+
+  - (* Econstint, not injective *)
+    inversion inj.
+Qed.
       
 Theorem loop_reversal_correct_if_ix_injective:
   forall (lub: upperbound)
     (lub_in_range: Z.of_nat lub < Int.max_unsigned)
     (ivname: ident)
     (s: stmt),
-    injective_stmt s ->
+    injective_stmt_b s = true ->
     forall (l: loop)
       (le leid: loopenv)
       (m mid: mem),
       l = (loop_id_schedule lub lub_in_range ivname s) ->
-      exec_loop le m l  mid leid ->
+      exec_loop le m l mid leid ->
       forall (lrev: loop)
         (lerev: loopenv)
         (mrev: mem),
@@ -1395,4 +1612,12 @@ Theorem loop_reversal_correct_if_ix_injective:
     exec_loop le m lrev  mrev lerev ->
     leid = lerev /\ mid = mrev.
 Proof.
+  intros until s.
+  intros s_inj.
+  intros until mid.
+  intros l_id.
+  intros exec_id.
+  intros until mrev.
+  intros l_rev.
+  intros exec_lrev.
 Abort.
