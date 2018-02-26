@@ -1593,7 +1593,140 @@ Proof.
   - (* Econstint, not injective *)
     inversion inj.
 Qed.
+
+(* Find the lenv *for* lnew that will give the same iteration variable
+    as that of lold.
+
+That is:
+
+viv --loldscheudle--> i1
+? --lnewschedule--> i1
+
+answer: ? = lnewschedule_inv(i1)
+i1 = loldschedule(viv)
+
+answer := lnewschedule_inv(loldschedule(viv))
+*)
+
+
+Definition equivalent_lenv (leold: loopenv)
+           (lold: loop)
+           (lnew: loop) : loopenv :=
+  mkLenv ((loopscheduleinv lnew) ((loopschedule lold)(viv leold))).
+
+(* Equivalent lenv actually gives us the correct value for affine expressions *)
+Lemma equivalent_lenv_equal_affineexpr: forall (leold: loopenv) (lold: loop) (lnew: loop),
+    forall (ae: affineexpr) (v: val),
+      (viv leold < loopub lold)%nat ->
+      (* TODO: this maybe too tight a requirement *)
+      (loopub lold = loopub lnew) ->
+    eval_affineexpr leold lold ae v ->
+    eval_affineexpr (equivalent_lenv leold lold lnew) lnew ae v.
+Proof.
+  intros until v.
+  intros viv_inrange.
+  intros loopub_equal.
+  intros eval_old.
+  induction ae.
+  - remember (equivalent_lenv leold lold lnew) as lenew.
+    assert (v = nat_to_val (loopschedule lnew (viv lenew))) as v_eq_indvar.
+    inversion eval_old. subst.
+    unfold equivalent_lenv.
+    simpl.
+    destruct (loopschedulewitness lnew).
+    rewrite inverse_forward0.
+    reflexivity.
+
+    rewrite <- loopub_equal.
+
+    destruct (loopschedulewitness lold).
+    apply inrange_forward1.
+    assumption.
+
+    rewrite v_eq_indvar.
+    apply eval_Eindvar.
+
+  - inversion eval_old.
+    subst.
+    apply eval_Econstint.
+Qed.
+    
+
+(* if we take an equivalent statement in the new loop, then we will compute the same result *)
+Lemma equivalent_lenv_equal_stmt: forall (leold: loopenv) (lold: loop) (lnew: loop),
+    forall (s:stmt) (m m': mem),
+      (viv leold < loopub lold)%nat ->
+      (* TODO: this maybe too tight a requirement *)
+      (loopub lold = loopub lnew) ->
+    exec_stmt leold lold m s m' ->
+    exec_stmt (equivalent_lenv leold lold lnew) lnew m s m'.
+Proof.
+  intros until m'.
+  intros viv_old_inrange.
+  intros loopub_equal.
+  intros exec_old.
+
+  induction s.
+  inversion exec_old. subst.
+
+  - eapply exec_Sstore.
+    unfold equivalent_lenv.
+    simpl.
+
+    destruct (loopschedulewitness lnew).
+    apply inrange_backward0.
+    rewrite <- loopub_equal.
+
+    destruct (loopschedulewitness lold).
+    apply inrange_forward1.
+
+    assumption.
+
+
+    apply  equivalent_lenv_equal_affineexpr; eassumption.
+    auto.
+Qed.
+
+  
       
+Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
+  forall (lub: upperbound)
+    (lub_in_range: Z.of_nat lub < Int.max_unsigned)
+    (ivname: ident)
+    (le: loopenv)
+    (m: mem)
+    (s: stmt),
+    injective_stmt_b s = true ->
+    forall (l: loop)
+      (mid: mem),
+      l = (loop_id_schedule lub lub_in_range ivname s) ->
+      exec_stmt le l m s mid ->
+      forall (lrev: loop)
+        (mrev: mem),
+    lrev =  (loop_reversed_schedule lub lub_in_range ivname s) ->
+    exec_stmt le lrev m s mrev ->
+    mid = mrev.
+Proof.
+  intros until s.
+  intros s_inj.
+  intros until mid.
+  intros l_id.
+  intros exec_lid.
+
+  intros until mrev.
+  intros l_rev.
+  intros exec_lrev.
+
+  induction s.
+
+  - (* Sstore *)
+    inversion exec_lrev.
+    inversion exec_lid.
+    subst.
+
+    
+
+
 Theorem loop_reversal_correct_if_ix_injective:
   forall (lub: upperbound)
     (lub_in_range: Z.of_nat lub < Int.max_unsigned)
@@ -1605,19 +1738,26 @@ Theorem loop_reversal_correct_if_ix_injective:
       (m mid: mem),
       l = (loop_id_schedule lub lub_in_range ivname s) ->
       exec_loop le m l mid leid ->
-      forall (lrev: loop)
-        (lerev: loopenv)
-        (mrev: mem),
+      forall (lrev: loop),
     lrev =  (loop_reversed_schedule lub lub_in_range ivname s) ->
-    exec_loop le m lrev  mrev lerev ->
-    leid = lerev /\ mid = mrev.
+    exec_loop le m lrev mid leid.
 Proof.
   intros until s.
   intros s_inj.
   intros until mid.
-  intros l_id.
+  intros l_def.
   intros exec_id.
-  intros until mrev.
-  intros l_rev.
-  intros exec_lrev.
-Abort.
+  intros until lrev.
+  intros lrev_def.
+
+  
+  assert (loopub lrev = loopub l) as loopub_eq.
+  rewrite l_def.
+  rewrite lrev_def.
+  simpl.
+  auto.
+
+  induction exec_id.
+
+
+  
