@@ -1698,28 +1698,29 @@ Abort.
 
 (* Create a relation that allows one to peel the last iteration off of
 a loop *)
-Inductive exec_loop_inv: loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
-| exec_loop_inv_start: forall (m0: mem) (l: loop) (le0: loopenv),
+Inductive exec_loop_inv: nat -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
+| exec_loop_inv_begin: forall (vivbegin: nat) (m0 m1: mem) (l: loop) (le0: loopenv),
     (viv le0 < loopub l)%nat ->
-    (viv le0 = 0)%nat ->
-    exec_loop_inv le0 m0 l m0 le0
-| exec_loop_inv_last_iter: forall (l: loop) (le0 le1: loopenv) (m0 m1 m2: mem),
+    (viv le0 = vivbegin)%nat ->
+    exec_stmt le0 l m0 (loopstmt l) m1 ->
+    exec_loop_inv vivbegin le0 m0 l m1 (loopenv_bump_vindvar le0)
+| exec_loop_inv_continue: forall (vivbegin: nat) (l: loop) (le0 le1: loopenv) (m0 m1 m2: mem),
     (viv le0 < loopub l)%nat ->
-    (viv le0 > 0)%nat ->
-    exec_loop_inv le0 m0 l m1 le1 ->
+    (viv le0 > vivbegin)%nat ->
+    exec_loop_inv vivbegin le0 m0 l m1 le1 ->
     exec_stmt le1 l m1 (loopstmt l) m2 ->
-    exec_loop_inv le0 m0 l m2 (loopenv_bump_vindvar le1)
+    exec_loop_inv vivbegin le0 m0 l m2 (loopenv_bump_vindvar le1)
 | exec_loop_inv_out_of_bounds:
-    forall (l: loop) (le: loopenv) (m: mem),
+    forall (vivbegin: nat) (l: loop) (le: loopenv) (m: mem),
       (viv le >= loopub l)%nat ->
-      exec_loop_inv le m l m le.
+      exec_loop_inv vivbegin le m l m le.
 
 
 Theorem exec_loop_inv_is_function:
-  forall (le le1: loopenv) (m m1: mem) (l: loop),
-    exec_loop_inv le m l m1 le1 ->
+  forall (vivbegin: nat)(le le1: loopenv) (m m1: mem) (l: loop),
+    exec_loop_inv vivbegin le m l m1 le1 ->
     forall (le2: loopenv) (m2: mem),
-      exec_loop_inv le m l m2 le2 ->
+      exec_loop_inv vivbegin le m l m2 le2 ->
       le1 = le2 /\ m1 = m2.
 Proof.
   intros until l.
@@ -1727,26 +1728,36 @@ Proof.
   induction exec1;
     subst.
 
-  - intros until m2. intros exec2.
-    induction exec2; try omega; try auto.
+  -  intros until m2.
+     intros exec2.
+     inversion exec2;
+       subst;
+       try omega.
+
+     +  assert (m1 = m2) as meq.
+        eapply exec_stmt_is_function; eassumption.
+        subst.
+        auto.
+
   - intros until m3.
     intros exec2.
-    induction exec2; try auto; try omega.
-    assert ( le1 = le2 /\ m1 = m3) as eqs.
-    apply IHexec1; assumption.
+    inversion exec2; subst; try omega.
+
+    assert (le1 = le4 /\ m1 = m5) as eqs.
+    eapply IHexec1; eassumption.
+
     destruct eqs as [leq meq].
     subst.
-
-    assert (m2 = m4) as meq.
-    eapply exec_stmt_is_function;
-      eassumption.
+    
+    assert (m2 = m3) as meq.
+    eapply exec_stmt_is_function; eassumption.
 
     subst.
-
     auto.
 
-  -  intros until m2. intros exec2.
-     induction exec2; try omega; try auto.
+  -  intros until m2.
+     intros exec2.
+     inversion exec2; subst; try omega; try auto.
 Qed.
   
 
