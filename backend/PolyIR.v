@@ -497,10 +497,35 @@ Section EXEC_LOOP.
       exec_loop le m l m le
   | eval_loop_loop: forall le le' m m' m'' l,
       (viv le < loopub l)%nat ->
+      (viv le < viv le')%nat -> 
       exec_stmt le l m (loopstmt l) m' ->
       exec_loop (loopenv_bump_vindvar le) m' l m'' le' ->
       exec_loop le m l m'' le'.
 End EXEC_LOOP.
+
+Lemma exec_loop_viv_nondecreasing:
+  forall (le le': loopenv) (m m': mem) (l: loop),
+    exec_loop le m l m' le' ->
+    (viv le' >= viv le)%nat.
+Proof.
+  intros until l.
+  intros execl.
+  induction execl.
+  - auto.
+  - unfold loopenv_bump_vindvar in *. simpl in *. omega.
+Qed.
+
+Lemma exec_loop_env_equal_implies_memory_equal:
+  forall (le le': loopenv) (m m': mem) (l: loop),
+    exec_loop le m l m' le' ->
+    le = le' -> m = m'.
+Proof.
+  intros.
+  subst.
+  inversion H; subst; try auto.
+  omega.
+Qed.
+  
 
 Theorem eval_affineexpr_is_function:
   forall (le: loopenv) (l: loop) (ae: affineexpr) (v v': val),
@@ -983,10 +1008,10 @@ Proof.
     + (* Loop succeeds an iteration *)
     rename H into loopsched.
     rename H0 into loopschedinv.
-    rename H1 into match_cm_inner_stmt.
-    rename H3 into exec_cms_inner_block.
-    rename H4 into exec_cms_loop.
-    rename H9 into t1t2val.
+    rename H2 into match_cm_inner_stmt.
+    rename H4 into exec_cms_inner_block.
+    rename H5 into exec_cms_loop.
+    rename H10 into t1t2val.
 
     assert (t1 = E0 /\ t2 = E0) as t1_t2_e0.
     apply destruct_trace_app_eq_E0.
@@ -1103,7 +1128,7 @@ Proof.
 
 
 
-    + rename H8 into out_neq_normal.
+    + rename H9 into out_neq_normal.
       contradiction.
 Qed.
 
@@ -1394,15 +1419,15 @@ Proof.
   -  reflexivity.
   -
     rename H into viv_inrange.
-    rename H0 into execstmt.
+    rename H1 into execstmt.
     destruct (loopstmt l) as [wchunk writeae writeix].
     specialize (IHexecl nowrite).
     assert (Mem.loadv STORE_CHUNK_SIZE m' readix = Mem.loadv STORE_CHUNK_SIZE m readix ).
 
     inversion execstmt. subst.
     rename vaddr into writeaddr.
-    rename H5 into evalwriteexpr.
-    rename H7 into m'_as_store_m.
+    rename H6 into evalwriteexpr.
+    rename H8 into m'_as_store_m.
 
     eapply loadv_storev_other.
     eassumption.
@@ -1699,14 +1724,15 @@ Abort.
 (* Create a relation that allows one to peel the last iteration off of
 a loop *)
 Inductive exec_loop_inv: nat -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
-| exec_loop_inv_begin: forall (vivbegin: nat) (m0 m1: mem) (l: loop) (le0: loopenv),
+| exec_loop_inv_begin: forall (vivbegin: nat) (m0 m1: mem) (l: loop) (le0 le1: loopenv),
     (viv le0 < loopub l)%nat ->
-    (viv le0 = vivbegin)%nat ->
+    (vivbegin + 1 = viv le1)%nat ->
+    le1 = loopenv_bump_vindvar le0 ->
     exec_stmt le0 l m0 (loopstmt l) m1 ->
-    exec_loop_inv vivbegin le0 m0 l m1 (loopenv_bump_vindvar le0)
+    exec_loop_inv vivbegin le0 m0 l m1 le1%nat
 | exec_loop_inv_continue: forall (vivbegin: nat) (l: loop) (le0 le1: loopenv) (m0 m1 m2: mem),
     (viv le0 < loopub l)%nat ->
-    (viv le0 > vivbegin)%nat ->
+    (vivbegin >= 2 + (viv le0))%nat ->
     exec_loop_inv vivbegin le0 m0 l m1 le1 ->
     exec_stmt le1 l m1 (loopstmt l) m2 ->
     exec_loop_inv vivbegin le0 m0 l m2 (loopenv_bump_vindvar le1)
@@ -1715,6 +1741,19 @@ Inductive exec_loop_inv: nat -> loopenv -> mem -> loop -> mem -> loopenv -> Prop
       (viv le >= loopub l)%nat ->
       exec_loop_inv vivbegin le m l m le.
 
+Lemma exec_loop_inv_viv_nondecreasing:
+  forall (vivbegin: nat) (m0 m1: mem) (l: loop) (le0 le1: loopenv),
+    exec_loop_inv vivbegin le0 m0 l m1 le1 ->
+    (viv le1 >= viv le0)%nat.
+Proof.
+  intros until le1.
+  intros execlinv.
+  induction execlinv;
+    subst;
+    unfold loopenv_bump_vindvar in *;
+    simpl in *;
+    try omega.
+Qed.
 
 Theorem exec_loop_inv_is_function:
   forall (vivbegin: nat)(le le1: loopenv) (m m1: mem) (l: loop),
@@ -1732,16 +1771,17 @@ Proof.
      intros exec2.
      inversion exec2;
        subst;
+       simpl in *;
        try omega.
 
-     +  assert (m1 = m2) as meq.
-        eapply exec_stmt_is_function; eassumption.
-        subst.
-        auto.
+     + assert (m1 = m2).
+       eapply exec_stmt_is_function; eassumption.
+       subst. auto.
+
 
   - intros until m3.
     intros exec2.
-    inversion exec2; subst; try omega.
+    inversion exec2; subst; simpl in *; try omega.
 
     assert (le1 = le4 /\ m1 = m5) as eqs.
     eapply IHexec1; eassumption.
@@ -1757,8 +1797,10 @@ Proof.
 
   -  intros until m2.
      intros exec2.
-     inversion exec2; subst; try omega; try auto.
+     inversion exec2; subst; simpl in *; try omega; try auto.
 Qed.
+
+
   
 
 (* Show how the usual order of execution matches the order of execution
@@ -1766,69 +1808,78 @@ where we peel the final loop iter off *)
 Theorem exec_loop_implies_exec_loop_inv:
   forall (le le': loopenv) (m m': mem) (l: loop),
     exec_loop le m l m' le' ->
-    exec_loop_inv le m l m' le'.
+    exec_loop_inv (viv le) le m l m' le'.
 Proof.
-  intros.
-  induction H.
-  - admit.
-  - remember (loopenv_bump_vindvar le) as le_plus_1.
-    induction IHexec_loop.
-    + subst. (* show that this is nonsense, since exec_loop is not incrementing its indvar *)
-      admit.
-    +  subst.
-       rename H0 into exec_0_to_1_s.
-       rename m0 into m1.
-       rename mstmt into mn.
-       rename le' into le_n_minus_1.
-       admit.
-       (* 
-       rename le0 into le1.
-       rename le into le0.
-       rename m into m0.
-       rename mloop into m_n_minus_1.
+  intros until le'.
+  remember (viv le') as vivle'.
+  destruct vivle'.
 
+  - intros until l.
+  intros execl.
+  induction  execl; subst.
+  + apply exec_loop_inv_out_of_bounds. auto.
+    
+  +  auto.
+     assert (viv le' >= viv (loopenv_bump_vindvar le))%nat as contra.
+     eapply exec_loop_viv_nondecreasing.
+     eassumption.
 
-       assert (exec_loop le1 m1 l m_n_minus_1 le_n_minus_1).
-       admit.
-       
-       assert (exec_loop_inv le0 m0 l  m_n_minus_1 le_n_minus_1).
-       eapply IHIHexec_loop.
-       auto.
-       auto.
-       auto.
+     unfold loopenv_bump_vindvar in contra.
+     rewrite Heqvivle' in contra.
+     simpl in contra.
+     omega.
 
-       eapply exec_loop_inv_last_iter.
-       auto.
-       auto.
-       auto.
-        *)
+  - intros until l.
+    intros execl.
 
-    +
-      rename m0 into m1.
-       rename m into m0.
-       rename le0 into le1.
-       rename le into le0.
-      assert (viv le0 = loopub l - 1 /\ viv le1 = loopub l)%nat as viv_info.
-      destruct le0. destruct le1.
-      unfold loopenv_bump_vindvar in *.
-      simpl in *.
-      inversion Heqle_plus_1.
+    induction execl.
+    + apply exec_loop_inv_out_of_bounds.
+      auto.
+
+    + assert (viv le' >= viv (loopenv_bump_vindvar le))%nat as le'_lower_bound.
+      eapply exec_loop_viv_nondecreasing.
+      eassumption.
+      
+      unfold loopenv_bump_vindvar in le'_lower_bound.
+      simpl in le'_lower_bound.
+
+      assert (viv le' = viv le + 1 \/ viv le' > viv le + 1)%nat as viv'cases.
       omega.
 
-      destruct viv_info as [viv_le viv_le0].
-      assert (le1 = loopenv_bump_vindvar le0) as le1_as_bump_le0.
-      unfold loopenv_bump_vindvar.
-      destruct le0, le1.
-      simpl in *.
-      subst.
-      auto.
+      destruct viv'cases as [viv'eq | viv'gt].
 
-      rewrite le1_as_bump_le0.
-      eapply  exec_loop_inv_last_iter.
-      auto.
-      eapply exec_loop_inv_start.
-      auto.
-       (* mutual induction? *)
+      * eapply exec_loop_inv_begin; try auto.
+        unfold loopenv_bump_vindvar.
+        destruct le'. simpl in *.
+        auto.
+
+        assert (loopenv_bump_vindvar le = le') as env_before_after_loop_equal.
+        unfold loopenv_bump_vindvar.
+        destruct le, le'.
+        simpl in *.
+        subst.
+        auto.
+
+        rewrite env_before_after_loop_equal in execl.
+
+        assert (m' = m'') as loop_is_empty.
+        eapply exec_loop_env_equal_implies_memory_equal.
+        eassumption.
+        auto.
+
+        subst.
+        auto.
+        
+      * assert (le' = loopenv_bump_vindvar (loopenv_reduce_vindvar le')) as
+            le'_as_bump.
+        eapply loopenv_bump_reduce_vindvar.
+        omega.
+        rewrite le'_as_bump.
+        eapply exec_loop_inv_continue; try omega.
+
+
+
+    
 Admitted.
 
 
@@ -1853,10 +1904,10 @@ Theorem loop_reversal_correct_if_ix_injective:
       (le leid: loopenv)
       (m mid: mem),
       l = (loop_id_schedule lub lub_in_range ivname s) ->
-      exec_loop le m l mid leid ->
+      exec_loop_inv 0 le m l mid leid ->
       forall (lrev: loop),
     lrev =  (loop_reversed_schedule lub lub_in_range ivname s) ->
-    exec_loop_peel_end le m lrev mid leid.
+    exec_loop_inv 0 le m lrev mid leid.
 Proof.
   intros until s.
   intros s_inj.
