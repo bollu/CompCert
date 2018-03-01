@@ -1682,6 +1682,244 @@ Proof.
     auto.
 Qed.
 
+Section MEMORYINLOOP.
+  Definition memStructureEq (m m': mem) : Prop :=
+    Mem.mem_access m = Mem.mem_access m' /\
+    Mem.nextblock m = Mem.nextblock m'.
+
+  Lemma memStructureEq_refl:
+    forall (m: mem),
+      memStructureEq m m.
+  Proof.
+    intros m.
+    unfold memStructureEq.
+    auto.
+  Qed.
+
+  Lemma memStructureEq_trans:
+    forall (m m' m'': mem),
+      memStructureEq m m' ->
+      memStructureEq m' m'' ->
+      memStructureEq m m''.
+  Proof.
+    intros.
+    unfold memStructureEq in *.
+    destruct m, m', m''.
+    simpl in *.
+    intuition;
+      subst; reflexivity.
+   Qed.
+    
+
+  (* A view of memory where they are structurally equal, but only differ on
+     memory content *)
+  Lemma mem_equal: forall (m m': mem),
+      memStructureEq m m'->
+      Mem.mem_contents m = Mem.mem_contents m' ->
+      m = m'.
+  Proof.
+    intros until m'.
+    intros structureq.
+    intros contenteq.
+    unfold memStructureEq in *.
+    destruct structureq as [accesseq nextblockeq].
+             
+    destruct m, m'. simpl in *.
+    apply Mem.mkmem_ext; auto.
+  Qed.
+
+  Lemma mem_store_structure_eq:
+    forall  (m m': mem)
+       (chunk: AST.memory_chunk)
+       (b: Values.block) (ofs: Z) (v: val),
+      Mem.store chunk m b ofs v = Some m' ->
+      memStructureEq m m'.
+  Proof.
+    intros until v.
+    intros store.
+    unfold memStructureEq.
+    split.
+    symmetry.
+    eapply Mem.store_access.
+    eassumption.
+
+    symmetry.
+    eapply Mem.nextblock_store.
+    eassumption.
+  Qed.
+
+  Lemma mem_storev_is_structure_eq:
+    forall (m m': mem)
+      (chunk: memory_chunk)
+      (addr v: val),
+      Mem.storev chunk m addr v = Some m' ->
+      memStructureEq m m'.
+  Proof.
+    intros until v.
+    intros store.
+    unfold Mem.storev in store.
+    induction addr; try inversion store.
+
+    eapply mem_store_structure_eq.
+    eassumption.
+  Qed.
+
+  Lemma exec_stmt_memory_is_structure_eq:
+    forall (m m': mem)
+      (s: stmt)
+      (le : loopenv)
+      (l: loop),
+      exec_stmt le l m s m' ->
+      memStructureEq m m'.
+  Proof.
+    intros until l.
+    intros execs.
+    induction s.
+    - (* Sstore *)
+      inversion execs; subst.
+      eapply mem_storev_is_structure_eq.
+      eassumption.
+   Qed.
+
+
+  Lemma exec_loop_memory_is_structure_eq:
+    forall (m m': mem)
+      (le le': loopenv)
+      (l: loop),
+      exec_loop le m l m' le' ->
+      memStructureEq m m'.
+  Proof.
+    intros until l.
+    intros execl.
+    induction execl; subst.
+    - eapply memStructureEq_refl.
+    - assert (memStructureEq m m') as m_seq_m'.
+      eapply exec_stmt_memory_is_structure_eq.
+      eassumption.
+      eapply memStructureEq_trans; eassumption.
+  Qed.
+
+  Definition id_inj: Val.meminj :=  fun (b: block) => Some (b, 0).
+  Lemma memStructureEq_perm: forall (m m': mem)
+                               (b: block)
+                               (ofs: Z)
+                               (k: perm_kind)
+                               (p: permission),
+      memStructureEq m m'->
+      Mem.perm m b ofs k p ->
+      Mem.perm m' b ofs k p.
+  Proof.
+    unfold Mem.perm.
+    unfold memStructureEq.
+    intros until p.
+    intros structureeq.
+    destruct structureeq as [acceq nextblockeq].
+    intros perm_m.
+    rewrite <- acceq.
+    assumption.
+  Qed.
+
+  Lemma memval_inject_refl: forall (mval: memval),
+      memval_inject (id_inj) mval mval.
+  Proof.
+    intros mval.
+    destruct mval.
+    eapply memval_inject_undef.
+    eapply memval_inject_byte.
+    eapply memval_inject_frag.
+    induction v.
+    - apply Val.val_inject_undef.
+    - apply Val.inject_int.
+    - apply Val.inject_long.
+    - apply Val.inject_float.
+    - apply Val.inject_single.
+    - eapply Val.inject_ptr.
+      unfold id_inj.
+      auto.
+      rewrite Ptrofs.add_zero.
+      reflexivity.
+  Qed.
+  
+  (* mem_inj is some sort of "generic injection", that is less specific
+     than Mem.inject *)
+  Lemma memStructureEq_generic_inject:
+    forall (m m': mem),
+      memStructureEq m m' ->
+      (forall (b: block), (Mem.mem_contents m )#b = (Mem.mem_contents m')#b) ->
+      Mem.mem_inj id_inj m m'.
+  Proof.
+    intros until m'.
+    intros structureeq.
+    intros pointwise_eq.
+    apply Mem.mk_mem_inj.
+    - intros until p.
+      unfold id_inj.
+      intros b1_b2_rel.
+      inversion b1_b2_rel.
+      subst.
+      
+      simpl.
+      unfold memStructureEq in structureeq.
+      intros m_perm.
+
+      
+      eapply memStructureEq_perm.
+      eassumption.
+      cut (ofs + 0 = ofs).
+      intros ofs_eq.
+      rewrite ofs_eq.
+      assumption.
+      omega.
+
+    -  intros until p.
+       intros b1_b2_rel.
+       inversion b1_b2_rel.
+       subst.
+
+       intros mem_perm.
+       (* I was fucking around, I did not know that this would work.
+       TODO: what is this "|" operator anyway? "(X | Y)")
+        *)
+       exists 0.
+       omega.
+
+    - intros until delta.
+      intros b1_b2_rel.
+      inversion b1_b2_rel.
+      subst.
+
+      intros perm_readable.
+
+      specialize (pointwise_eq b2).
+      rewrite pointwise_eq.
+      
+      cut (ofs + 0 = ofs).
+      intros ofs_plus_0_eq.
+      rewrite ofs_plus_0_eq.
+      apply memval_inject_refl.
+      omega.
+  Qed.
+
+       
+  Lemma memStructureEq_inject:
+    forall (m m': mem),
+      memStructureEq m m' ->
+      (forall (b: block), (Mem.mem_contents m )#b = (Mem.mem_contents m')#b) ->
+      Mem.inject (Mem.flat_inj (Mem.nextblock m)) m m'.
+  Proof.
+    intros until m'.
+    intros structureeq.
+    intros mem_eq_at_b.
+    apply Mem.mk_inject.
+    Abort.
+
+      
+
+      
+    
+      
+End MEMORYINLOOP.
+
   
       
 Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
@@ -1719,214 +1957,3 @@ Proof.
     inversion exec_lid.
     subst.
 Abort.
-
-
-(* Create a relation that allows one to peel the last iteration off of
-a loop *)
-Inductive exec_loop_inv: nat -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
-| exec_loop_inv_begin: forall (vivbegin: nat) (m0 m1: mem) (l: loop) (le0 le1: loopenv),
-    (viv le0 < loopub l)%nat ->
-    (vivbegin + 1 = viv le1)%nat ->
-    le1 = loopenv_bump_vindvar le0 ->
-    exec_stmt le0 l m0 (loopstmt l) m1 ->
-    exec_loop_inv vivbegin le0 m0 l m1 le1%nat
-| exec_loop_inv_continue: forall (vivbegin: nat) (l: loop) (le0 le1: loopenv) (m0 m1 m2: mem),
-    (viv le0 < loopub l)%nat ->
-    (vivbegin >= 2 + (viv le0))%nat ->
-    exec_loop_inv vivbegin le0 m0 l m1 le1 ->
-    exec_stmt le1 l m1 (loopstmt l) m2 ->
-    exec_loop_inv vivbegin le0 m0 l m2 (loopenv_bump_vindvar le1)
-| exec_loop_inv_out_of_bounds:
-    forall (vivbegin: nat) (l: loop) (le: loopenv) (m: mem),
-      (viv le >= loopub l)%nat ->
-      exec_loop_inv vivbegin le m l m le.
-
-Lemma exec_loop_inv_viv_nondecreasing:
-  forall (vivbegin: nat) (m0 m1: mem) (l: loop) (le0 le1: loopenv),
-    exec_loop_inv vivbegin le0 m0 l m1 le1 ->
-    (viv le1 >= viv le0)%nat.
-Proof.
-  intros until le1.
-  intros execlinv.
-  induction execlinv;
-    subst;
-    unfold loopenv_bump_vindvar in *;
-    simpl in *;
-    try omega.
-Qed.
-
-Theorem exec_loop_inv_is_function:
-  forall (vivbegin: nat)(le le1: loopenv) (m m1: mem) (l: loop),
-    exec_loop_inv vivbegin le m l m1 le1 ->
-    forall (le2: loopenv) (m2: mem),
-      exec_loop_inv vivbegin le m l m2 le2 ->
-      le1 = le2 /\ m1 = m2.
-Proof.
-  intros until l.
-  intros exec1.
-  induction exec1;
-    subst.
-
-  -  intros until m2.
-     intros exec2.
-     inversion exec2;
-       subst;
-       simpl in *;
-       try omega.
-
-     + assert (m1 = m2).
-       eapply exec_stmt_is_function; eassumption.
-       subst. auto.
-
-
-  - intros until m3.
-    intros exec2.
-    inversion exec2; subst; simpl in *; try omega.
-
-    assert (le1 = le4 /\ m1 = m5) as eqs.
-    eapply IHexec1; eassumption.
-
-    destruct eqs as [leq meq].
-    subst.
-    
-    assert (m2 = m3) as meq.
-    eapply exec_stmt_is_function; eassumption.
-
-    subst.
-    auto.
-
-  -  intros until m2.
-     intros exec2.
-     inversion exec2; subst; simpl in *; try omega; try auto.
-Qed.
-
-
-  
-
-(* Show how the usual order of execution matches the order of execution
-where we peel the final loop iter off *)
-Theorem exec_loop_implies_exec_loop_inv:
-  forall (le le': loopenv) (m m': mem) (l: loop),
-    exec_loop le m l m' le' ->
-    exec_loop_inv (viv le) le m l m' le'.
-Proof.
-  intros until le'.
-  remember (viv le') as vivle'.
-  destruct vivle'.
-
-  - intros until l.
-  intros execl.
-  induction  execl; subst.
-  + apply exec_loop_inv_out_of_bounds. auto.
-    
-  +  auto.
-     assert (viv le' >= viv (loopenv_bump_vindvar le))%nat as contra.
-     eapply exec_loop_viv_nondecreasing.
-     eassumption.
-
-     unfold loopenv_bump_vindvar in contra.
-     rewrite Heqvivle' in contra.
-     simpl in contra.
-     omega.
-
-  - intros until l.
-    intros execl.
-
-    induction execl.
-    + apply exec_loop_inv_out_of_bounds.
-      auto.
-
-    + assert (viv le' >= viv (loopenv_bump_vindvar le))%nat as le'_lower_bound.
-      eapply exec_loop_viv_nondecreasing.
-      eassumption.
-      
-      unfold loopenv_bump_vindvar in le'_lower_bound.
-      simpl in le'_lower_bound.
-
-      assert (viv le' = viv le + 1 \/ viv le' > viv le + 1)%nat as viv'cases.
-      omega.
-
-      destruct viv'cases as [viv'eq | viv'gt].
-
-      * eapply exec_loop_inv_begin; try auto.
-        unfold loopenv_bump_vindvar.
-        destruct le'. simpl in *.
-        auto.
-
-        assert (loopenv_bump_vindvar le = le') as env_before_after_loop_equal.
-        unfold loopenv_bump_vindvar.
-        destruct le, le'.
-        simpl in *.
-        subst.
-        auto.
-
-        rewrite env_before_after_loop_equal in execl.
-
-        assert (m' = m'') as loop_is_empty.
-        eapply exec_loop_env_equal_implies_memory_equal.
-        eassumption.
-        auto.
-
-        subst.
-        auto.
-        
-      * assert (le' = loopenv_bump_vindvar (loopenv_reduce_vindvar le')) as
-            le'_as_bump.
-        eapply loopenv_bump_reduce_vindvar.
-        omega.
-        rewrite le'_as_bump.
-        eapply exec_loop_inv_continue; try omega.
-
-
-
-    
-Admitted.
-
-
-
-
-
-
-
-
-    
-    
-
-                         
-
-Theorem loop_reversal_correct_if_ix_injective:
-  forall (lub: upperbound)
-    (lub_in_range: Z.of_nat lub < Int.max_unsigned)
-    (ivname: ident)
-    (s: stmt),
-    injective_stmt_b s = true ->
-    forall (l: loop)
-      (le leid: loopenv)
-      (m mid: mem),
-      l = (loop_id_schedule lub lub_in_range ivname s) ->
-      exec_loop_inv 0 le m l mid leid ->
-      forall (lrev: loop),
-    lrev =  (loop_reversed_schedule lub lub_in_range ivname s) ->
-    exec_loop_inv 0 le m lrev mid leid.
-Proof.
-  intros until s.
-  intros s_inj.
-  intros until mid.
-  intros l_def.
-  intros exec_id.
-  intros until lrev.
-  intros lrev_def.
-
-  induction exec_id.
-  apply eval_loop_stop.
-
-  assert (loopub lrev = loopub l) as loopub_eq.
-  rewrite l_def.
-  rewrite lrev_def.
-  simpl.
-  auto.
-
-  rewrite loopub_eq.
-
-
-  eapply eval_loop_loop.
