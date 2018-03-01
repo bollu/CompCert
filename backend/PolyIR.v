@@ -1799,8 +1799,8 @@ Section MEMORYINLOOP.
       eapply memStructureEq_trans; eassumption.
   Qed.
 
-  Definition id_inj: Val.meminj :=  fun (b: block) => Some (b, 0).
-  Lemma memStructureEq_perm: forall (m m': mem)
+  Definition id_inj (m m': mem): Val.meminj :=  fun (b: block) => Some (b, 0).
+  Lemma memStructureEq_perm_eq: forall (m m': mem)
                                (b: block)
                                (ofs: Z)
                                (k: perm_kind)
@@ -1819,10 +1819,10 @@ Section MEMORYINLOOP.
     assumption.
   Qed.
 
-  Lemma memval_inject_refl: forall (mval: memval),
-      memval_inject (id_inj) mval mval.
+  Lemma memval_inject_id_inj_refl: forall (m m': mem) (mval: memval),
+      memval_inject (id_inj m m') mval mval.
   Proof.
-    intros mval.
+    intros until mval.
     destruct mval.
     eapply memval_inject_undef.
     eapply memval_inject_byte.
@@ -1839,14 +1839,16 @@ Section MEMORYINLOOP.
       rewrite Ptrofs.add_zero.
       reflexivity.
   Qed.
+
+  
   
   (* mem_inj is some sort of "generic injection", that is less specific
      than Mem.inject *)
-  Lemma memStructureEq_generic_inject:
+  Lemma memStructureEq_extensional_mem_inj:
     forall (m m': mem),
       memStructureEq m m' ->
       (forall (b: block), (Mem.mem_contents m )#b = (Mem.mem_contents m')#b) ->
-      Mem.mem_inj id_inj m m'.
+      Mem.mem_inj (id_inj m m') m m'.
   Proof.
     intros until m'.
     intros structureeq.
@@ -1863,7 +1865,7 @@ Section MEMORYINLOOP.
       intros m_perm.
 
       
-      eapply memStructureEq_perm.
+      eapply memStructureEq_perm_eq.
       eassumption.
       cut (ofs + 0 = ofs).
       intros ofs_eq.
@@ -1896,24 +1898,28 @@ Section MEMORYINLOOP.
       cut (ofs + 0 = ofs).
       intros ofs_plus_0_eq.
       rewrite ofs_plus_0_eq.
-      apply memval_inject_refl.
+      apply memval_inject_id_inj_refl.
       omega.
   Qed.
 
-       
-  Lemma memStructureEq_inject:
+  Lemma memStructureEq_extensional_inject:
     forall (m m': mem),
       memStructureEq m m' ->
       (forall (b: block), (Mem.mem_contents m )#b = (Mem.mem_contents m')#b) ->
-      Mem.inject (Mem.flat_inj (Mem.nextblock m)) m m'.
+      Mem.inject (id_inj m m') m m'.
   Proof.
     intros until m'.
     intros structureeq.
-    intros mem_eq_at_b.
-    apply Mem.mk_inject.
-    Abort.
+    intros extensional_eq.
+    constructor.
+    - apply memStructureEq_extensional_mem_inj; assumption.
+    - (* stuck *)
+  Abort.
+    
 
-      
+
+  
+
 
       
     
@@ -1938,7 +1944,8 @@ Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
         (mrev: mem),
     lrev =  (loop_reversed_schedule lub lub_in_range ivname s) ->
     exec_stmt le lrev m s mrev ->
-    mid = mrev.
+    exists (f: meminj),
+    Mem.inject f mid mrev.
 Proof.
   intros until s.
   intros s_inj.
