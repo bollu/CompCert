@@ -1801,8 +1801,7 @@ Section MEMORYINLOOP.
 
   Definition id_inj (m m': mem): Val.meminj :=
     fun (b: block) =>
-      if plt b (Mem.nextblock m) &&
-             plt  b (Mem.nextblock m')
+      if plt b (Mem.nextblock m)
       then Some (b, 0)
       else None.
   
@@ -1866,8 +1865,7 @@ Section MEMORYINLOOP.
       unfold id_inj.
       intros b1_b2_rel.
 
-      destruct (plt b1 (Mem.nextblock m) &&
-                    plt b1 (Mem.nextblock m')); inversion b1_b2_rel.
+      destruct (plt b1 (Mem.nextblock m)); inversion b1_b2_rel.
       inversion b1_b2_rel.
       subst.
       assert (ofs + 0 = ofs) as ofseq.
@@ -1885,8 +1883,7 @@ Section MEMORYINLOOP.
     -  intros until p.
        intros b1_b2_rel.
        unfold id_inj in b1_b2_rel.
-       destruct (plt b1 (Mem.nextblock m) &&
-                     plt b1 (Mem.nextblock m')); inversion b1_b2_rel.
+       destruct (plt b1 (Mem.nextblock m)); inversion b1_b2_rel.
        
        inversion b1_b2_rel.
        subst.
@@ -1904,8 +1901,7 @@ Section MEMORYINLOOP.
       unfold id_inj in b1_b2_rel.
 
       
-      destruct (plt b1 (Mem.nextblock m) &&
-                    plt b1 (Mem.nextblock m')); inversion b1_b2_rel.
+      destruct (plt b1 (Mem.nextblock m)); inversion b1_b2_rel.
       subst.
       clear b1_b2_rel.
 
@@ -1916,17 +1912,40 @@ Section MEMORYINLOOP.
       rewrite pointwise_eq.
       reflexivity.
 
+
       rewrite mem_at_b2_eq.
       
       cut (ofs + 0 = ofs).
       intros ofs_plus_0_eq.
       rewrite ofs_plus_0_eq.
-
       clear mem_at_b2_eq ofs_plus_0_eq.
+
       
-      apply memval_inject_id_inj_refl.
-      omega.
-  Qed.
+      (* we're trying to show that you can inject mem values into itself *)
+      remember (ZMap.get ofs (Mem.mem_contents m)# b2) as val_to_inject.
+
+      
+      destruct val_to_inject.
+      eapply memval_inject_undef.
+      eapply memval_inject_byte.
+      eapply memval_inject_frag.
+      induction v.
+      + apply Val.val_inject_undef.
+      + apply Val.inject_int.
+      + apply Val.inject_long.
+      + apply Val.inject_float.
+      + apply Val.inject_single.
+      + intros.
+        eapply Val.inject_ptr.
+        unfold id_inj.
+
+
+        destruct (plt b (Mem.nextblock m)).
+        * auto.
+        * 
+               
+        admit.
+  Admitted.
 
   Lemma memStructureEq_extensional_inject:
     forall (m m': mem),
