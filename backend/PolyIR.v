@@ -1696,6 +1696,18 @@ Section MEMORYINLOOP.
     auto.
   Qed.
 
+  Lemma memStructureEq_sym:
+    forall (m m': mem),
+      memStructureEq m m' ->
+      memStructureEq m' m.
+  Proof.
+    intros until m'.
+    unfold memStructureEq.
+    intros eqs.
+    destruct eqs.
+    auto.
+  Qed.
+
   Lemma memStructureEq_trans:
     forall (m m' m'': mem),
       memStructureEq m m' ->
@@ -1942,24 +1954,84 @@ Section MEMORYINLOOP.
 
         destruct (plt b (Mem.nextblock m)).
         * auto.
-        * 
-               
-        admit.
-  Admitted.
+  Abort.
 
+  Lemma memStructureEq_nextblock_eq:
+    forall (m m': mem),
+      memStructureEq m m' ->
+      Mem.nextblock m = Mem.nextblock m'.
+  Proof.
+    intros until m'.
+    intros structureeq.
+    unfold memStructureEq in structureeq.
+    destruct structureeq.
+    auto.
+  Qed.
+    
+
+  Lemma id_inj_no_overlap: forall (m m': mem),
+      Mem.meminj_no_overlap (id_inj m m') m.
+  Proof.
+    intros until m'.
+    unfold id_inj; intros; red; intros.
+    destruct (plt b1 (Mem.nextblock m)); inversion H0; subst.
+    destruct (plt b2 (Mem.nextblock m)); inversion H1; subst.
+    auto.
+  Qed.
+  
   Lemma memStructureEq_extensional_inject:
     forall (m m': mem),
       memStructureEq m m' ->
       (forall (b: block), (Mem.mem_contents m )#b = (Mem.mem_contents m')#b) ->
+      Mem.mem_inj (id_inj m m') m m' ->
       Mem.inject (id_inj m m') m m'.
   Proof.
     intros until m'.
     intros structureeq.
     intros extensional_eq.
     constructor.
-    - apply memStructureEq_extensional_mem_inj; assumption.
-    - (* stuck *)
-  Abort.
+    - auto.
+    - intros.
+      unfold id_inj.
+      apply pred_dec_false.
+      auto.
+    - intros until delta.
+      intros id_inj_val.
+      unfold Mem.valid_block.
+      unfold id_inj in id_inj_val.
+      destruct (plt b (Mem.nextblock m));
+        inversion id_inj_val.
+      subst.
+      cut (Mem.nextblock m = Mem.nextblock m' ).
+      intros nextblockeq.
+      rewrite <- nextblockeq.
+      assumption.
+
+      apply memStructureEq_nextblock_eq.
+      assumption.
+
+    -  (* no overlap *)
+      apply id_inj_no_overlap.
+
+    - (* range *)
+      unfold id_inj; intros.
+      destruct (plt b (Mem.nextblock m)); inv H0.
+      generalize (Ptrofs.unsigned_range_2 ofs). omega.
+
+    -  (* perm inv *)
+      unfold id_inj; intros.
+      destruct (plt b1 (Mem.nextblock m)); inv H0.
+      rewrite Z.add_0_r in H1.
+      assert (Mem.perm m b2 ofs k p).
+      eapply memStructureEq_perm_eq.
+      cut (memStructureEq m' m).
+      intros.
+      eassumption.
+      apply memStructureEq_sym.
+      auto.
+      auto.
+      auto.
+  Qed.
     
 
 
