@@ -1799,7 +1799,13 @@ Section MEMORYINLOOP.
       eapply memStructureEq_trans; eassumption.
   Qed.
 
-  Definition id_inj (m m': mem): Val.meminj :=  fun (b: block) => Some (b, 0).
+  Definition id_inj (m m': mem): Val.meminj :=
+    fun (b: block) =>
+      if plt b (Mem.nextblock m) &&
+             plt  b (Mem.nextblock m')
+      then Some (b, 0)
+      else None.
+  
   Lemma memStructureEq_perm_eq: forall (m m': mem)
                                (b: block)
                                (ofs: Z)
@@ -1820,9 +1826,15 @@ Section MEMORYINLOOP.
   Qed.
 
   Lemma memval_inject_id_inj_refl: forall (m m': mem) (mval: memval),
+      (forall (b:block) (ofs:ptrofs),
+          Val.inject
+            (id_inj m m')
+            (Vptr b ofs)
+            (Vptr b ofs)) ->
       memval_inject (id_inj m m') mval mval.
   Proof.
     intros until mval.
+    intros ptr_injector.
     destruct mval.
     eapply memval_inject_undef.
     eapply memval_inject_byte.
@@ -1833,11 +1845,7 @@ Section MEMORYINLOOP.
     - apply Val.inject_long.
     - apply Val.inject_float.
     - apply Val.inject_single.
-    - eapply Val.inject_ptr.
-      unfold id_inj.
-      auto.
-      rewrite Ptrofs.add_zero.
-      reflexivity.
+    - apply ptr_injector.
   Qed.
 
   
@@ -1857,24 +1865,29 @@ Section MEMORYINLOOP.
     - intros until p.
       unfold id_inj.
       intros b1_b2_rel.
+
+      destruct (plt b1 (Mem.nextblock m) &&
+                    plt b1 (Mem.nextblock m')); inversion b1_b2_rel.
       inversion b1_b2_rel.
       subst.
+      assert (ofs + 0 = ofs) as ofseq.
+      omega.
+      rewrite ofseq.
       
-      simpl.
       unfold memStructureEq in structureeq.
       intros m_perm.
 
       
       eapply memStructureEq_perm_eq.
       eassumption.
-      cut (ofs + 0 = ofs).
-      intros ofs_eq.
-      rewrite ofs_eq.
       assumption.
-      omega.
 
     -  intros until p.
        intros b1_b2_rel.
+       unfold id_inj in b1_b2_rel.
+       destruct (plt b1 (Mem.nextblock m) &&
+                     plt b1 (Mem.nextblock m')); inversion b1_b2_rel.
+       
        inversion b1_b2_rel.
        subst.
 
@@ -1884,20 +1897,33 @@ Section MEMORYINLOOP.
         *)
        exists 0.
        omega.
+        
 
     - intros until delta.
       intros b1_b2_rel.
-      inversion b1_b2_rel.
+      unfold id_inj in b1_b2_rel.
+
+      
+      destruct (plt b1 (Mem.nextblock m) &&
+                    plt b1 (Mem.nextblock m')); inversion b1_b2_rel.
       subst.
+      clear b1_b2_rel.
 
       intros perm_readable.
 
-      specialize (pointwise_eq b2).
+      assert ((Mem.mem_contents m') # b2 = (Mem.mem_contents m) #b2)
+        as mem_at_b2_eq.
       rewrite pointwise_eq.
+      reflexivity.
+
+      rewrite mem_at_b2_eq.
       
       cut (ofs + 0 = ofs).
       intros ofs_plus_0_eq.
       rewrite ofs_plus_0_eq.
+
+      clear mem_at_b2_eq ofs_plus_0_eq.
+      
       apply memval_inject_id_inj_refl.
       omega.
   Qed.
