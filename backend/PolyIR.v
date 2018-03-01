@@ -1867,11 +1867,13 @@ Section MEMORYINLOOP.
     forall (m m': mem),
       memStructureEq m m' ->
       (forall (b: block), (Mem.mem_contents m )#b = (Mem.mem_contents m')#b) ->
+      (forall (b: block) (i:ptrofs), Val.inject (id_inj m m') (Vptr b i) (Vptr b i)) ->
       Mem.mem_inj (id_inj m m') m m'.
   Proof.
     intros until m'.
     intros structureeq.
     intros pointwise_eq.
+    intros inject_pointer.
     apply Mem.mk_mem_inj.
     - intros until p.
       unfold id_inj.
@@ -1947,14 +1949,9 @@ Section MEMORYINLOOP.
       + apply Val.inject_long.
       + apply Val.inject_float.
       + apply Val.inject_single.
-      + intros.
-        eapply Val.inject_ptr.
-        unfold id_inj.
-
-
-        destruct (plt b (Mem.nextblock m)).
-        * auto.
-  Abort.
+      + apply inject_pointer.
+      + omega.
+  Qed.
 
   Lemma memStructureEq_nextblock_eq:
     forall (m m': mem),
