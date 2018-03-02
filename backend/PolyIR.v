@@ -71,7 +71,7 @@ Qed.
 
 Inductive affineexpr: Type :=
 | Eindvar: affineexpr
-| Econstint: int -> affineexpr.
+| Econstoffset: ptrofs -> affineexpr.
 
 Definition STORE_CHUNK_SIZE: memory_chunk := Mint8unsigned.
 Inductive stmt: Type :=
@@ -83,6 +83,7 @@ Notation indvar := nat.
 Notation upperbound := nat.
 
 Definition nat_to_int (n: nat): int := (Int.repr (Z.of_nat n)).
+Definition nat_to_ptrofs (n: nat): ptrofs := (Ptrofs.repr (Z.of_nat n)).
 Definition nat_to_val (n: nat): val := Vint (nat_to_int  n).
 
 Lemma nat_to_int_inj:
@@ -386,14 +387,16 @@ Qed.
     
     
 Record loop : Type :=
-  mkLoop { loopub: upperbound;
-           loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned;
-           loopivname: ident;
-           loopstmt: stmt;
-           loopschedule: vindvar -> vindvar;
-           loopscheduleinv: vindvar -> vindvar;
-           loopschedulewitness: inverseTillUb loopub loopschedule loopscheduleinv;
-         }.
+  mkLoop {
+      loopub: upperbound;
+      loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned;
+      loopivname: ident;
+      looparrblock: block;
+      loopstmt: stmt;
+      loopschedule: vindvar -> vindvar;
+      loopscheduleinv: vindvar -> vindvar;
+      loopschedulewitness: inverseTillUb loopub loopschedule loopscheduleinv;
+    }.
 
 
 Definition id_vindvar : vindvar -> vindvar := id.
@@ -412,10 +415,12 @@ Qed.
 Definition loop_id_schedule (loopub: upperbound)
            (loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned)
            (loopivname: ident)
+           (looparrblock: block)
            (loopstmt: stmt) :=
   mkLoop loopub
          loopub_in_range_witness
          loopivname
+         looparrblock
          loopstmt
          id
          id
@@ -440,10 +445,12 @@ Qed.
 Definition loop_reversed_schedule (loopub: upperbound)
            (loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned)
            (loopivname: ident)
+           (looparrblock: block)
            (loopstmt: stmt) :=
   mkLoop loopub
          loopub_in_range_witness
          loopivname
+         looparrblock
          loopstmt
          (n_minus_x loopub)
          (n_minus_x loopub)
@@ -475,20 +482,39 @@ Section EVAL_AFFINEEXPR.
   Variable le: loopenv.
   Variable l: loop.
 
-  Inductive eval_affineexpr: affineexpr -> val -> Prop :=
-  | eval_Eindvar: eval_affineexpr Eindvar (nat_to_val (loopschedule l (viv le)))
-  | eval_Econstint: forall (i: int),
-      eval_affineexpr (Econstint i) (Vint i).
+  Inductive eval_affineexpr: affineexpr -> ptrofs -> Prop :=
+  | eval_Eindvar: eval_affineexpr Eindvar (nat_to_ptrofs (loopschedule l (viv le)))
+  | eval_Econstoffset: forall (ofs: ptrofs),
+      eval_affineexpr (Econstoffset ofs) ofs.
 End EVAL_AFFINEEXPR.
 
 Section EXEC_STMT.
-  Inductive exec_stmt: loopenv -> loop -> mem -> stmt -> mem -> Prop :=
+  Inductive exec_stmt: loopenv -> loop -> mem -> stmt -> mem -> Prop := 
   | exec_Sstore: forall (le: loopenv) (l: loop) (m m': mem)
-                   (addr: affineexpr) (i: int) (vaddr: val),
+                   (addr: affineexpr) (i: int) (ofs: ptrofs),
       (viv le < loopub l)%nat ->
-      eval_affineexpr le l addr vaddr ->
-      Mem.storev STORE_CHUNK_SIZE m vaddr (Vint i) = Some m' ->
+      eval_affineexpr le l addr ofs ->
+      Mem.storev STORE_CHUNK_SIZE
+                 m
+                 (Vptr (looparrblock l) ofs)
+                 (Vint i) = Some m' ->
       exec_stmt le l m (Sstore addr i) m'.
+
+
+  Lemma exec_stmt_is_useless:
+    forall le l m s m',
+      exec_stmt le l m s m' -> m = m'.
+  Proof.
+    intros until m'.
+    intros execs.
+    inversion execs. subst.
+
+    - rename H0 into eval_expr.
+      rename H1 into memstore.
+
+      unfold Mem.storev in memstore.
+  Abort.
+      
 End EXEC_STMT.
 
 Section EXEC_LOOP.
@@ -552,13 +578,15 @@ Proof.
   intros eval_m.
   intros eval_m'.
   induction s; inversion eval_m;inversion eval_m'; subst; try auto.
-  assert(vaddr = vaddr0) as veq.
+  assert(ofs = vaddr0) as veq.
   eapply eval_affineexpr_is_function; eassumption.
   subst.
-  assert (Some m' = Some m'') as meq.
 
+  
   rename H7 into store_m'.
   rename H16 into store_m''.
+  assert (Some m' = Some m'') as meq.
+
   
   rewrite <- store_m'. rewrite <- store_m''.
 
@@ -624,7 +652,7 @@ Section MATCHAFFINEEXPR.
   Variable l: loop.
   Inductive match_affineexpr: expr -> affineexpr -> Prop :=
   | match_Evar: match_affineexpr (Evar (loopivname l)) Eindvar
-  | match_Econstint: forall i,match_affineexpr (Econst (Ointconst i)) (Econstint i).
+  | match_Econstoffset: forall i,match_affineexpr (Econst (Ointconst i)) (Econstint i).
 End MATCHAFFINEEXPR.
 
 Theorem match_expr_have_same_value:
@@ -693,7 +721,9 @@ Section MATCHSTMT.
   | match_Sstore: forall (addre: expr) (i: int)
                     (addrae: affineexpr),
       match_affineexpr l addre addrae ->
-      match_stmt (Cminor.Sstore STORE_CHUNK_SIZE addre (Econst (Ointconst i)))
+      match_stmt (Cminor.Sstore
+                    STORE_CHUNK_SIZE
+                    (Vptr (looparrblock l) ) i)
                  (Sstore addrae i).
 End MATCHSTMT.
 
@@ -714,7 +744,7 @@ Proof.
   inversion exec_s.
   inversion exec_cms.
   subst.
-  assert (vaddr0 = vaddr) as vaddreq.
+  assert (vaddr0 = ofs) as vaddreq.
   eapply match_expr_have_same_value; eassumption.
   subst.
 
@@ -1427,7 +1457,7 @@ Proof.
     assert (Mem.loadv STORE_CHUNK_SIZE m' readix = Mem.loadv STORE_CHUNK_SIZE m readix ).
 
     inversion execstmt. subst.
-    rename vaddr into writeaddr.
+    rename ofs into writeaddr.
     rename H6 into evalwriteexpr.
     rename H8 into m'_as_store_m.
 
@@ -1463,7 +1493,7 @@ peel of a loop iteration from the beginning of the loop
 Definition injective_affineexpr_b (ae: affineexpr) : bool :=
   match ae with
   | Eindvar => true
-  | Econstint _ => false
+  | Econstoffset _ => false
   end.
 
 Definition injective_stmt_b (s: stmt) : bool :=
@@ -1516,7 +1546,7 @@ Proof.
     
     apply nat_to_val_neq_2; omega.
 
-  - (* Econstint, not injective *)
+  - (* Econstoffset, not injective *)
     inversion inj.
 Qed.
     
@@ -1587,7 +1617,7 @@ Proof.
 
 
 
-  - (* Econstint, not injective *)
+  - (* Econstoffset, not injective *)
     inversion inj.
 Qed.
 
@@ -1645,7 +1675,7 @@ Proof.
 
   - inversion eval_old.
     subst.
-    apply eval_Econstint.
+    apply eval_Econstoffset.
 Qed.
     
 
@@ -2033,28 +2063,6 @@ Section MEMORYINLOOP.
   Qed.
 End MEMORYINLOOP.
 
-
-(* NOTE, TODO, HIGH PRIORITY: rewrite our expressions so that
-we actually write to a fucking array :P *)
-Lemma exec_stmt_is_useless:
-  forall (s: stmt) (m m': mem) (le: loopenv) (l: loop),
-    exec_stmt le l m s m' -> m = m'.
-Proof.
-  intros.
-  induction s.
-  - inversion H. subst.
-    rename H8 into store.
-    unfold Mem.storev in store.
-
-    rename H6 into evaladdr.
-    induction a.
-    inversion evaladdr. subst.
-    unfold nat_to_val in store.
-    inversion store.
-
-    inversion evaladdr. subst.
-    inversion store.
-Qed.
 
 (* Theory of locations that a loop writes to, so we can later check if
 a loop writes to a memory location or not, and reason about this fact
