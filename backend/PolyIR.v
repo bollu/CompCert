@@ -1979,7 +1979,9 @@ Section MEMORYINLOOP.
   Lemma memStructureEq_extensional_inject:
     forall (m m': mem),
       memStructureEq m m' ->
-      (forall (b: block), (Mem.mem_contents m )#b = (Mem.mem_contents m')#b) ->
+      (forall (b: block) (ofs: positive),
+          (Mem.mem_contents m )#b# ofs =
+          (Mem.mem_contents m')#b#ofs) ->
       Mem.mem_inj (id_inj m m') m m' ->
       Mem.inject (id_inj m m') m m'.
   Proof.
@@ -2031,6 +2033,50 @@ Section MEMORYINLOOP.
   Qed.
 End MEMORYINLOOP.
 
+
+(* NOTE, TODO, HIGH PRIORITY: rewrite our expressions so that
+we actually write to a fucking array :P *)
+Lemma exec_stmt_is_useless:
+  forall (s: stmt) (m m': mem) (le: loopenv) (l: loop),
+    exec_stmt le l m s m' -> m = m'.
+Proof.
+  intros.
+  induction s.
+  - inversion H. subst.
+    rename H8 into store.
+    unfold Mem.storev in store.
+
+    rename H6 into evaladdr.
+    induction a.
+    inversion evaladdr. subst.
+    unfold nat_to_val in store.
+    inversion store.
+
+    inversion evaladdr. subst.
+    inversion store.
+Qed.
+
+(* Theory of locations that a loop writes to, so we can later check if
+a loop writes to a memory location or not, and reason about this fact
+*)
+Section LOOPWRITELOCATIONS.
+  Definition StmtWriteLocation (s: stmt) (viv: vindvar) : block * positive.
+        
+      
+    
+
+(* locations that are written to by a loop *)
+Definition LoopWriteLocations_rec (l: loop) (viv: vindvar) : list (block * positive) :=
+  if (loopub l <=? viv)%nat
+  then List.nil
+  else List.nil.
+         
+                                                                  
+Definition LoopWriteLocations (l: loop):list (block * positive) :=
+  LoopWriteLocations_rec l 0%nat.
+
+End LOOPWRITELOCATIONS.
+      
   
       
 Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
@@ -2062,6 +2108,8 @@ Proof.
   intros exec_lrev.
 
   eapply memStructureEq_extensional_inject.
+
+  assert (memStructureEq mid mrev) as structure_eq.
   eapply memStructureEq_trans.
   eapply memStructureEq_sym.
   eapply memStructureEq_exec_stmt.
@@ -2069,7 +2117,9 @@ Proof.
   eapply memStructureEq_exec_stmt.
   eassumption.
 
-  intros b.
+  exact structure_eq.
+
+  intros.
   
 
   
