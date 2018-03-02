@@ -10,6 +10,8 @@ Require Import Znat.
 Require Import Nat.
 Require Import PeanoNat.
 Require Import ExtensionalityFacts.
+Require Import Equivalence EquivDec.
+Require Import Coqlib.
 
 
 (* Useful facts about functions that are inverses *)
@@ -1725,7 +1727,7 @@ Section MEMORYINLOOP.
 
   (* A view of memory where they are structurally equal, but only differ on
      memory content *)
-  Lemma mem_equal: forall (m m': mem),
+  Lemma memStructureEq_mem_equal: forall (m m': mem),
       memStructureEq m m'->
       Mem.mem_contents m = Mem.mem_contents m' ->
       m = m'.
@@ -1740,7 +1742,7 @@ Section MEMORYINLOOP.
     apply Mem.mkmem_ext; auto.
   Qed.
 
-  Lemma mem_store_structure_eq:
+  Lemma memStructureEq_store:
     forall  (m m': mem)
        (chunk: AST.memory_chunk)
        (b: Values.block) (ofs: Z) (v: val),
@@ -1760,7 +1762,7 @@ Section MEMORYINLOOP.
     eassumption.
   Qed.
 
-  Lemma mem_storev_is_structure_eq:
+  Lemma memStructureEq_storev:
     forall (m m': mem)
       (chunk: memory_chunk)
       (addr v: val),
@@ -1772,11 +1774,11 @@ Section MEMORYINLOOP.
     unfold Mem.storev in store.
     induction addr; try inversion store.
 
-    eapply mem_store_structure_eq.
+    eapply memStructureEq_store.
     eassumption.
   Qed.
 
-  Lemma exec_stmt_memory_is_structure_eq:
+  Lemma memStructureEq_exec_stmt:
     forall (m m': mem)
       (s: stmt)
       (le : loopenv)
@@ -1789,12 +1791,12 @@ Section MEMORYINLOOP.
     induction s.
     - (* Sstore *)
       inversion execs; subst.
-      eapply mem_storev_is_structure_eq.
+      eapply memStructureEq_storev.
       eassumption.
    Qed.
 
 
-  Lemma exec_loop_memory_is_structure_eq:
+  Lemma memStructureEq_exec_loop:
     forall (m m': mem)
       (le le': loopenv)
       (l: loop),
@@ -1806,7 +1808,7 @@ Section MEMORYINLOOP.
     induction execl; subst.
     - eapply memStructureEq_refl.
     - assert (memStructureEq m m') as m_seq_m'.
-      eapply exec_stmt_memory_is_structure_eq.
+      eapply memStructureEq_exec_stmt.
       eassumption.
       eapply memStructureEq_trans; eassumption.
   Qed.
@@ -1860,13 +1862,12 @@ Section MEMORYINLOOP.
   Qed.
 
   
-  
   (* mem_inj is some sort of "generic injection", that is less specific
      than Mem.inject *)
   Lemma memStructureEq_extensional_mem_inj:
     forall (m m': mem),
       memStructureEq m m' ->
-      (forall (b: block), (Mem.mem_contents m )#b = (Mem.mem_contents m')#b) ->
+      (forall (b: block) (ofs: positive), (Mem.mem_contents m )#b # ofs = (Mem.mem_contents m')#b # ofs) ->
       (forall (b: block) (i:ptrofs), Val.inject (id_inj m m') (Vptr b i) (Vptr b i)) ->
       Mem.mem_inj (id_inj m m') m m'.
   Proof.
@@ -1908,7 +1909,7 @@ Section MEMORYINLOOP.
         *)
        exists 0.
        omega.
-        
+       
 
     - intros until delta.
       intros b1_b2_rel.
@@ -1921,36 +1922,35 @@ Section MEMORYINLOOP.
 
       intros perm_readable.
 
-      assert ((Mem.mem_contents m') # b2 = (Mem.mem_contents m) #b2)
-        as mem_at_b2_eq.
-      rewrite pointwise_eq.
-      reflexivity.
-
-
-      rewrite mem_at_b2_eq.
       
       cut (ofs + 0 = ofs).
       intros ofs_plus_0_eq.
       rewrite ofs_plus_0_eq.
-      clear mem_at_b2_eq ofs_plus_0_eq.
+      clear ofs_plus_0_eq.
 
-      
-      (* we're trying to show that you can inject mem values into itself *)
-      remember (ZMap.get ofs (Mem.mem_contents m)# b2) as val_to_inject.
+      remember (ZMap.get ofs (Mem.mem_contents m) # b2) as vinj1.
+      remember (ZMap.get ofs (Mem.mem_contents m') # b2) as vinj2.
 
-      
-      destruct val_to_inject.
-      eapply memval_inject_undef.
-      eapply memval_inject_byte.
-      eapply memval_inject_frag.
-      induction v.
-      + apply Val.val_inject_undef.
-      + apply Val.inject_int.
-      + apply Val.inject_long.
-      + apply Val.inject_float.
-      + apply Val.inject_single.
-      + apply inject_pointer.
-      + omega.
+      assert (vinj1 = vinj2) as vinj_eq.
+      rewrite Heqvinj1.
+      rewrite Heqvinj2.
+      eapply pointwise_eq.
+
+      rewrite vinj_eq in *.
+
+      destruct vinj2.
+
+      +  eapply memval_inject_undef.
+      + eapply memval_inject_byte.
+      + eapply memval_inject_frag.
+        induction v.
+        * apply Val.val_inject_undef.
+        * apply Val.inject_int.
+        * apply Val.inject_long.
+        * apply Val.inject_float.
+        * apply Val.inject_single.
+        * apply inject_pointer.
+      +  omega.
   Qed.
 
   Lemma memStructureEq_nextblock_eq:
@@ -2029,15 +2029,6 @@ Section MEMORYINLOOP.
       auto.
       auto.
   Qed.
-    
-
-
-  
-
-
-      
-    
-      
 End MEMORYINLOOP.
 
   
@@ -2058,8 +2049,7 @@ Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
         (mrev: mem),
     lrev =  (loop_reversed_schedule lub lub_in_range ivname s) ->
     exec_stmt le lrev m s mrev ->
-    exists (f: meminj),
-    Mem.inject f mid mrev.
+    Mem.inject (id_inj mid mrev) mid mrev.
 Proof.
   intros until s.
   intros s_inj.
@@ -2071,10 +2061,17 @@ Proof.
   intros l_rev.
   intros exec_lrev.
 
-  induction s.
+  eapply memStructureEq_extensional_inject.
+  eapply memStructureEq_trans.
+  eapply memStructureEq_sym.
+  eapply memStructureEq_exec_stmt.
+  eassumption.
+  eapply memStructureEq_exec_stmt.
+  eassumption.
 
-  - (* Sstore *)
-    inversion exec_lrev.
-    inversion exec_lid.
-    subst.
-Abort.
+  intros b.
+  
+
+  
+
+  
