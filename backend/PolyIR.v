@@ -391,7 +391,7 @@ Record loop : Type :=
       loopub: upperbound;
       loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned;
       loopivname: ident;
-      looparrblock: block;
+      looparrname: ident;
       loopstmt: stmt;
       loopschedule: vindvar -> vindvar;
       loopscheduleinv: vindvar -> vindvar;
@@ -415,12 +415,12 @@ Qed.
 Definition loop_id_schedule (loopub: upperbound)
            (loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned)
            (loopivname: ident)
-           (looparrblock: block)
+           (looparrname: ident)
            (loopstmt: stmt) :=
   mkLoop loopub
          loopub_in_range_witness
          loopivname
-         looparrblock
+         looparrname
          loopstmt
          id
          id
@@ -445,12 +445,12 @@ Qed.
 Definition loop_reversed_schedule (loopub: upperbound)
            (loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned)
            (loopivname: ident)
-           (looparrblock: block)
+           (looparrname: ident)
            (loopstmt: stmt) :=
   mkLoop loopub
          loopub_in_range_witness
          loopivname
-         looparrblock
+         looparrname
          loopstmt
          (n_minus_x loopub)
          (n_minus_x loopub)
@@ -478,32 +478,42 @@ Proof.
 Qed.
 
 Section EVAL_AFFINEEXPR.
-
+  Variable ge: genv.
   Variable le: loopenv.
   Variable l: loop.
 
-  Inductive eval_affineexpr: affineexpr -> ptrofs -> Prop :=
-  | eval_Eindvar: eval_affineexpr Eindvar (nat_to_ptrofs (loopschedule l (viv le)))
+  Inductive eval_affineexpr: affineexpr -> val -> Prop :=
+  | eval_Eindvar: eval_affineexpr
+                    Eindvar
+                    (Genv.symbol_address ge
+                                         (looparrname l)
+                                         (nat_to_ptrofs (loopschedule l (viv le))))
   | eval_Econstoffset: forall (ofs: ptrofs),
-      eval_affineexpr (Econstoffset ofs) ofs.
+      eval_affineexpr (Econstoffset ofs)
+                      (Genv.symbol_address ge
+                                           (looparrname l)
+                                           ofs)
+  .
 End EVAL_AFFINEEXPR.
 
 Section EXEC_STMT.
-  Inductive exec_stmt: loopenv -> loop -> mem -> stmt -> mem -> Prop := 
-  | exec_Sstore: forall (le: loopenv) (l: loop) (m m': mem)
-                   (addr: affineexpr) (i: int) (ofs: ptrofs),
+  Inductive exec_stmt: genv -> loopenv -> loop -> mem -> stmt -> mem -> Prop := 
+  | exec_Sstore: forall (ge: genv)
+                   (le: loopenv)
+                   (l: loop)
+                   (m m': mem)
+                   (addr: affineexpr) (i: int) (aval: val),
       (viv le < loopub l)%nat ->
-      eval_affineexpr le l addr ofs ->
+      eval_affineexpr ge le l addr aval  ->
       Mem.storev STORE_CHUNK_SIZE
                  m
-                 (Vptr (looparrblock l) ofs)
+                 aval
                  (Vint i) = Some m' ->
-      exec_stmt le l m (Sstore addr i) m'.
-
+      exec_stmt ge le l m (Sstore addr i) m'.
 
   Lemma exec_stmt_is_useless:
-    forall le l m s m',
-      exec_stmt le l m s m' -> m = m'.
+    forall ge le l m s m',
+      exec_stmt ge le l m s m' -> m = m'.
   Proof.
     intros until m'.
     intros execs.
@@ -519,21 +529,21 @@ End EXEC_STMT.
 
 Section EXEC_LOOP.
 
-  Inductive exec_loop: loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
-  | eval_loop_stop: forall le m l,
+  Inductive exec_loop: genv -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
+  | eval_loop_stop: forall ge le m l,
       (viv le >= loopub l)%nat ->
-      exec_loop le m l m le
-  | eval_loop_loop: forall le le' m m' m'' l,
+      exec_loop ge le m l m le
+  | eval_loop_loop: forall ge le le' m m' m'' l,
       (viv le < loopub l)%nat ->
       (viv le < viv le')%nat -> 
-      exec_stmt le l m (loopstmt l) m' ->
-      exec_loop (loopenv_bump_vindvar le) m' l m'' le' ->
-      exec_loop le m l m'' le'.
+      exec_stmt ge le l m (loopstmt l) m' ->
+      exec_loop ge (loopenv_bump_vindvar le) m' l m'' le' ->
+      exec_loop ge le m l m'' le'.
 End EXEC_LOOP.
 
 Lemma exec_loop_viv_nondecreasing:
-  forall (le le': loopenv) (m m': mem) (l: loop),
-    exec_loop le m l m' le' ->
+  forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
+    exec_loop ge le m l m' le' ->
     (viv le' >= viv le)%nat.
 Proof.
   intros until l.
@@ -544,8 +554,8 @@ Proof.
 Qed.
 
 Lemma exec_loop_env_equal_implies_memory_equal:
-  forall (le le': loopenv) (m m': mem) (l: loop),
-    exec_loop le m l m' le' ->
+  forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
+    exec_loop ge le m l m' le' ->
     le = le' -> m = m'.
 Proof.
   intros.
@@ -556,35 +566,36 @@ Qed.
   
 
 Theorem eval_affineexpr_is_function:
-  forall (le: loopenv) (l: loop) (ae: affineexpr) (ofs ofs': ptrofs),
-    eval_affineexpr le l ae ofs ->
-    eval_affineexpr le l ae ofs' ->
-    ofs = ofs'.
+  forall (ge: genv) (le: loopenv) (l: loop) (ae: affineexpr) (a a': val),
+    eval_affineexpr ge le l ae a ->
+    eval_affineexpr ge le l ae a' ->
+    a = a'.
 Proof.
-  intros until ofs'.
-  intros eval_ofs.
-  intros eval_ofs'.
-  induction ae; inversion eval_ofs; inversion eval_ofs'; subst; try auto.
+  intros until a'.
+  intros eval_a.
+  intros eval_a'.
+  induction ae; inversion eval_a; inversion eval_a'; subst; try auto.
 Qed.
 
 
 Theorem exec_stmt_is_function:
-  forall (le: loopenv) (l: loop) (m m' m'': mem) (s: stmt),
-    exec_stmt le l m s m' ->
-    exec_stmt le l m s m'' ->
+  forall (ge: genv)
+    (le: loopenv) (l: loop) (m m' m'': mem) (s: stmt),
+    exec_stmt ge le l m s m' ->
+    exec_stmt ge le l m s m'' ->
     m' = m''.
 Proof.
   intros until s.
   intros eval_m.
   intros eval_m'.
   induction s; inversion eval_m;inversion eval_m'; subst; try auto.
-  assert(ofs = ofs0) as veq.
+  assert(aval = aval0) as veq.
   eapply eval_affineexpr_is_function; eassumption.
   subst.
 
   
-  rename H7 into store_m'.
-  rename H16 into store_m''.
+  rename H8 into store_m'.
+  rename H18 into store_m''.
   assert (Some m' = Some m'') as meq.
 
   
@@ -651,7 +662,7 @@ Section MATCHAFFINEEXPR.
   Variable le: loopenv.
   Variable l: loop.
   Inductive match_affineexpr: expr -> affineexpr -> Prop :=
-  | match_Evar: match_affineexpr (Evar (loopivname l)) Eindvar
+  | match_Evar: match_affineexpr (Econst (loopivname l)) Eindvar
   | match_Econstoffset: forall i,match_affineexpr (Econst (Ointconst i)) (Econstint i).
 End MATCHAFFINEEXPR.
 
@@ -723,7 +734,7 @@ Section MATCHSTMT.
       match_affineexpr l addre addrae ->
       match_stmt (Cminor.Sstore
                     STORE_CHUNK_SIZE
-                    (Vptr (looparrblock l) ) i)
+                    (Vptr (looparrname l) ) i)
                  (Sstore addrae i).
 End MATCHSTMT.
 
