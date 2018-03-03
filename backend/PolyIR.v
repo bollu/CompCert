@@ -578,7 +578,7 @@ Proof.
   intros eval_m.
   intros eval_m'.
   induction s; inversion eval_m;inversion eval_m'; subst; try auto.
-  assert(ofs = vaddr0) as veq.
+  assert(ofs = ofs0) as veq.
   eapply eval_affineexpr_is_function; eassumption.
   subst.
 
