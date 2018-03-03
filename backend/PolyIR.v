@@ -196,38 +196,30 @@ Qed.
 
 Lemma transfer_nat_add_to_int_add:
   forall (n: nat),
-    Z.of_nat n < Int.max_unsigned ->
-    Int.repr (Z.of_nat (n + 1)%nat) =
-    (Int.add (Int.repr (Z.of_nat n)) Int.one).
+    Z.of_nat n < Int64.max_unsigned ->
+    Int64.repr (Z.of_nat (n + 1)%nat) =
+    (Int64.add (Int64.repr (Z.of_nat n)) Int64.one).
 Proof.
   intros n.
   intros n_lt_unsigned.
-  rewrite Int.add_unsigned.
+  rewrite Int64.add_unsigned.
   unfold Int.one.
-  rewrite Int.unsigned_repr.
-  rewrite Int.unsigned_repr.
+  rewrite Int64.unsigned_repr.
   rewrite Nat2Z.inj_add.
   simpl.
   reflexivity.
   split.
   omega.
-  unfold Int.max_unsigned.
-  unfold Int64.modulus.
-  unfold Int.wordsize.
-  simpl.
   omega.
 
-  split.
-  omega.
-  omega.
 Qed.
 
 Lemma transfer_nat_lt_to_int_lt:
   forall (n1 n2: nat),
     (n1 < n2)%nat ->
-    Z.of_nat n1 <= Int.max_unsigned ->
-    Z.of_nat n2 <= Int.max_unsigned ->
-    Int.ltu (nat_to_int n1) (nat_to_int n2) = true.
+    Z.of_nat n1 <= Int64.max_unsigned ->
+    Z.of_nat n2 <= Int64.max_unsigned ->
+    Int64.ltu (nat_to_int64 n1) (nat_to_int64 n2) = true.
 Proof.
   intros until n2.
   intros n1_lt_n2.
@@ -235,10 +227,10 @@ Proof.
   intros n1_lt_max_unsigned.
   intros n2_lt_max_unsigned.
   
-  unfold nat_to_int.
-  unfold Int.ltu.
-  rewrite Int.unsigned_repr.
-  rewrite Int.unsigned_repr.
+  unfold nat_to_int64.
+  unfold Int64.ltu.
+  rewrite Int64.unsigned_repr.
+  rewrite Int64.unsigned_repr.
   rewrite zlt_true.
   reflexivity.
   rewrite <- Z.compare_lt_iff.
@@ -259,9 +251,9 @@ Qed.
 Lemma transfer_nat_ge_to_int_ltu:
   forall (n1 n2: nat),
     (n1 >= n2)%nat ->
-    Z.of_nat n1 <= Int.max_unsigned ->
-    Z.of_nat n2 <= Int.max_unsigned ->
-    Int.ltu (nat_to_int n1) (nat_to_int n2) = false.
+    Z.of_nat n1 <= Int64.max_unsigned ->
+    Z.of_nat n2 <= Int64.max_unsigned ->
+    Int64.ltu (nat_to_int n1) (nat_to_int n2) = false.
 Proof.
   intros until n2.
   intros n1_lt_n2.
@@ -270,9 +262,9 @@ Proof.
   intros n2_lt_max_unsigned.
   
   unfold nat_to_int.
-  unfold Int.ltu.
-  rewrite Int.unsigned_repr.
-  rewrite Int.unsigned_repr.
+  unfold Int64.ltu.
+  rewrite Int64.unsigned_repr.
+  rewrite Int64.unsigned_repr.
   rewrite zlt_false.
   reflexivity.
   apply Z.le_ge.
@@ -391,7 +383,7 @@ Qed.
 Record loop : Type :=
   mkLoop {
       loopub: upperbound;
-      loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned;
+      loopub_in_range_witness: Z.of_nat loopub < Int64.max_unsigned;
       loopivname: ident;
       looparrname: ident;
       loopstmt: stmt;
@@ -415,7 +407,7 @@ Proof.
 Qed.
 
 Definition loop_id_schedule (loopub: upperbound)
-           (loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned)
+           (loopub_in_range_witness: Z.of_nat loopub < Int64.max_unsigned)
            (loopivname: ident)
            (looparrname: ident)
            (loopstmt: stmt) :=
@@ -445,7 +437,7 @@ Qed.
 
 
 Definition loop_reversed_schedule (loopub: upperbound)
-           (loopub_in_range_witness: Z.of_nat loopub < Int.max_unsigned)
+           (loopub_in_range_witness: Z.of_nat loopub < Int64.max_unsigned)
            (loopivname: ident)
            (looparrname: ident)
            (loopstmt: stmt) :=
@@ -685,6 +677,9 @@ End MATCHAFFINEEXPR.
 
 Theorem match_expr_have_same_value:
   forall (l:loop) (le:loopenv) (a:expr) (sp: val) (m: mem) (ae:affineexpr) (e:env) (ge: genv) (v v':val),
+    Archi.ptr64 = true ->
+
+    (viv le < loopub l)%nat ->
     match_affineexpr l a ae ->
     match_env l e le ->
     eval_expr ge sp e m a v ->
@@ -692,6 +687,8 @@ Theorem match_expr_have_same_value:
     v = v'.
 Proof.
   intros until v'.
+  intros archi_ptr64_true.
+  intros viv_in_range.
   intros match_exprs.
   intros match_envs.
   intros eval_expr.
@@ -703,43 +700,84 @@ Proof.
     inversion match_envs;
     subst.
 
-  rename H2 into eval_baseptr.
-  rename H4 into eval_loopiv.
-  rename H5 into eval_baseptr_plus_loopiv.
-  rename H8 into loopiv_eq_sched.
-  rename v1 into vbaseptr.
-  rename v2 into loopiv.
+  - rename H2 into eval_baseptr.
+    rename H4 into eval_loopiv.
+    rename H5 into eval_baseptr_plus_loopiv.
+    rename H8 into loopiv_eq_sched.
+    rename v1 into vbaseptr.
+    rename v2 into loopiv.
 
-  assert (Genv.symbol_address ge (looparrname l) (nat_to_ptrofs 0) = vbaseptr) as
-      vbseptr_val.
-  inversion eval_baseptr; subst.
-  inversion H0.
-  auto.
-  subst.
+    assert (Genv.symbol_address ge (looparrname l) (nat_to_ptrofs 0) = vbaseptr) as
+        vbseptr_val.
+    inversion eval_baseptr; subst.
+    inversion H0.
+    auto.
+    subst.
 
-  inversion eval_baseptr_plus_loopiv.
-  subst.
+    inversion eval_baseptr_plus_loopiv.
+    subst.
 
-  inversion eval_loopiv. subst.
+    inversion eval_loopiv. subst.
 
 
 
-  assert (Some loopiv = Some (nat_to_vlong (loopschedule l (viv le)))) as loopivnameq.
-  rename H0 into e_at_loopivname.
-  rewrite <- loopiv_eq_sched.
-  rewrite <- e_at_loopivname.
-  reflexivity.
+    assert (Some loopiv = Some (nat_to_vlong (loopschedule l (viv le)))) as loopivnameq.
+    rename H0 into e_at_loopivname.
+    rewrite <- loopiv_eq_sched.
+    rewrite <- e_at_loopivname.
+    reflexivity.
 
-  inversion loopivnameq.
-  subst.
+    inversion loopivnameq.
+    subst.
 
-  unfold Genv.symbol_address.
+    unfold Genv.symbol_address.
 
-  remember (Genv.find_symbol ge (looparrname l)) as maybe_arrbase.
-  destruct (maybe_arrbase).
-  unfold Val.addl.
-  simpl.
-  destruct Archi.ptr64.
+    remember (Genv.find_symbol ge (looparrname l)) as maybe_arrbase.
+    destruct (maybe_arrbase).
+    unfold Val.addl.
+    simpl.
+    destruct Archi.ptr64.
+  + unfold Ptrofs.add.
+    unfold nat_to_ptrofs.
+    simpl.
+    rewrite Ptrofs.unsigned_repr.
+    simpl.
+    unfold nat_to_int64.
+    rewrite Ptrofs.repr_unsigned.
+    unfold Ptrofs.of_int64.
+    rewrite Int64.unsigned_repr.
+    reflexivity.
+    split.
+    omega.
+
+    assert (Z.of_nat (loopschedule l (viv le)) < Z.of_nat (loopub l)) as iv_in_range.
+    apply Znat.inj_lt.
+    eapply inrange_forward.
+    exact (loopschedulewitness l).
+    assumption.
+    assert (Z.of_nat (loopub l) < Int64.max_unsigned) as loopub_in_range.
+    eapply (loopub_in_range_witness l).
+
+    admit.
+    split.
+    omega. unfold Ptrofs.max_unsigned.
+    unfold Ptrofs.modulus.
+    unfold Ptrofs.wordsize.
+    unfold Wordsize_Ptrofs.wordsize.
+    destruct Archi.ptr64; simpl; omega.
+
+  +  inversion archi_ptr64_true.
+
+  + unfold Val.addl.
+    reflexivity.
+  - inversion eval_expr; subst. inversion H1. subst.
+    reflexivity.
+Admitted.
+
+    
+
+  
+
 
   
 
@@ -895,7 +933,7 @@ Qed.
 Lemma eval_iv_lt_ub_false:
   forall (ge: genv) (sp: val) (m: mem),
   forall (e: env) (ivname: ident) (viv: nat) (ub: upperbound),
-    Z.of_nat viv <= Int.max_unsigned ->
+    Z.of_nat viv <= Int64.max_unsigned ->
     (viv >= ub)%nat ->
     e ! ivname = Some (nat_to_vlong viv) ->
     eval_expr ge sp e m 
@@ -936,7 +974,7 @@ Qed.
 Lemma eval_iv_lt_ub_true:
   forall (ge: genv) (sp: val) (m: mem),
   forall (e: env) (ivname: ident) (viv: nat) (ub: upperbound),
-    Z.of_nat ub < Int.max_unsigned ->
+    Z.of_nat ub < Int64.max_unsigned ->
     (viv < ub)%nat ->
     e ! ivname = Some (nat_to_vlong viv) ->
     eval_expr ge sp e m 
@@ -1022,9 +1060,9 @@ Theorem match_loop_has_same_effect:
       (iv: vindvar)
       (ivname: ident)
       (lsched lschedinv: vindvar -> vindvar)
-      (lub_in_range: Z.of_nat lub < Int.max_unsigned)
-      (lub_in_range': Z.of_nat lub + 1 < Int.max_unsigned)
-      (viv_in_range: Z.of_nat iv < Int.max_unsigned)
+      (lub_in_range: Z.of_nat lub < Int64.max_unsigned)
+      (lub_in_range': Z.of_nat lub + 1 < Int64.max_unsigned)
+      (viv_in_range: Z.of_nat iv < Int64.max_unsigned)
       (loopstmt: stmt)
       (lschedwitness: inverseTillUb lub lsched lschedinv),
     forall (f: function)
@@ -1605,12 +1643,12 @@ Proof.
     assert (loopschedule l (viv le2) < loopub l)%nat as indvar2_inrange.
     apply indvar_in_range_1. assumption.
 
-    assert (Z.of_nat (loopub l) < Int.max_unsigned).
+    assert (Z.of_nat (loopub l) < Int64.max_unsigned).
     apply (loopub_in_range_witness l).
 
     
-    assert (Int.max_unsigned < Int64.modulus).
-    unfold Int.max_unsigned.
+    assert (Int64.max_unsigned < Int64.modulus).
+    unfold Int64.max_unsigned.
     omega.
     
     apply nat_to_vlong_neq_2; omega.
@@ -1646,8 +1684,8 @@ Proof.
     rename H0 into v_as_le1.
     rename H1 into v_as_le2.
 
-    assert (Int.max_unsigned < Int64.modulus).
-    unfold Int.max_unsigned.
+    assert (Int64.max_unsigned < Int64.modulus).
+    unfold Int64.max_unsigned.
     omega.
 
     
@@ -1660,7 +1698,7 @@ Proof.
     assert ((loopschedule l (viv le2)) < loopub l)%nat.
     apply inrange_forward0. auto.
 
-    assert (Z.of_nat (loopub l) < Int.max_unsigned).
+    assert (Z.of_nat (loopub l) < Int64.max_unsigned).
     apply (loopub_in_range_witness l).
 
 
@@ -2158,7 +2196,7 @@ End LOOPWRITELOCATIONS.
       
 Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
   forall (lub: upperbound)
-    (lub_in_range: Z.of_nat lub < Int.max_unsigned)
+    (lub_in_range: Z.of_nat lub < Int64.max_unsigned)
     (ivname: ident)
     (le: loopenv)
     (m: mem)
