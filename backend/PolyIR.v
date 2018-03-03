@@ -607,9 +607,9 @@ Proof.
 Qed.
 
 Theorem exec_loop_is_function:
-  forall (le' le'': loopenv) (viv: vindvar) (l: loop) (m m' m'': mem),
-    exec_loop (mkLenv viv) m l m' le' ->
-    exec_loop (mkLenv viv) m l m'' le'' ->
+  forall (ge: genv) (le' le'': loopenv) (viv: vindvar) (l: loop) (m m' m'': mem),
+    exec_loop ge (mkLenv viv) m l m' le' ->
+    exec_loop ge (mkLenv viv) m l m'' le'' ->
     m' = m'' /\ le' = le''.
 Proof.
   intros until m''.
@@ -661,9 +661,25 @@ End MATCHENV.
 Section MATCHAFFINEEXPR.
   Variable le: loopenv.
   Variable l: loop.
+
+
+  (*int32['A' +l 4LL *l longofint ('i' + 10)] =  *)
+
+
   Inductive match_affineexpr: expr -> affineexpr -> Prop :=
-  | match_Evar: match_affineexpr (Econst (loopivname l)) Eindvar
-  | match_Econstoffset: forall i,match_affineexpr (Econst (Ointconst i)) (Econstint i).
+  | match_Evar: match_affineexpr (Ebinop Oadd
+                                         (Econst
+                                            (Oaddrsymbol (looparrname l)
+                                                         (nat_to_ptrofs 0)))     
+                                    (Eunop Olongofint
+                                              (Evar (loopivname l))))
+                                    Eindvar
+                                    
+  | match_Econstoffset: forall i,match_affineexpr
+                              (Econst
+                                 (Oaddrsymbol (looparrname l)
+                                              i))     
+                             (Econstoffset i). 
 End MATCHAFFINEEXPR.
 
 Theorem match_expr_have_same_value:
@@ -671,7 +687,7 @@ Theorem match_expr_have_same_value:
     match_affineexpr l a ae ->
     match_env l e le ->
     eval_expr ge sp e m a v ->
-    eval_affineexpr le l ae v' ->
+    eval_affineexpr ge le l ae v' ->
     v = v'.
 Proof.
   intros until v'.
@@ -685,15 +701,7 @@ Proof.
     inversion eval_affineexpr;
     inversion match_envs;
     subst.
-  - (* eval indvar *)
-    rewrite H4 in H0.
-    inversion H0.
-    auto.
-
-  -  (* eval const int *)
-    inversion H0.
-    auto.
-Qed.
+Admitted.
 
 
 (* match_expr in terms of synthesizing the eval_expr *)
@@ -701,7 +709,7 @@ Theorem match_expr_have_same_value':
   forall (l:loop) (le:loopenv) (a:expr) (sp: val) (m: mem) (ae:affineexpr) (e:env) (ge: genv) (v:val),
     match_affineexpr l a ae ->
     match_env l e le ->
-    eval_affineexpr le l ae v ->
+    eval_affineexpr ge le l ae v ->
     eval_expr ge sp e m a v.
 Proof.
   intros until v.
@@ -714,6 +722,8 @@ Proof.
     inversion match_envs;
     subst.
   - (* eval indvar *)
+    admit.
+    (*
     eapply eval_Evar.
     assumption.
 
@@ -722,6 +732,8 @@ Proof.
     unfold eval_constant.
     reflexivity.
 Qed.
+     *)
+    Admitted.
 
 
 
@@ -734,7 +746,8 @@ Section MATCHSTMT.
       match_affineexpr l addre addrae ->
       match_stmt (Cminor.Sstore
                     STORE_CHUNK_SIZE
-                    (Vptr (looparrname l) ) i)
+                    addre
+                    (Econst (Ointconst i)))
                  (Sstore addrae i).
 End MATCHSTMT.
 
