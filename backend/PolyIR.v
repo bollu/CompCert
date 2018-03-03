@@ -253,7 +253,7 @@ Lemma transfer_nat_ge_to_int_ltu:
     (n1 >= n2)%nat ->
     Z.of_nat n1 <= Int64.max_unsigned ->
     Z.of_nat n2 <= Int64.max_unsigned ->
-    Int64.ltu (nat_to_int n1) (nat_to_int n2) = false.
+    Int64.ltu (nat_to_int64 n1) (nat_to_int64 n2) = false.
 Proof.
   intros until n2.
   intros n1_lt_n2.
@@ -261,7 +261,7 @@ Proof.
   intros n1_lt_max_unsigned.
   intros n2_lt_max_unsigned.
   
-  unfold nat_to_int.
+  unfold nat_to_int64.
   unfold Int64.ltu.
   rewrite Int64.unsigned_repr.
   rewrite Int64.unsigned_repr.
@@ -757,14 +757,15 @@ Proof.
     assumption.
     assert (Z.of_nat (loopub l) < Int64.max_unsigned) as loopub_in_range.
     eapply (loopub_in_range_witness l).
-
-    admit.
+    omega.
     split.
-    omega. unfold Ptrofs.max_unsigned.
-    unfold Ptrofs.modulus.
-    unfold Ptrofs.wordsize.
-    unfold Wordsize_Ptrofs.wordsize.
-    destruct Archi.ptr64; simpl; omega.
+    omega.
+    unfold Ptrofs.max_unsigned.
+    rewrite Ptrofs.modulus_eq64.
+    unfold Int64.modulus.
+    simpl.
+    omega.
+    eassumption.
 
   +  inversion archi_ptr64_true.
 
@@ -772,7 +773,7 @@ Proof.
     reflexivity.
   - inversion eval_expr; subst. inversion H1. subst.
     reflexivity.
-Admitted.
+Qed.
 
     
 
