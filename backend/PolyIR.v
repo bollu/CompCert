@@ -556,15 +556,15 @@ Qed.
   
 
 Theorem eval_affineexpr_is_function:
-  forall (le: loopenv) (l: loop) (ae: affineexpr) (v v': val),
-    eval_affineexpr le l ae v ->
-    eval_affineexpr le l ae v' ->
-    v = v'.
+  forall (le: loopenv) (l: loop) (ae: affineexpr) (ofs ofs': ptrofs),
+    eval_affineexpr le l ae ofs ->
+    eval_affineexpr le l ae ofs' ->
+    ofs = ofs'.
 Proof.
-  intros until v'.
-  intros eval_v.
-  intros eval_v'.
-  induction ae; inversion eval_v; inversion eval_v'; subst; try auto.
+  intros until ofs'.
+  intros eval_ofs.
+  intros eval_ofs'.
+  induction ae; inversion eval_ofs; inversion eval_ofs'; subst; try auto.
 Qed.
 
 
