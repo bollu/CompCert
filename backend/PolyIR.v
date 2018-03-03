@@ -678,7 +678,6 @@ End MATCHAFFINEEXPR.
 Theorem match_expr_have_same_value:
   forall (l:loop) (le:loopenv) (a:expr) (sp: val) (m: mem) (ae:affineexpr) (e:env) (ge: genv) (v v':val),
     Archi.ptr64 = true ->
-
     (viv le < loopub l)%nat ->
     match_affineexpr l a ae ->
     match_env l e le ->
@@ -777,47 +776,8 @@ Qed.
 
     
 
-  
 
 
-  
-
-
-
-
-Admitted.
-
-
-(* match_expr in terms of synthesizing the eval_expr *)
-Theorem match_expr_have_same_value':
-  forall (l:loop) (le:loopenv) (a:expr) (sp: val) (m: mem) (ae:affineexpr) (e:env) (ge: genv) (v:val),
-    match_affineexpr l a ae ->
-    match_env l e le ->
-    eval_affineexpr ge le l ae v ->
-    eval_expr ge sp e m a v.
-Proof.
-  intros until v.
-  intros match_exprs.
-  intros match_envs.
-  intros eval_affineexpr.
-  
-  induction match_exprs;
-    inversion eval_affineexpr;
-    inversion match_envs;
-    subst.
-  - (* eval indvar *)
-    admit.
-    (*
-    eapply eval_Evar.
-    assumption.
-
-  -  (* eval const int *)
-    eapply eval_Econst.
-    unfold eval_constant.
-    reflexivity.
-Qed.
-     *)
-    Admitted.
 
 
 
@@ -837,6 +797,7 @@ End MATCHSTMT.
 
 Theorem match_stmt_has_same_effect:
   forall (le: loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m' m'': mem) (ge: genv) (e e': env) (t: trace) (o: outcome),
+    Archi.ptr64 = true ->
     match_env l e le ->
     Cminor.exec_stmt ge f sp e m cms t e' m' o ->
     exec_stmt ge le l m s m'' ->
@@ -844,6 +805,7 @@ Theorem match_stmt_has_same_effect:
     m' = m'' /\ e = e' /\ t = E0 /\ o = Out_normal.
 Proof.
   intros until o.
+  intros arch64.
   intros matchenv.
   intros exec_cms.
   intros exec_s.
@@ -852,12 +814,12 @@ Proof.
   inversion exec_s.
   inversion exec_cms.
   subst.
-  assert (vaddr0 = ofs) as vaddreq.
+  assert (vaddr0 = vaddr) as vaddreq.
   eapply match_expr_have_same_value; eassumption.
   subst.
 
   assert (v = Vint i) as veq.
-  rename H21 into eval_v.
+  rename H22 into eval_v.
   inversion eval_v.
   subst.
   inversion H1. subst.
@@ -865,8 +827,8 @@ Proof.
   subst.
   
   assert (Some m' = Some m'') as meq.
-  rename H22 into store_into_m'.
-  rename H8 into store_into_m''.
+  rename H23 into store_into_m'.
+  rename H9 into store_into_m''.
   
   rewrite <- store_into_m'.
   rewrite <- store_into_m''.
