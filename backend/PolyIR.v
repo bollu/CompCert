@@ -82,98 +82,100 @@ Notation vindvar := nat.
 Notation indvar := nat.
 Notation upperbound := nat.
 
-Definition nat_to_int (n: nat): int := (Int.repr (Z.of_nat n)).
+(* Definition nat_to_int (n: nat): int := (Int.repr (Z.of_nat n)). *)
+Definition nat_to_int64 (n: nat): int64 := (Int64.repr (Z.of_nat n)).
 Definition nat_to_ptrofs (n: nat): ptrofs := (Ptrofs.repr (Z.of_nat n)).
-Definition nat_to_val (n: nat): val := Vint (nat_to_int  n).
+Definition nat_to_vlong (n: nat): val := Vlong (nat_to_int64  n).
 
-Lemma nat_to_int_inj:
+Lemma nat_to_int64_inj:
   forall (n n': nat),
-    Z.of_nat n < Int.modulus ->
-    Z.of_nat n' < Int.modulus -> 
-    nat_to_int n = nat_to_int n' -> n = n'.
+    Z.of_nat n < Int64.modulus ->
+    Z.of_nat n' < Int64.modulus -> 
+    nat_to_int64 n = nat_to_int64 n' -> n = n'.
 Proof.
   intros until n'.
   intros n_inrange n'_inrange.
   
   intros eq_as_int.
   unfold nat_to_int in eq_as_int.
-  apply Int.repr_of_nat_inj.
+  apply Int64.repr_of_nat_inj.
   omega.
   omega.
   eassumption.
 Qed.
 
-Lemma nat_to_int_neq:
+Lemma nat_to_int64_neq:
   forall (n n': nat),
-    Z.of_nat n < Int.modulus ->
-    Z.of_nat n' < Int.modulus ->
+    Z.of_nat n < Int64.modulus ->
+    Z.of_nat n' < Int64.modulus ->
     n <> n' ->
-    nat_to_int n <> nat_to_int n'.
+    nat_to_int64 n <> nat_to_int64 n'.
   intros until n'.
   intros n_inrange n'_inrange.
 
   intros neq_as_nat.
-  assert ({nat_to_int n = nat_to_int n'} + {nat_to_int n <> nat_to_int n'}) as nat_to_int_cases.
-  apply Int.eq_dec.
+  assert ({nat_to_int64 n = nat_to_int64 n'} +
+          {nat_to_int64 n <> nat_to_int64 n'}) as nat_to_int_cases.
+  apply Int64.eq_dec.
   destruct nat_to_int_cases as [n_eq | n_neq].
 
   - assert (n = n') as contra.
-  apply nat_to_int_inj; assumption.
+  apply nat_to_int64_inj; assumption.
   omega.
   -  auto.
 Qed.
 
 
 
-Lemma nat_to_val_inj:
+Lemma nat_to_vlong_inj:
   forall (n n': nat),
-    Z.of_nat n < Int.modulus ->
-    Z.of_nat n' < Int.modulus -> 
-    nat_to_val n = nat_to_val n' -> n = n'.
+    Z.of_nat n < Int64.modulus ->
+    Z.of_nat n' < Int64.modulus -> 
+    nat_to_vlong n = nat_to_vlong n' -> n = n'.
 Proof.
   intros until n'.
   intros untiil n_lt_mod n'_lt_mod.
-  unfold nat_to_val in n'_lt_mod.
+  unfold nat_to_vlong in n'_lt_mod.
 
-  assert (forall i j, Vint i = Vint j -> i = j) as inversion_Vint.
+  assert (forall i j, Vlong i = Vlong j -> i = j) as inversion_Vlong.
   intros until j.
-  intros vint_eq.
-  inversion vint_eq.
+  intros eq.
+  inversion eq.
   reflexivity.
   
   (* TODO: why do I need this? *)
-  assert (nat_to_int n = nat_to_int n').
-  eapply inversion_Vint.
+  assert (nat_to_int64 n = nat_to_int64 n').
+  eapply inversion_Vlong.
   assumption.
 
-  apply nat_to_int_inj; assumption.
+  apply nat_to_int64_inj; assumption.
 Qed.
 
   
-Lemma nat_to_val_neq_1:
+Lemma nat_to_vlong_neq_1:
   forall (n n': nat),
-    nat_to_val n <> nat_to_val n' -> n <> n'.
+    nat_to_vlong n <> nat_to_vlong n' -> n <> n'.
 Proof.
   intros until n'.
 
-  intros nat_to_val_neq.
+  intros nat_to_vlong_neq.
 
   assert (n = n' \/ n <> n') as ncases.
   omega.
   destruct ncases as [n_eq | n_neq].
-  - assert (nat_to_val n = nat_to_val n') as contra.
+  - assert (nat_to_vlong n = nat_to_vlong n') as contra.
     rewrite n_eq. reflexivity.
     contradiction.
   -  auto.
 Qed.
 
 
-Lemma nat_to_val_neq_2:
+Lemma nat_to_vlong_neq_2:
   forall (n n': nat),
-    Z.of_nat n < Int.modulus ->
-    Z.of_nat n' < Int.modulus ->
+    Z.of_nat n < Int64.modulus ->
+    Z.of_nat n' < Int64.modulus ->
     n <> n' ->
-    nat_to_val n <> nat_to_val n'.
+    nat_to_vlong n <> nat_to_vlong n'.
 Proof.
   intros until n'.
   intros n_lt_mod.
@@ -181,13 +183,13 @@ Proof.
 
   intros neq.
 
-  assert (nat_to_val n = nat_to_val n' \/ nat_to_val n <> nat_to_val n') as
-      nat_to_val_cases.
+  assert (nat_to_vlong n = nat_to_vlong n' \/ nat_to_vlong n <> nat_to_vlong n') as
+      nat_to_vlong_cases.
   apply val_eq_dec.
 
-  destruct nat_to_val_cases as [v_eq | v_neq].
+  destruct nat_to_vlong_cases as [v_eq | v_neq].
   - assert (n = n') as contra.
-    apply nat_to_val_inj; assumption.
+    apply nat_to_vlong_inj; assumption.
     omega.
   -  auto.
 Qed.
@@ -210,7 +212,7 @@ Proof.
   split.
   omega.
   unfold Int.max_unsigned.
-  unfold Int.modulus.
+  unfold Int64.modulus.
   unfold Int.wordsize.
   simpl.
   omega.
@@ -502,14 +504,14 @@ Section EXEC_STMT.
                    (le: loopenv)
                    (l: loop)
                    (m m': mem)
-                   (addr: affineexpr) (i: int) (aval: val),
+                   (eaddr: affineexpr) (i: int) (vaddr: val),
       (viv le < loopub l)%nat ->
-      eval_affineexpr ge le l addr aval  ->
+      eval_affineexpr ge le l eaddr vaddr  ->
       Mem.storev STORE_CHUNK_SIZE
                  m
-                 aval
+                 vaddr
                  (Vint i) = Some m' ->
-      exec_stmt ge le l m (Sstore addr i) m'.
+      exec_stmt ge le l m (Sstore eaddr i) m'.
 
   Lemma exec_stmt_is_useless:
     forall ge le l m s m',
@@ -589,7 +591,7 @@ Proof.
   intros eval_m.
   intros eval_m'.
   induction s; inversion eval_m;inversion eval_m'; subst; try auto.
-  assert(aval = aval0) as veq.
+  assert(vaddr0 = vaddr) as veq.
   eapply eval_affineexpr_is_function; eassumption.
   subst.
 
@@ -629,11 +631,11 @@ Qed.
 
 Section MATCHENV.
   Definition match_env (l: loop) (e: env) (le: loopenv) : Prop :=
-    e ! (loopivname  l) = Some (nat_to_val (loopschedule l (viv le))).
+    e ! (loopivname  l) = Some (nat_to_vlong (loopschedule l (viv le))).
 
 Definition env_incr_iv_wrt_loop (le: loopenv) (l: loop) (e: env) : env :=
   PTree.set (loopivname l)
-            (nat_to_val(loopschedule l (viv le + 1)%nat))
+            (nat_to_vlong(loopschedule l (viv le + 1)%nat))
             e.
 
 
@@ -667,12 +669,11 @@ Section MATCHAFFINEEXPR.
 
 
   Inductive match_affineexpr: expr -> affineexpr -> Prop :=
-  | match_Evar: match_affineexpr (Ebinop Oadd
+  | match_Evar: match_affineexpr (Ebinop Oaddl
                                          (Econst
                                             (Oaddrsymbol (looparrname l)
                                                          (nat_to_ptrofs 0)))     
-                                    (Eunop Olongofint
-                                              (Evar (loopivname l))))
+                                              (Evar (loopivname l)))
                                     Eindvar
                                     
   | match_Econstoffset: forall i,match_affineexpr
@@ -701,6 +702,50 @@ Proof.
     inversion eval_affineexpr;
     inversion match_envs;
     subst.
+
+  rename H2 into eval_baseptr.
+  rename H4 into eval_loopiv.
+  rename H5 into eval_baseptr_plus_loopiv.
+  rename H8 into loopiv_eq_sched.
+  rename v1 into vbaseptr.
+  rename v2 into loopiv.
+
+  assert (Genv.symbol_address ge (looparrname l) (nat_to_ptrofs 0) = vbaseptr) as
+      vbseptr_val.
+  inversion eval_baseptr; subst.
+  inversion H0.
+  auto.
+  subst.
+
+  inversion eval_baseptr_plus_loopiv.
+  subst.
+
+  inversion eval_loopiv. subst.
+
+
+
+  assert (Some loopiv = Some (nat_to_vlong (loopschedule l (viv le)))) as loopivnameq.
+  rename H0 into e_at_loopivname.
+  rewrite <- loopiv_eq_sched.
+  rewrite <- e_at_loopivname.
+  reflexivity.
+
+  inversion loopivnameq.
+  subst.
+
+  unfold Genv.symbol_address.
+
+  remember (Genv.find_symbol ge (looparrname l)) as maybe_arrbase.
+  destruct (maybe_arrbase).
+  unfold Val.addl.
+  simpl.
+  destruct Archi.ptr64.
+
+  
+
+
+
+
 Admitted.
 
 
@@ -755,7 +800,7 @@ Theorem match_stmt_has_same_effect:
   forall (le: loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m' m'': mem) (ge: genv) (e e': env) (t: trace) (o: outcome),
     match_env l e le ->
     Cminor.exec_stmt ge f sp e m cms t e' m' o ->
-    exec_stmt le l m s m'' ->
+    exec_stmt ge le l m s m'' ->
     match_stmt l  cms s ->
     m' = m'' /\ e = e' /\ t = E0 /\ o = Out_normal.
 Proof.
@@ -852,7 +897,7 @@ Lemma eval_iv_lt_ub_false:
   forall (e: env) (ivname: ident) (viv: nat) (ub: upperbound),
     Z.of_nat viv <= Int.max_unsigned ->
     (viv >= ub)%nat ->
-    e ! ivname = Some (nat_to_val viv) ->
+    e ! ivname = Some (nat_to_vlong viv) ->
     eval_expr ge sp e m 
               (Ebinop
                  (Ocmpu Clt)
@@ -873,7 +918,7 @@ Proof.
   unfold eval_binop.
   unfold Val.cmpu.
   unfold Val.cmpu_bool.
-  unfold nat_to_val.
+  unfold nat_to_vlong.
   unfold Val.of_optbool.
   unfold Int.cmpu.
   rewrite transfer_nat_ge_to_int_ltu.
@@ -893,7 +938,7 @@ Lemma eval_iv_lt_ub_true:
   forall (e: env) (ivname: ident) (viv: nat) (ub: upperbound),
     Z.of_nat ub < Int.max_unsigned ->
     (viv < ub)%nat ->
-    e ! ivname = Some (nat_to_val viv) ->
+    e ! ivname = Some (nat_to_vlong viv) ->
     eval_expr ge sp e m 
               (Ebinop
                  (Ocmpu Clt)
@@ -914,7 +959,7 @@ Proof.
   unfold eval_binop.
   unfold Val.cmpu.
   unfold Val.cmpu_bool.
-  unfold nat_to_val.
+  unfold nat_to_vlong.
   unfold Val.of_optbool.
   unfold Int.cmpu.
   rewrite transfer_nat_lt_to_int_lt.
@@ -1159,7 +1204,7 @@ Proof.
     rewrite e1_is_incr_e_at_loopivname.
     unfold env_incr_iv_wrt_loop.
     unfold incr_env_by_1.
-    unfold nat_to_val.
+    unfold nat_to_vlong.
     unfold nat_to_int.
     rewrite lval. simpl.
     assert (lsched = id) as lsched_id.
@@ -1564,11 +1609,11 @@ Proof.
     apply (loopub_in_range_witness l).
 
     
-    assert (Int.max_unsigned < Int.modulus).
+    assert (Int.max_unsigned < Int64.modulus).
     unfold Int.max_unsigned.
     omega.
     
-    apply nat_to_val_neq_2; omega.
+    apply nat_to_vlong_neq_2; omega.
 
   - (* Econstoffset, not injective *)
     inversion inj.
@@ -1601,7 +1646,7 @@ Proof.
     rename H0 into v_as_le1.
     rename H1 into v_as_le2.
 
-    assert (Int.max_unsigned < Int.modulus).
+    assert (Int.max_unsigned < Int64.modulus).
     unfold Int.max_unsigned.
     omega.
 
@@ -1621,7 +1666,7 @@ Proof.
 
     
     assert (loopschedule l (viv le1) = loopschedule l (viv le2)) as indvar_eq.
-    apply nat_to_val_inj.
+    apply nat_to_vlong_inj.
     omega.
     omega.
     rewrite v_as_le1, v_as_le2.
@@ -1680,7 +1725,7 @@ Proof.
   intros eval_old.
   induction ae.
   - remember (equivalent_lenv leold lold lnew) as lenew.
-    assert (v = nat_to_val (loopschedule lnew (viv lenew))) as v_eq_indvar.
+    assert (v = nat_to_vlong (loopschedule lnew (viv lenew))) as v_eq_indvar.
     inversion eval_old. subst.
     unfold equivalent_lenv.
     simpl.
