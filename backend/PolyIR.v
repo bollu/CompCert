@@ -97,7 +97,7 @@ Proof.
   intros n_inrange n'_inrange.
   
   intros eq_as_int.
-  unfold nat_to_int in eq_as_int.
+  unfold nat_to_int64 in eq_as_int.
   apply Int64.repr_of_nat_inj.
   omega.
   omega.
@@ -1067,7 +1067,7 @@ Section MATCHLOOP.
       loopscheduleinv l = id ->
       match_stmt l cm_inner_stmt (loopstmt l) ->
       match_loop (oned_loop_incr_by_1
-                    (nat_to_int (loopub l))
+                    (nat_to_int64 (loopub l))
                     (loopivname l)
                     (cm_inner_stmt))
                  l.
@@ -1096,6 +1096,7 @@ Qed.
 
   
 Theorem match_loop_has_same_effect:
+  Archi.ptr64 = true ->
   forall ge le m l mloop le',
     exec_loop ge le m l  mloop le' ->
     forall (lub: nat)
@@ -1111,7 +1112,6 @@ Theorem match_loop_has_same_effect:
       (sp: val)
       (cms: Cminor.stmt)
       (mblock: mem)
-      (ge: genv)
       (e eblock: env),
     le = mkLenv iv ->
     l = mkLoop lub lub_in_range ivname arrname loopstmt lsched lschedinv lschedwitness ->
@@ -1120,6 +1120,7 @@ Theorem match_loop_has_same_effect:
     match_loop cms l ->
     mloop = mblock /\  match_env l eblock le'.
 Proof.
+  intros arch64.
   intros until le'.
   intros execl.
   induction execl.
@@ -1143,11 +1144,12 @@ Proof.
     
     assert (eval_expr ge sp e m
                       (Ebinop
-                         (Ocmpu Clt)
+                         (Ocmplu Clt)
                          (Evar (loopivname l))
-                         (Econst (Ointconst (nat_to_int (loopub l))))) Vfalse)
+                         (Econst (Olongconst (nat_to_int64 (loopub l))))) Vfalse)
       as iv_geq_ub.
     eapply eval_iv_lt_ub_false with (viv := iv).
+    omega.
     omega.
     rewrite <- viv_le_is_iv.
     omega.
@@ -1205,9 +1207,9 @@ Proof.
     intros lval leval.
 
     assert (eval_expr ge sp e m 
-                      (Ebinop (Ocmpu Clt)
+                      (Ebinop (Ocmplu Clt)
                               (Evar (loopivname l))
-                              (Econst (Ointconst (nat_to_int (loopub l)))))
+                              (Econst (Olongconst (nat_to_int64 (loopub l)))))
                       Vtrue) as iv_lt_ub_true.
     eapply eval_iv_lt_ub_true.
     rewrite lval. simpl.
@@ -1255,6 +1257,7 @@ Proof.
     eassumption.
     eassumption.
     eassumption.
+    eassumption.
     eapply match_stmt_does_not_alias.
     eassumption.
     (* ---- *)
@@ -1268,11 +1271,12 @@ Proof.
     unfold id in e_at_ivname.
     
     assert (env_incr_iv_wrt_loop le l e = e1) as eeq.
-    assert (e1 = incr_env_by_1 e (loopivname l) (nat_to_int iv)) as
+    assert (e1 = incr_env_by_1 e (loopivname l) (nat_to_int64 iv)) as
         e1_is_incr_e_at_loopivname.
     eapply continue_sblock_incr_by_1_sseq_sif.
     eapply iv_lt_ub_true.
     eapply match_stmt_has_same_effect'.
+    eassumption.
     eassumption.
     eassumption.
     eassumption.
@@ -1285,7 +1289,7 @@ Proof.
     unfold env_incr_iv_wrt_loop.
     unfold incr_env_by_1.
     unfold nat_to_vlong.
-    unfold nat_to_int.
+    unfold nat_to_int64.
     rewrite lval. simpl.
     assert (lsched = id) as lsched_id.
     rewrite <- loopsched.
