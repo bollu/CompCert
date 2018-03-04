@@ -986,16 +986,18 @@ Lemma eval_iv_lt_ub_false:
   forall (ge: genv) (sp: val) (m: mem),
   forall (e: env) (ivname: ident) (viv: nat) (ub: upperbound),
     Z.of_nat viv <= Int64.max_unsigned ->
+    Z.of_nat ub <= Int64.max_unsigned ->
     (viv >= ub)%nat ->
     e ! ivname = Some (nat_to_vlong viv) ->
     eval_expr ge sp e m 
               (Ebinop
-                 (Ocmpl Clt)
+                 (Ocmplu Clt)
                  (Evar ivname)
                  (Econst (Olongconst (nat_to_int64 ub)))) Vfalse.
 Proof.
   intros until ub.
-  intros ub_lt_max_unsigned.
+  intros viv_le_max_unsigned.
+  intros ub_le_max_unsigned.
   intros viv_lt_ub.
   intros e_at_ivname_is_viv.
   eapply eval_Ebinop.
@@ -1006,18 +1008,17 @@ Proof.
   auto.
 
   unfold eval_binop.
-  unfold Val.cmpl.
-  unfold Val.cmpl_bool.
+  unfold Val.cmplu.
+  unfold Val.cmplu_bool.
   unfold nat_to_vlong.
   unfold Int.cmpu.
   simpl.
 
   assert (Int64.ltu (nat_to_int64 viv0) (nat_to_int64 ub) = false).
-  rewrite transfer_nat_ge_to_int_ltu.
+  rewrite transfer_nat_ge_to_int_ltu; try assumption; try auto.
+  rewrite H.
   reflexivity.
-  eassumption.
-  eassumption.
-Admitted.
+Qed.
 
 Lemma eval_iv_lt_ub_true:
   forall (ge: genv) (sp: val) (m: mem),
@@ -1027,7 +1028,7 @@ Lemma eval_iv_lt_ub_true:
     e ! ivname = Some (nat_to_vlong viv) ->
     eval_expr ge sp e m 
               (Ebinop
-                 (Ocmpl Clt)
+                 (Ocmplu Clt)
                  (Evar ivname)
                  (Econst (Olongconst (nat_to_int64 ub)))) Vtrue.
 Proof.
@@ -1043,29 +1044,17 @@ Proof.
   auto.
 
   unfold eval_binop.
-  unfold Val.cmpl.
-  unfold Val.cmpl_bool.
+  unfold Val.cmplu.
+  unfold Val.cmplu_bool.
   unfold nat_to_vlong.
-  unfold Int64.cmp.
+  unfold Int64.cmpu.
 
-  assert (Int64.lt (nat_to_int64 viv0)
-                   (nat_to_int64 ub) = true).
-  Admitted.
-(*
-  rewrite transfer_nat_lt_to_int_lt.
+  assert (Int64.ltu (nat_to_int64 viv0)
+                    (nat_to_int64 ub) = true) as int_viv_ltu_ub.
+  eapply  transfer_nat_lt_to_int_lt; try assumption; try omega.
+  rewrite int_viv_ltu_ub.
   reflexivity.
-  eassumption.
-
-  assert (Z.of_nat viv0 < Z.of_nat ub) as z_viv0_lt_ub.
-  apply Znat.inj_lt.
-  assumption.
-
-  eapply Z.le_trans with (m := Z.of_nat ub).
-  omega.
-  omega.
-  omega.
 Qed.
-*)
 
   
 
