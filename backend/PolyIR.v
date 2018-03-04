@@ -2318,22 +2318,44 @@ End MEMORYINLOOP.
 a loop writes to a memory location or not, and reason about this fact
 *)
 Section LOOPWRITELOCATIONS.
-  (* Definition StmtWriteLocation (s: stmt) (viv: vindvar) : block * positive. *)
+
+  Variable ge: genv.
+  Variable  l: loop.
+  Definition affineexprWriteLocation
+             (ae: affineexpr) (viv: vindvar) : val :=
+    (Genv.symbol_address ge
+                         (looparrname l)
+                         (nat_to_ptrofs (loopschedule l viv))).
+    
+             
+    
+
+  Definition StmtWriteLocation (s: stmt) (viv: vindvar) : val :=
+    match s with
+      Sstore ae _ => affineexprWriteLocation ae viv
+    end.
         
       
     
 
 (* locations that are written to by a loop *)
-Definition LoopWriteLocations_rec (l: loop) (viv: vindvar) : list (block * positive) :=
-  if (loopub l <=? viv)%nat
-  then List.nil
-  else List.nil.
-         
+  Program Fixpoint LoopWriteLocations_rec (viv: vindvar) (count: nat) {struct count} : list val :=
+    match count with
+    | O => List.nil
+    | S count' =>
+      if (loopub l <=? viv)%nat
+      then List.nil
+      else List.cons
+             (StmtWriteLocation (loopstmt l) viv)
+             (LoopWriteLocations_rec (viv + 1)%nat count')
+    end.
+
                                                                   
-Definition LoopWriteLocations (l: loop):list (block * positive) :=
-  LoopWriteLocations_rec l 0%nat.
+Definition LoopWriteLocations : list val :=
+  LoopWriteLocations_rec 0%nat (loopub l).
 
 End LOOPWRITELOCATIONS.
+
       
   
       
