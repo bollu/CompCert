@@ -134,23 +134,33 @@ Lemma nat_to_vlong_inj:
     nat_to_vlong n = nat_to_vlong n' -> n = n'.
 Proof.
   intros until n'.
-  intros untiil n_lt_mod n'_lt_mod.
-  unfold nat_to_vlong in n'_lt_mod.
+  intros ninrange n'inrange nptreq.
+  unfold nat_to_vlong in nptreq.
 
-  assert (forall i j, Vlong i = Vlong j -> i = j) as inversion_Vlong.
-  intros until j.
-  intros eq.
-  inversion eq.
-  reflexivity.
   
-  (* TODO: why do I need this? *)
-  assert (nat_to_int64 n = nat_to_int64 n').
-  eapply inversion_Vlong.
-  assumption.
+  assert (nat_to_int64 n = nat_to_int64 n') as nateq.
 
+  assert (forall i i', Vlong i = Vlong i' -> i = i').
+  intros.
+  inversion H. auto.
+  apply H.
+  auto.
   apply nat_to_int64_inj; assumption.
 Qed.
 
+
+
+Lemma nat_to_ptrofs_inj:
+  forall (n n': nat),
+    Z.of_nat n < Int64.modulus ->
+    Z.of_nat n' < Int64.modulus -> 
+    nat_to_ptrofs n = nat_to_ptrofs n' -> n = n'.
+Proof.
+  intros until n'.
+  intros ninrange n'inrange nptreq.
+  unfold nat_to_ptrofs in nptreq.
+  apply Ptrofs.repr_of_nat_inj; assumption.
+Qed.
   
 Lemma nat_to_vlong_neq_1:
   forall (n n': nat),
@@ -194,6 +204,32 @@ Proof.
   -  auto.
 Qed.
 
+
+Lemma nat_to_ptrofs_neq_2:
+  forall (n n': nat),
+    Z.of_nat n < Int64.modulus ->
+    Z.of_nat n' < Int64.modulus ->
+    n <> n' ->
+    nat_to_ptrofs n <> nat_to_ptrofs n'.
+  Proof.
+    intros until n'.
+    intros n_lt_mod.
+    intros n'_lt_mod.
+
+    intros neq.
+
+    assert ({nat_to_ptrofs n = nat_to_ptrofs n'} +
+            {nat_to_ptrofs n <> nat_to_ptrofs n'}) as cases.
+    unfold nat_to_ptrofs.
+    eapply Ptrofs.eq_dec.
+
+    destruct cases as [ofseq | ofsneq].
+    - assert (n = n').
+      unfold nat_to_ptrofs in ofseq.
+      apply Ptrofs.repr_of_nat_inj; try eassumption.
+      omega.
+    - auto.
+Qed.
 Lemma transfer_nat_add_to_int_add:
   forall (n: nat),
     Z.of_nat n < Int64.max_unsigned ->
@@ -1385,20 +1421,22 @@ Qed.
 if there exists a value for the virtual loop indvar such that
 if executed, the loop will take that value *)
 Definition affineexpr_takes_value_in_loop
+           (ge: genv)
            (l: loop)
            (ae: affineexpr)
            (v: val) : Prop :=
   exists (vivval: nat), (0 <= vivval < (loopub l))%nat /\
-                 eval_affineexpr (mkLenv vivval) l ae v.
+                 eval_affineexpr ge (mkLenv vivval) l ae v.
 
 
 
 Definition affineexpr_does_not_take_value_in_loop
+           (ge: genv)
            (l: loop)
            (ae: affineexpr)
            (val_notake: val) : Prop :=
   forall (vivval: nat) (v: val), (0 <= vivval < (loopub l))%nat /\
-                          eval_affineexpr (mkLenv vivval) l ae v ->
+                          eval_affineexpr ge (mkLenv vivval) l ae v ->
                           v <> val_notake.
   
 
@@ -1406,9 +1444,10 @@ Definition affineexpr_does_not_take_value_in_loop
 of loop induction variable not taking a value *)
 Lemma not_affineexpr_takes_value_equivalence:
   forall (l: loop)
+    (ge: genv)
     (ae: affineexpr)
     (v: val),
-    ~affineexpr_takes_value_in_loop l ae v <->  affineexpr_does_not_take_value_in_loop l ae v.
+    ~affineexpr_takes_value_in_loop ge l ae v <->  affineexpr_does_not_take_value_in_loop ge l ae v.
 Proof.
   intros until v.
   split.
@@ -1451,11 +1490,12 @@ Qed.
 
                         
 Definition stmt_does_not_write_to_ix_in_loop
+           (ge: genv)
            (l: loop)
            (s: stmt)
            (val_notake: val) : Prop :=
   match s with
-  | Sstore ae _ => affineexpr_does_not_take_value_in_loop l ae val_notake
+  | Sstore ae _ => affineexpr_does_not_take_value_in_loop ge l ae val_notake
   end.
 
 (* A statement writes to an index in a loop if
@@ -1463,16 +1503,18 @@ it is a store statement, and the index expression takes
 on the value in the loop
  *) 
 Definition stmt_writes_ix_in_loop
+           (ge: genv)
            (l: loop)
            (s: stmt)
            (v: val) : Prop :=
   match s with
-  | Sstore ae _ => affineexpr_takes_value_in_loop l ae v
+  | Sstore ae _ => affineexpr_takes_value_in_loop ge l ae v
   end.
 
 Lemma not_stmt_writes_ix_in_loop_equivalence:
-  forall (l: loop) (s: stmt) (v: val),
-    ~ (stmt_writes_ix_in_loop l s v) <-> stmt_does_not_write_to_ix_in_loop l s v.
+  forall (ge: genv) (l: loop) (s: stmt) (v: val),
+    ~ (stmt_writes_ix_in_loop ge l s v) <->
+    stmt_does_not_write_to_ix_in_loop ge l s v.
 Proof.
   intros.
   unfold not.
@@ -1591,10 +1633,10 @@ Qed.
 memory, if the index of access memix has *not* been written to
 by the loop, then the memory remains the same *)
 Lemma mem_unchanged_if_stmt_does_not_write_to_ix_in_loop:
-  forall (l: loop) (le le': loopenv) (m m': mem)
+  forall (ge: genv) (l: loop) (le le': loopenv) (m m': mem)
     (readix: val),
-    exec_loop le m l m' le' ->
-    (stmt_does_not_write_to_ix_in_loop l (loopstmt l) readix) ->
+    exec_loop ge le m l m' le' ->
+    (stmt_does_not_write_to_ix_in_loop ge l (loopstmt l) readix) ->
     Mem.loadv STORE_CHUNK_SIZE m readix = Mem.loadv STORE_CHUNK_SIZE m' readix.
 Proof.
   intros until readix.
@@ -1610,12 +1652,11 @@ Proof.
     assert (Mem.loadv STORE_CHUNK_SIZE m' readix = Mem.loadv STORE_CHUNK_SIZE m readix ).
 
     inversion execstmt. subst.
-    rename ofs into writeaddr.
-    rename H6 into evalwriteexpr.
-    rename H8 into m'_as_store_m.
+    rename vaddr into writeaddr.
+    rename H7 into evalwriteexpr.
+    rename H9 into m'_as_store_m.
 
-    eapply loadv_storev_other.
-    eassumption.
+    eapply loadv_storev_other; try eassumption.
     
 
     assert (writeaddr <> readix) as write_ix_neq_readix.
@@ -1655,21 +1696,23 @@ Definition injective_stmt_b (s: stmt) : bool :=
   end.
 
 Lemma injective_affineexpr_1:
-  forall (ae: affineexpr) (l: loop) (le1 le2: loopenv)
-    (v1 v2: val),
+  forall (ae: affineexpr) (ge: genv) (l: loop) (le1 le2: loopenv)
+    (v1 v2: val) (arrblock: block),
     injective_affineexpr_b ae = true ->
     le1 <> le2 ->
     (viv le1 < loopub l)%nat ->
     (viv le2 < loopub l)%nat ->
-    eval_affineexpr le1 l ae v1 ->
-    eval_affineexpr le2 l ae v2 ->
+    eval_affineexpr ge le1 l ae v1 ->
+    eval_affineexpr ge le2 l ae v2 ->
+    Genv.find_symbol ge (looparrname l) = Some arrblock ->
     v1 <> v2.
 Proof.
-  intros until v2.
+  intros until arrblock.
   intros inj.
   intros le_neq.
   intros le1_inrange le2_inrange.
   intros eval_le1 eval_le2.
+  intros genv_at_arrname.
 
   induction ae.
 
@@ -1696,29 +1739,49 @@ Proof.
     assert (Int64.max_unsigned < Int64.modulus).
     unfold Int64.max_unsigned.
     omega.
-    
-    apply nat_to_vlong_neq_2; omega.
+    unfold Genv.symbol_address.
+    rewrite genv_at_arrname.
+
+    assert (nat_to_ptrofs (loopschedule l (viv le1)) <>
+           nat_to_ptrofs (loopschedule l (viv le2))).
+    apply nat_to_ptrofs_neq_2; omega.
+    congruence.
 
   - (* Econstoffset, not injective *)
     inversion inj.
 Qed.
     
   
+Lemma vptr_inversion:
+  forall (b b' : block) (ofs ofs': ptrofs),
+    Vptr b ofs = Vptr b' ofs' ->
+    b = b' /\ ofs = ofs'.
+Proof.
+  intros.
+  inversion H.
+  auto.
+Qed.
+
+  
+
+  
 
 Lemma injective_affineexpr_2:
-  forall (ae: affineexpr) (l: loop) (le1 le2: loopenv)
-    (v: val),
+  forall (ge: genv) (ae: affineexpr) (l: loop) (le1 le2: loopenv)
+    (v: val) (arrblock: block),
     injective_affineexpr_b ae = true ->
     (viv le1 < loopub l)%nat ->
     (viv le2 < loopub l)%nat ->
-    eval_affineexpr le1 l ae v ->
-    eval_affineexpr le2 l ae v ->
+    eval_affineexpr ge le1 l ae v ->
+    eval_affineexpr ge le2 l ae v ->
+    Genv.find_symbol ge (looparrname l) = Some arrblock ->
     le1 = le2.
 Proof.
-  intros until v.
+  intros until arrblock.
   intros inj.
   intros le1_inrange le2_inrange.
   intros eval_le1 eval_le2.
+  intros genv_at_arrname.
 
 
   induction ae.
@@ -1729,6 +1792,11 @@ Proof.
 
     rename H0 into v_as_le1.
     rename H1 into v_as_le2.
+
+    unfold Genv.symbol_address in *.
+    rewrite genv_at_arrname in *.
+
+    
 
     assert (Int64.max_unsigned < Int64.modulus).
     unfold Int64.max_unsigned.
@@ -1747,14 +1815,24 @@ Proof.
     assert (Z.of_nat (loopub l) < Int64.max_unsigned).
     apply (loopub_in_range_witness l).
 
+    assert (nat_to_ptrofs (loopschedule l(viv le1)) = 
+            nat_to_ptrofs (loopschedule l(viv le2))) as
+        indvar_eq_as_ptrofs.
+    eapply vptr_inversion.
+    rewrite <- v_as_le1 in v_as_le2.
+    symmetry.
+    eassumption.
+    
+
+
+
+    assert (Z.of_nat (loopub l)  < Int64.max_unsigned) as loopub_inrange.
+    eapply (loopub_in_range_witness l).
 
     
     assert (loopschedule l (viv le1) = loopschedule l (viv le2)) as indvar_eq.
-    apply nat_to_vlong_inj.
-    omega.
-    omega.
-    rewrite v_as_le1, v_as_le2.
-    auto.
+    apply nat_to_ptrofs_inj; try omega; try assumption.
+    
 
     assert (viv le1 = viv le2) as viv_eq.
     eapply inverseTillUb_inj_1.
@@ -1796,12 +1874,13 @@ Definition equivalent_lenv (leold: loopenv)
 
 (* Equivalent lenv actually gives us the correct value for affine expressions *)
 Lemma equivalent_lenv_equal_affineexpr: forall (leold: loopenv) (lold: loop) (lnew: loop),
-    forall (ae: affineexpr) (v: val),
+    forall (ge: genv)
+      (ae: affineexpr) (v: val),
       (viv leold < loopub lold)%nat ->
       (* TODO: this maybe too tight a requirement *)
       (loopub lold = loopub lnew) ->
-    eval_affineexpr leold lold ae v ->
-    eval_affineexpr (equivalent_lenv leold lold lnew) lnew ae v.
+    eval_affineexpr ge leold lold ae v ->
+    eval_affineexpr ge (equivalent_lenv leold lold lnew) lnew ae v.
 Proof.
   intros until v.
   intros viv_inrange.
