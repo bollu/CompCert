@@ -1879,21 +1879,33 @@ Lemma equivalent_lenv_equal_affineexpr: forall (leold: loopenv) (lold: loop) (ln
       (viv leold < loopub lold)%nat ->
       (* TODO: this maybe too tight a requirement *)
       (loopub lold = loopub lnew) ->
+      (looparrname lold = looparrname lnew) ->
     eval_affineexpr ge leold lold ae v ->
     eval_affineexpr ge (equivalent_lenv leold lold lnew) lnew ae v.
 Proof.
   intros until v.
   intros viv_inrange.
   intros loopub_equal.
+  intros looparrname_equal.
   intros eval_old.
   induction ae.
   - remember (equivalent_lenv leold lold lnew) as lenew.
-    assert (v = nat_to_vlong (loopschedule lnew (viv lenew))) as v_eq_indvar.
+
+    (*
+                    (Genv.symbol_address ge
+                                         (looparrname l)
+                                         (nat_to_ptrofs (loopschedule l (viv le))))
+     *)
+    assert (v = Genv.symbol_address
+                  ge
+                  (looparrname lnew)
+                  (nat_to_ptrofs (loopschedule lnew (viv lenew)))) as v_eq_indvar.
     inversion eval_old. subst.
     unfold equivalent_lenv.
     simpl.
     destruct (loopschedulewitness lnew).
     rewrite inverse_forward0.
+    rewrite looparrname_equal.
     reflexivity.
 
     rewrite <- loopub_equal.
@@ -1907,6 +1919,7 @@ Proof.
 
   - inversion eval_old.
     subst.
+    rewrite looparrname_equal.
     apply eval_Econstoffset.
 Qed.
     
