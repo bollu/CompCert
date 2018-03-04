@@ -1925,17 +1925,20 @@ Qed.
     
 
 (* if we take an equivalent statement in the new loop, then we will compute the same result *)
-Lemma equivalent_lenv_equal_stmt: forall (leold: loopenv) (lold: loop) (lnew: loop),
+Lemma equivalent_lenv_equal_stmt:
+  forall (ge: genv)(leold: loopenv) (lold: loop) (lnew: loop),
     forall (s:stmt) (m m': mem),
       (viv leold < loopub lold)%nat ->
       (* TODO: this maybe too tight a requirement *)
       (loopub lold = loopub lnew) ->
-    exec_stmt leold lold m s m' ->
-    exec_stmt (equivalent_lenv leold lold lnew) lnew m s m'.
+      (looparrname lold = looparrname lnew) ->
+    exec_stmt ge leold lold m s m' ->
+    exec_stmt ge (equivalent_lenv leold lold lnew) lnew m s m'.
 Proof.
   intros until m'.
   intros viv_old_inrange.
   intros loopub_equal.
+  intros looparrname_equal.
   intros exec_old.
 
   induction s.
@@ -2054,11 +2057,12 @@ Section MEMORYINLOOP.
   Qed.
 
   Lemma memStructureEq_exec_stmt:
-    forall (m m': mem)
+    forall (ge: genv)
+      (m m': mem)
       (s: stmt)
       (le : loopenv)
       (l: loop),
-      exec_stmt le l m s m' ->
+      exec_stmt ge le l m s m' ->
       memStructureEq m m'.
   Proof.
     intros until l.
@@ -2072,10 +2076,11 @@ Section MEMORYINLOOP.
 
 
   Lemma memStructureEq_exec_loop:
-    forall (m m': mem)
+    forall (ge: genv)
+      (m m': mem)
       (le le': loopenv)
       (l: loop),
-      exec_loop le m l m' le' ->
+      exec_loop ge le m l m' le' ->
       memStructureEq m m'.
   Proof.
     intros until l.
@@ -2313,7 +2318,7 @@ End MEMORYINLOOP.
 a loop writes to a memory location or not, and reason about this fact
 *)
 Section LOOPWRITELOCATIONS.
-  Definition StmtWriteLocation (s: stmt) (viv: vindvar) : block * positive.
+  (* Definition StmtWriteLocation (s: stmt) (viv: vindvar) : block * positive. *)
         
       
     
@@ -2335,19 +2340,20 @@ End LOOPWRITELOCATIONS.
 Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
   forall (lub: upperbound)
     (lub_in_range: Z.of_nat lub < Int64.max_unsigned)
-    (ivname: ident)
+    (ivname arrname: ident)
+    (ge: genv)
     (le: loopenv)
     (m: mem)
     (s: stmt),
     injective_stmt_b s = true ->
     forall (l: loop)
       (mid: mem),
-      l = (loop_id_schedule lub lub_in_range ivname s) ->
-      exec_stmt le l m s mid ->
+      l = (loop_id_schedule lub lub_in_range ivname arrname s) ->
+      exec_stmt ge le l m s mid ->
       forall (lrev: loop)
         (mrev: mem),
-    lrev =  (loop_reversed_schedule lub lub_in_range ivname s) ->
-    exec_stmt le lrev m s mrev ->
+    lrev =  (loop_reversed_schedule lub lub_in_range ivname arrname s) ->
+    exec_stmt ge le lrev m s mrev ->
     Mem.inject (id_inj mid mrev) mid mrev.
 Proof.
   intros until s.
@@ -2371,7 +2377,6 @@ Proof.
   eassumption.
 
   exact structure_eq.
-
   intros.
   
 
