@@ -774,7 +774,87 @@ Proof.
     reflexivity.
 Qed.
 
+Theorem match_expr_have_same_value':
+  forall (l:loop)
+    (le:loopenv)
+    (a:expr)
+    (sp: val)
+    (m: mem)
+    (ae:affineexpr)
+    (e:env)
+    (ge: genv)
+    (v:val),
+    Archi.ptr64 = true ->
+    (viv le < loopub l)%nat ->
+    match_affineexpr l a ae ->
+    match_env l e le ->
+    eval_affineexpr ge le l ae v ->
+    eval_expr ge sp e m a v.
+Proof.
+  intros until v.
+  intros arch64.
+  intros viv_in_range.
+  intros match_exprs.
+  intros match_envs.
+  intros eval_affineexpr.
+  
+  induction match_exprs;
+    inversion eval_affineexpr;
+    inversion match_envs;
+    subst.
+  rename H1 into e_at_loopivname.
+  - eapply eval_Ebinop.
+    eapply eval_Econst.
+    unfold eval_constant.
+    auto.
+    eapply eval_Evar.
+    apply e_at_loopivname.
+    unfold Genv.symbol_address.
+
+    remember (Genv.find_symbol ge (looparrname l))
+      as genv_at_arrname.
+    destruct genv_at_arrname.
+
+    + unfold eval_binop.
+      unfold Val.addl.
+      unfold nat_to_vlong.
+      rewrite arch64.
+      unfold nat_to_ptrofs.
+      rewrite Ptrofs.add_unsigned.
+      rewrite Ptrofs.unsigned_repr.
+      simpl.
+      rewrite Ptrofs.repr_unsigned.
+      unfold nat_to_int64.
+      unfold Ptrofs.of_int64.
+
+      remember (Z.of_nat (loopschedule l (viv le))) as innerval.
+
+      rewrite Int64.unsigned_repr.
+      auto.
+
+      (* innerval is in Int64.max_unsigned *)
+      split.
+      omega.
+      unfold Int64.max_unsigned.
+      unfold Int64.modulus.
+      unfold two_power_nat.
+      unfold Ptrofs.wordsize.
+      unfold Wordsize_Ptrofs.wordsize.
+      rewrite arch64.
+      simpl.
+      omega.
+
+    + unfold eval_binop.
+      unfold Val.addl.
+      reflexivity.
+
+  - apply eval_Econst.
+    unfold eval_constant.
+    reflexivity.
+
     
+Admitted.
+   
 
 
 
@@ -838,14 +918,18 @@ Proof.
   auto.
 Qed.
 
+
+
 Theorem match_stmt_has_same_effect':
   forall (le: loopenv) (l: loop)(f: function) (sp: val) (cms: Cminor.stmt) (s: stmt) (m m':mem) (ge: genv) (e: env),
+    Archi.ptr64 = true ->
     match_env l e le ->
-    exec_stmt le l m s m' ->
+    exec_stmt ge le l m s m' ->
     match_stmt l  cms s ->
     Cminor.exec_stmt ge f sp e m cms E0 e m' Out_normal.
 Proof.
   intros until e.
+  intros arch64.
   intros matchenv.
   inversion matchenv.
   rename H0 into e_at_loopivname.
@@ -860,10 +944,7 @@ Proof.
     
     inversion matchstmt. subst.
     eapply Cminor.exec_Sstore.
-    eapply match_expr_have_same_value'.
-    eassumption.
-    eassumption.
-    eassumption.
+    eapply match_expr_have_same_value'; try eassumption.
 
     eapply eval_Econst.
     unfold eval_constant.
@@ -901,9 +982,9 @@ Lemma eval_iv_lt_ub_false:
     e ! ivname = Some (nat_to_vlong viv) ->
     eval_expr ge sp e m 
               (Ebinop
-                 (Ocmpu Clt)
+                 (Ocmpl Clt)
                  (Evar ivname)
-                 (Econst (Ointconst (nat_to_int ub)))) Vfalse.
+                 (Econst (Olongconst (nat_to_int64 ub)))) Vfalse.
 Proof.
   intros until ub.
   intros ub_lt_max_unsigned.
@@ -917,22 +998,18 @@ Proof.
   auto.
 
   unfold eval_binop.
-  unfold Val.cmpu.
-  unfold Val.cmpu_bool.
+  unfold Val.cmpl.
+  unfold Val.cmpl_bool.
   unfold nat_to_vlong.
-  unfold Val.of_optbool.
   unfold Int.cmpu.
+  simpl.
+
+  assert (Int64.ltu (nat_to_int64 viv0) (nat_to_int64 ub) = false).
   rewrite transfer_nat_ge_to_int_ltu.
   reflexivity.
   eassumption.
-
   eassumption.
-
-
-  eapply Z.le_trans with (m := Z.of_nat viv0).
-  omega.
-  omega.
-Qed.
+Admitted.
 
 Lemma eval_iv_lt_ub_true:
   forall (ge: genv) (sp: val) (m: mem),
@@ -942,9 +1019,9 @@ Lemma eval_iv_lt_ub_true:
     e ! ivname = Some (nat_to_vlong viv) ->
     eval_expr ge sp e m 
               (Ebinop
-                 (Ocmpu Clt)
+                 (Ocmpl Clt)
                  (Evar ivname)
-                 (Econst (Ointconst (nat_to_int ub)))) Vtrue.
+                 (Econst (Olongconst (nat_to_int64 ub)))) Vtrue.
 Proof.
   intros until ub.
   intros ub_lt_max_unsigned.
@@ -958,11 +1035,15 @@ Proof.
   auto.
 
   unfold eval_binop.
-  unfold Val.cmpu.
-  unfold Val.cmpu_bool.
+  unfold Val.cmpl.
+  unfold Val.cmpl_bool.
   unfold nat_to_vlong.
-  unfold Val.of_optbool.
-  unfold Int.cmpu.
+  unfold Int64.cmp.
+
+  assert (Int64.lt (nat_to_int64 viv0)
+                   (nat_to_int64 ub) = true).
+  Admitted.
+(*
   rewrite transfer_nat_lt_to_int_lt.
   reflexivity.
   eassumption.
@@ -976,6 +1057,7 @@ Proof.
   omega.
   omega.
 Qed.
+*)
 
   
 
@@ -997,12 +1079,12 @@ End MATCHLOOP.
 
 
 Theorem exec_loop_when_iv_gt_ub_has_no_effect:
-  forall (ub: nat) (iv: nat),
+  forall (ub: nat) (iv: nat) (ge: genv),
   forall (le le': loopenv) (l: loop) (m m': mem),
     loopub l = ub ->
     viv le = iv ->
     (iv >= ub)%nat -> 
-    exec_loop le  m l  m' le' ->
+    exec_loop ge le  m l  m' le' ->
     le = le' /\ m = m'.
 Proof.
   intros until m'.
@@ -1017,11 +1099,11 @@ Qed.
 
   
 Theorem match_loop_has_same_effect:
-  forall le m l mloop le',
-    exec_loop le m l  mloop le' ->
+  forall ge le m l mloop le',
+    exec_loop ge le m l  mloop le' ->
     forall (lub: nat)
       (iv: vindvar)
-      (ivname: ident)
+      (ivname arrname: ident)
       (lsched lschedinv: vindvar -> vindvar)
       (lub_in_range: Z.of_nat lub < Int64.max_unsigned)
       (lub_in_range': Z.of_nat lub + 1 < Int64.max_unsigned)
@@ -1035,7 +1117,7 @@ Theorem match_loop_has_same_effect:
       (ge: genv)
       (e eblock: env),
     le = mkLenv iv ->
-    l = mkLoop lub lub_in_range ivname loopstmt lsched lschedinv lschedwitness ->
+    l = mkLoop lub lub_in_range ivname arrname loopstmt lsched lschedinv lschedwitness ->
     match_env l e le ->
     Cminor.exec_stmt ge f sp e m cms E0 eblock mblock Out_normal ->
     match_loop cms l ->
