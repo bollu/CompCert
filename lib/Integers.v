@@ -5284,6 +5284,34 @@ Proof.
   unfold max_unsigned. rewrite  modulus_eq64. destruct (Int64.unsigned_range n); omega.
 Qed.
 
+
+Strategy transparent [Wordsize_Ptrofs.wordsize].
+
+Lemma ptrofs_max_unsigned_gt_0:
+  Ptrofs.max_unsigned > 0.
+Proof.
+  unfold Ptrofs.max_unsigned.
+  unfold Ptrofs.modulus.
+  unfold two_power_nat.
+  unfold wordsize.
+  unfold Wordsize_Ptrofs.wordsize.
+  rewrite _64.
+  simpl.
+  omega.
+Qed.
+
+Strategy opaque [Wordsize_Ptrofs.wordsize].
+
+Lemma int64_max_unsigned_gt_0:
+  Int64.max_unsigned > 0.
+Proof.
+  unfold Int64.max_unsigned.
+  unfold Int64.modulus.
+  unfold two_power_nat.
+  simpl.
+  omega.
+Qed.
+
 End AGREE64.
 
 Hint Resolve

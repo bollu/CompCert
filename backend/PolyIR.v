@@ -835,14 +835,24 @@ Proof.
       (* innerval is in Int64.max_unsigned *)
       split.
       omega.
-      unfold Int64.max_unsigned.
-      unfold Int64.modulus.
-      unfold two_power_nat.
-      unfold Ptrofs.wordsize.
-      unfold Wordsize_Ptrofs.wordsize.
-      rewrite arch64.
-      simpl.
+
+      assert (Z.of_nat (loopub l) < Int64.max_unsigned) as loopubinrange.
+      eapply loopub_in_range_witness.
+      assert (Z.of_nat (loopschedule l (viv le)) < Z.of_nat (loopub l)) as loopschedinrange.
+      apply Znat.inj_lt.
+      eapply inrange_forward.
+      exact (loopschedulewitness l).
+      assumption.
       omega.
+
+      split; try omega.
+      Check (Ptrofs.max_unsigned).
+      cut (Ptrofs.max_unsigned > 0).
+      intros.
+      unfold Z.of_nat.
+      omega.
+      eapply Ptrofs.ptrofs_max_unsigned_gt_0.
+      assumption.
 
     + unfold eval_binop.
       unfold Val.addl.
@@ -851,9 +861,7 @@ Proof.
   - apply eval_Econst.
     unfold eval_constant.
     reflexivity.
-
-    
-Admitted.
+Qed.
    
 
 
