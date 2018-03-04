@@ -2319,6 +2319,7 @@ a loop writes to a memory location or not, and reason about this fact
 *)
 Section LOOPWRITELOCATIONS.
 
+
   Variable ge: genv.
   Variable  l: loop.
   Definition affineexprWriteLocation
@@ -2356,22 +2357,39 @@ Definition LoopWriteLocations : list val :=
 
 
 
-(* exery location that a loop can write to appears in this list *)
-Lemma LoopWriteLocationsComplete: True.
-Proof.
-  auto.
-Qed.
-
-Lemma LoopWriteLocationsCorrect: True.
-Proof.
-  auto.
-Qed.
-
-  
 End LOOPWRITELOCATIONS.
 
-      
+(* We are leaving this entire section admitted because what we
+really care about is the *existence* of such a list, which can
+obviously be constructed in this case *)
+Section LOOPWRITELOCATIONSLEMMAS.
+  Variable ge: genv.
+  Variable l: loop.
+  Variable s: stmt.
+  Variable b: block.
+  Variable ofs: ptrofs.
   
+
+  Lemma loop_write_locations_complete_1:
+    List.In (Vptr b ofs) (LoopWriteLocations ge l) ->
+    stmt_writes_ix_in_loop  ge l s (Vptr b ofs).
+  Proof.
+  Admitted.
+
+
+  Lemma loop_write_locations_complete_2:
+    ~ List.In (Vptr b ofs) (LoopWriteLocations ge l) ->
+    stmt_does_not_write_to_ix_in_loop ge l s (Vptr b ofs).
+  Proof.
+  Admitted.
+
+
+
+  
+End LOOPWRITELOCATIONSLEMMAS.
+
+Section LOOPWRITELOCATIONSTRANSPORT:
+  End LOOPWRITELOCATIONSTRANSPORT:
       
 Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
   forall (lub: upperbound)
@@ -2414,7 +2432,20 @@ Proof.
 
   exact structure_eq.
   intros.
-  
+
+  remember (LoopWriteLocations ge l) as lwritelocs.
+  remember (LoopWriteLocations ge lrev) as lrevwritelocs.
+  remember (Ptrofs.repr (Z.pos ofs)) as pofs.
+  remember (Vptr b pofs) as curptr.
+
+  assert ({List.In curptr lwritelocs} + {~ List.In curptr lwritelocs}) as
+      curptr_write.
+  apply List.In_dec. auto.
+  apply Val.eq.
+
+  destruct curptr_write as [curptr_write | no_curptr_write].
+  assert ()
+
 
   
 
