@@ -571,6 +571,22 @@ Section EXEC_LOOP.
       exec_loop ge le m l m'' le'.
 End EXEC_LOOP.
 
+Section EXEC_LOOP_REV.
+  Inductive exec_loop_rev: genv -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
+  | eval_looprev_stop: forall ge le m l,
+      (viv le >= loopub l)%nat ->
+      exec_loop_rev ge le m l m le
+  | eval_looprev_start: forall ge le m l,
+      (viv le < loopub l)%nat ->
+      exec_loop_rev  ge le m l m le
+  | eval_looprev_loop: forall ge le le' m m' m'' l,
+      (viv le < loopub l)%nat ->
+      (viv le < viv le')%nat -> 
+      exec_loop ge (loopenv_bump_vindvar le) m l m' le' ->
+      exec_stmt ge le' l m' (loopstmt l) m'' ->
+      exec_loop_rev ge le m l m'' (loopenv_bump_vindvar le').
+End EXEC_LOOP_REV.
+
 Lemma exec_loop_viv_nondecreasing:
   forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
     exec_loop ge le m l m' le' ->
