@@ -2272,20 +2272,31 @@ Section MEMORYINLOOP.
     auto.
   Qed.
   
-  Lemma memStructureEq_extensional_inject:
+  (* NOTE: I copied this proof from the CompCert Memory source,
+  I'm not entire sure _why_ this works. Particularly, the case with the
+  range goes through in this form, but not if I remove the redundant
+  Mem.mem_inj *)
+  Lemma memStructureEq_extensional_inject_private:
     forall (m m': mem),
       memStructureEq m m' ->
       (forall (b: block) (ofs: positive),
           (Mem.mem_contents m )#b# ofs =
           (Mem.mem_contents m')#b#ofs) ->
-      Mem.mem_inj (id_inj m m') m m' ->
+      (forall (b: block) (i:ptrofs), Val.inject (id_inj m m') (Vptr b i) (Vptr b i)) ->
+      Mem.mem_inj (id_inj m m') m m' -> 
       Mem.inject (id_inj m m') m m'.
   Proof.
     intros until m'.
     intros structureeq.
     intros extensional_eq.
+    intros val_ptr_inject.
+
+    assert (Mem.mem_inj (id_inj m m') m m') as mem_inj.
+    apply memStructureEq_extensional_mem_inj; eassumption.
+    
     constructor.
     - auto.
+      
     - intros.
       unfold id_inj.
       apply pred_dec_false.
@@ -2326,6 +2337,27 @@ Section MEMORYINLOOP.
       auto.
       auto.
       auto.
+  Qed.
+
+  
+  Lemma memStructureEq_extensional_inject:
+    forall (m m': mem),
+      memStructureEq m m' ->
+      (forall (b: block) (ofs: positive),
+          (Mem.mem_contents m )#b# ofs =
+          (Mem.mem_contents m')#b#ofs) ->
+      (forall (b: block) (i:ptrofs), Val.inject (id_inj m m') (Vptr b i) (Vptr b i)) ->
+      Mem.inject (id_inj m m') m m'.
+  Proof.
+    intros until m'.
+    intros structureeq.
+    intros extensional_eq.
+    intros val_ptr_inject.
+
+    assert (Mem.mem_inj (id_inj m m') m m') as mem_inj.
+    apply memStructureEq_extensional_mem_inj; eassumption.
+
+    apply memStructureEq_extensional_inject_private; eassumption.
   Qed.
 End MEMORYINLOOP.
 
@@ -2584,7 +2616,8 @@ Proof.
 
     
   destruct curptr_write as [curptr_write | no_curptr_write].
-  + admit.
+    +
+      admit.
 
   + assert (((Mem.mem_contents mid) # b) # ofs =
             ((Mem.mem_contents m) # b) # ofs) as memid_unchanged.
@@ -2612,7 +2645,8 @@ Proof.
     rewrite memid_unchanged, memrev_unchanged.
     reflexivity.
 
-  - (* howto? *)
+  - (* val ptr inject *)
+    intros.
 Admitted.
 
 
