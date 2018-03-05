@@ -1506,15 +1506,15 @@ Definition stmt_writes_ix_in_loop
            (ge: genv)
            (l: loop)
            (s: stmt)
-           (v: val) : Prop :=
+           (ixv: val) : Prop :=
   match s with
-  | Sstore ae _ => affineexpr_takes_value_in_loop ge l ae v
+  | Sstore ae i => (affineexpr_takes_value_in_loop ge l ae ixv)
   end.
 
 Lemma not_stmt_writes_ix_in_loop_equivalence:
-  forall (ge: genv) (l: loop) (s: stmt) (v: val),
-    ~ (stmt_writes_ix_in_loop ge l s v) <->
-    stmt_does_not_write_to_ix_in_loop ge l s v.
+  forall (ge: genv) (l: loop) (s: stmt) (ixv: val),
+    ~ stmt_writes_ix_in_loop ge l s ixv <->
+    stmt_does_not_write_to_ix_in_loop ge l s ixv.
 Proof.
   intros.
   unfold not.
@@ -1522,7 +1522,7 @@ Proof.
   unfold stmt_does_not_write_to_ix_in_loop.
 
   destruct s.
-  -  eapply not_affineexpr_takes_value_equivalence.
+  eapply not_affineexpr_takes_value_equivalence.
 Qed.
 
 
@@ -2388,8 +2388,77 @@ Section LOOPWRITELOCATIONSLEMMAS.
   
 End LOOPWRITELOCATIONSLEMMAS.
 
-Section LOOPWRITELOCATIONSTRANSPORT:
-  End LOOPWRITELOCATIONSTRANSPORT:
+(* Theorem about transporting LoopWriteLocations between a loop
+and its reverse *)
+Section LOOPWRITELOCATIONSTRANSPORT.
+  Variable ge: genv.
+  
+  Variable lub : upperbound.
+  Variable lub_in_range: Z.of_nat lub < Int64.max_unsigned.
+  Variable ivname arrname: ident.
+  Variable s: stmt.
+
+  
+  Variable b: block.
+  Variable ofs: ptrofs.
+  
+  Definition lid : loop :=
+    (loop_id_schedule lub lub_in_range ivname arrname s).
+  Definition lrev : loop :=
+    (loop_reversed_schedule lub lub_in_range ivname arrname s).
+
+  Lemma loop_write_locations_transportable_1:
+    List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
+    List.In (Vptr b ofs) (LoopWriteLocations ge lrev).
+  Proof.
+  Admitted.
+
+  
+  Lemma loop_write_locations_transportable_2:
+    ~ List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
+    ~ List.In (Vptr b ofs) (LoopWriteLocations ge lrev).
+  Proof.
+    Admitted.
+  
+End LOOPWRITELOCATIONSTRANSPORT.
+
+(* Theorems about  loop write locations and their interaction with memory *)
+Section LOOPWRITELOCATIONSMEMORY.
+  Variable ge: genv.
+  Variable l: loop.
+  
+  
+  Variable b: block.
+  Variable ofs: positive.
+  (* p for pointer. I admit, this is confusing, because p for positive
+  also works *)
+  Definition ofsp : ptrofs := Ptrofs.repr (Z.pos ofs).
+
+  Variable m m': mem.
+  Variable le le': loopenv.
+
+  Definition loopexec := exec_loop ge le m l m' le'.
+
+  Lemma loop_write_locations_does_not_have_write:
+    loopexec ->
+    ~ List.In (Vptr b ofsp) (LoopWriteLocations ge l) ->
+    ((Mem.mem_contents m) # b) # ofs = ((Mem.mem_contents m') # b) # ofs.
+  Proof.
+  Admitted.
+
+  
+  (* Obviously, this statement is retarded, I need much stronger
+  assumptions *)
+  Lemma loop_write_locations_has_write:
+    loopexec ->
+    List.In (Vptr b ofsp) (LoopWriteLocations ge l) ->
+    injective_stmt_b (loopstmt l) = true ->
+    ((Mem.mem_contents m) # b) # ofs = ((Mem.mem_contents m') # b) # ofs.
+  Proof.
+  Admitted.
+    
+End LOOPWRITELOCATIONSMEMORY.
+
       
 Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
   forall (lub: upperbound)
@@ -2434,7 +2503,7 @@ Proof.
   intros.
 
   remember (LoopWriteLocations ge l) as lwritelocs.
-  remember (LoopWriteLocations ge lrev) as lrevwritelocs.
+  remember (LoopWriteLocations ge lrev0) as lrevwritelocs.
   remember (Ptrofs.repr (Z.pos ofs)) as pofs.
   remember (Vptr b pofs) as curptr.
 
@@ -2442,9 +2511,93 @@ Proof.
       curptr_write.
   apply List.In_dec. auto.
   apply Val.eq.
+Abort.
 
+
+Theorem memory_matches_in_loop_reversal_if_ix_injective:
+  forall (lub: upperbound)
+    (lub_in_range: Z.of_nat lub < Int64.max_unsigned)
+    (ivname arrname: ident)
+    (ge: genv)
+    (le: loopenv)
+    (m: mem)
+    (s: stmt),
+    injective_stmt_b s = true ->
+    forall (l: loop)
+      (mid: mem)
+      (leid: loopenv),
+      l = (loop_id_schedule lub lub_in_range ivname arrname s) ->
+      exec_loop ge le m l mid leid ->
+      forall (lrev: loop)
+        (mrev: mem)
+        (lerev: loopenv),
+    lrev =  (loop_reversed_schedule lub lub_in_range ivname arrname s) ->
+    exec_loop ge le m l mrev lerev ->
+    Mem.inject (id_inj mid mrev) mid mrev.
+Proof.
+  intros until s.
+  intros sinj.
+  intros until leid.
+  intros loopiddef execloopid.
+  intros until lerev.
+  intros looprevdef execlooprev.
+  
+  eapply memStructureEq_extensional_inject.
+  
+  - assert (memStructureEq mid mrev) as structure_eq.
+    eapply memStructureEq_trans.
+    eapply memStructureEq_sym.
+    eapply memStructureEq_exec_loop.
+    eassumption.
+    eapply memStructureEq_exec_loop.
+    eassumption.
+
+    auto.
+
+  - intros.
+  
+    remember (LoopWriteLocations ge l) as lwritelocs.
+    remember (LoopWriteLocations ge lrev0) as lrevwritelocs.
+    remember (Ptrofs.repr (Z.pos ofs)) as pofs.
+    remember (Vptr b pofs) as curptr.
+
+    assert ({List.In curptr lwritelocs} + {~ List.In curptr lwritelocs}) as
+        curptr_write.
+    apply List.In_dec. auto.
+    apply Val.eq.
+
+    
   destruct curptr_write as [curptr_write | no_curptr_write].
-  assert ()
+  + admit.
+
+  + assert (((Mem.mem_contents mid) # b) # ofs =
+            ((Mem.mem_contents m) # b) # ofs) as memid_unchanged.
+    symmetry.
+    eapply loop_write_locations_does_not_have_write;
+      subst; try eassumption.
+
+
+    
+    assert (((Mem.mem_contents mrev) # b) # ofs =
+            ((Mem.mem_contents m) # b) # ofs) as memrev_unchanged.
+
+    
+    assert (~List.In curptr lrevwritelocs) as curptr_not_in_looprev.
+    rewrite Heqlrevwritelocs.
+    rewrite looprevdef.
+    rewrite Heqcurptr.
+    apply loop_write_locations_transportable_2.
+    subst. auto.
+    
+    symmetry.
+    eapply loop_write_locations_does_not_have_write;
+      subst;  eassumption.
+
+    rewrite memid_unchanged, memrev_unchanged.
+    reflexivity.
+
+  - (* howto? *)
+Admitted.
 
 
   
