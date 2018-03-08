@@ -14,7 +14,8 @@ Require Import Equivalence EquivDec.
 Require Import Coqlib.
 
 Section STMTINTERCHANGE.
-  Variable m m': mem.
+  Variable ma mb ma' mb': mem.
+  
   Variable arrname: ident.
   Definition STORE_CHUNK_SIZE: memory_chunk := Mint8unsigned.
 
@@ -24,7 +25,7 @@ Section STMTINTERCHANGE.
     Ptrofs.repr (Z.of_nat n).
   Definition arrofs_expr(ofs: nat) : expr :=
     Econst (Oaddrsymbol arrname (nat_to_ptrofs ofs)).
-    
+  
 
   
   (* a[0] = 1*)
@@ -40,6 +41,27 @@ Section STMTINTERCHANGE.
 
   Definition s12: Cminor.stmt := Cminor.Sseq s1 s2.
   Definition s21: Cminor.stmt := Cminor.Sseq s2 s1.
+
+  Variable injf : Val.meminj.
+  Variable begininj: Mem.inject injf ma mb.
+
+
+  Variable ge: genv.
+  Variable f: function.
+  Variable sp: val.
+  Variable e e': env.
+  Variable exec_s12: exec_stmt ge f sp  e ma s12 E0 e' ma' Out_normal.
+  Variable exec_s21: exec_stmt ge f sp  e ma s21 E0 e' mb' Out_normal.
+
+  Lemma meminj_new: Mem.mem_inj injf ma' mb'.
+  Proof.
+    constructor.
+  Abort.
+
+  Theorem flip_valid: Mem.inject injf ma' mb'.
+  Proof.
+  Abort.
+  
 
   
 End STMTINTERCHANGE.
