@@ -2507,6 +2507,73 @@ Section LOOPWRITELOCATIONSMEMORY.
     
 End LOOPWRITELOCATIONSMEMORY.
 
+
+Section UNDERSTANDCOMPCERTMEMORY.
+  Lemma mem_injects_on_one_stmt:
+    forall  ge le l m1 m2 s m1' m2' baseptr,
+      Genv.find_symbol ge (looparrname l) = Some baseptr ->
+      exec_stmt ge le l m1 s m1' ->
+      exec_stmt ge le l m2 s m2' ->
+      Mem.inject (id_inj m1 m2) m1 m2 ->
+      memStructureEq m1' m2' ->
+      Mem.inject (id_inj m1' m2') m1' m2'.
+  Proof.
+    intros until baseptr.
+    intros genv_at_looparrname.
+    intros execm1 execm2.
+    intros injectorig.
+    intros structureeq. 
+    eapply memStructureEq_extensional_inject; try assumption.
+
+    intros.
+    destruct s.
+
+
+    remember (Ptrofs.repr (Z.pos ofs)) as pofs.
+    remember (Vptr b pofs) as curptr.
+
+    remember (StmtWriteLocation ge l (Sstore a i) (viv le)) as swriteloc.
+
+    assert ({curptr = swriteloc} + {curptr <> swriteloc}) as curptr_cases.
+    apply Val.eq.
+
+    destruct curptr_cases as [alias | noalias].
+
+    - admit.
+
+    - admit.
+
+    - intros.
+      inversion execm1. inversion execm2. subst.
+      inversion H0. subst.
+      
+      unfold Mem.storev in H1.
+      unfold Genv.symbol_address in H1.
+      rewrite genv_at_looparrname in H1.
+      rename H1 into storem1.
+
+      inversion H9. subst.
+      unfold Genv.symbol_address in H10.
+      rewrite genv_at_looparrname in H10.
+      unfold Mem.storev in H10.
+      rename H10 into storem2.
+
+      eapply Val.inject_ptr.
+      unfold id_inj.
+      destruct (plt b (Mem.nextblock m1')).
+      auto.
+
+
+
+      
+    
+    Abort.
+
+    
+    
+  
+End UNDERSTANDCOMPCERTMEMORY.
+
       
 Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
   forall (lub: upperbound)
@@ -2570,6 +2637,7 @@ Theorem memory_matches_in_loop_reversal_if_ix_injective:
     (le: loopenv)
     (m: mem)
     (s: stmt),
+    Mem.inject (id_inj m m) m m ->
     injective_stmt_b s = true ->
     forall (l: loop)
       (mid: mem)
@@ -2584,6 +2652,7 @@ Theorem memory_matches_in_loop_reversal_if_ix_injective:
     Mem.inject (id_inj mid mrev) mid mrev.
 Proof.
   intros until s.
+  intros init_inj.
   intros sinj.
   intros until leid.
   intros loopiddef execloopid.
@@ -2603,7 +2672,7 @@ Proof.
     auto.
 
   - intros.
-  
+    
     remember (LoopWriteLocations ge l) as lwritelocs.
     remember (LoopWriteLocations ge lrev0) as lrevwritelocs.
     remember (Ptrofs.repr (Z.pos ofs)) as pofs.
@@ -2615,35 +2684,35 @@ Proof.
     apply Val.eq.
 
     
-  destruct curptr_write as [curptr_write | no_curptr_write].
+    destruct curptr_write as [curptr_write | no_curptr_write].
     +
       admit.
 
-  + assert (((Mem.mem_contents mid) # b) # ofs =
-            ((Mem.mem_contents m) # b) # ofs) as memid_unchanged.
-    symmetry.
-    eapply loop_write_locations_does_not_have_write;
-      subst; try eassumption.
+    + assert (((Mem.mem_contents mid) # b) # ofs =
+              ((Mem.mem_contents m) # b) # ofs) as memid_unchanged.
+      symmetry.
+      eapply loop_write_locations_does_not_have_write;
+        subst; try eassumption.
 
 
-    
-    assert (((Mem.mem_contents mrev) # b) # ofs =
-            ((Mem.mem_contents m) # b) # ofs) as memrev_unchanged.
+      
+      assert (((Mem.mem_contents mrev) # b) # ofs =
+              ((Mem.mem_contents m) # b) # ofs) as memrev_unchanged.
 
-    
-    assert (~List.In curptr lrevwritelocs) as curptr_not_in_looprev.
-    rewrite Heqlrevwritelocs.
-    rewrite looprevdef.
-    rewrite Heqcurptr.
-    apply loop_write_locations_transportable_2.
-    subst. auto.
-    
-    symmetry.
-    eapply loop_write_locations_does_not_have_write;
-      subst;  eassumption.
+      
+      assert (~List.In curptr lrevwritelocs) as curptr_not_in_looprev.
+      rewrite Heqlrevwritelocs.
+      rewrite looprevdef.
+      rewrite Heqcurptr.
+      apply loop_write_locations_transportable_2.
+      subst. auto.
+      
+      symmetry.
+      eapply loop_write_locations_does_not_have_write;
+        subst;  eassumption.
 
-    rewrite memid_unchanged, memrev_unchanged.
-    reflexivity.
+      rewrite memid_unchanged, memrev_unchanged.
+      reflexivity.
 
   - (* val ptr inject *)
     intros.
