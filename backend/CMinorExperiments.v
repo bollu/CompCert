@@ -13,6 +13,51 @@ Require Import ExtensionalityFacts.
 Require Import Equivalence EquivDec.
 Require Import Coqlib.
 
+
+    
+
+Lemma memval_inject_store_different_block:
+  forall (m m': mem),
+  forall chunk b ofs v bother injf,
+    (injf =  Mem.flat_inj (Mem.nextblock m)) ->
+    bother <> b ->
+    Mem.store chunk m b ofs v = Some m' ->
+    memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # bother)
+                  (ZMap.get ofs (Mem.mem_contents m') # bother).
+Proof.
+  intros until injf.
+  intros INJFVAL.
+  intros bneq.
+  intros mem_store.
+
+  assert (M'CONTENTS: Mem.mem_contents m' = PMap.set b (Mem.setN (encode_val chunk v) ofs m.(Mem.mem_contents)#b) m.(Mem.mem_contents)).
+  apply Mem.store_mem_contents; assumption.
+
+
+  assert (M'CONTENTSEQ: (Mem.mem_contents m') #bother = (Mem.mem_contents m)#bother).
+  rewrite M'CONTENTS.
+  apply PMap.gso.
+  assumption.
+
+  rewrite M'CONTENTSEQ.
+
+  (* memval_inject *)
+  remember (ZMap.get ofs (Mem.mem_contents m) # bother) as mval.
+  destruct mval; try constructor.
+
+  (* val inject *)
+  destruct v0; try constructor.
+  (* pointer injection *)
+  eapply Val.inject_ptr.
+  rewrite INJFVAL.
+  unfold Mem.flat_inj.
+  destruct (plt b0 (Mem.nextblock m)); try auto.
+  assert (NOACCESS_REPERUCSSION: forall ofs k, (Mem.mem_access m)#b0 ofs k = None).
+  intros. apply Mem.nextblock_noaccess. auto.
+Abort.
+
+
+  
 Section STMTINTERCHANGE.
   Variable ma mb ma' mb': mem.
   
@@ -277,15 +322,11 @@ Section STMTINTERCHANGE.
 
       
 
-  Lemma memval_inject_store_different_block:
-    forall (m m': mem),
-    forall chunk b ofs v bother,
-      Mem.store chunk m b ofs v = Some m' ->
-      memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # bother)
-                    (ZMap.get ofs (Mem.mem_contents m') # bother).
-  Proof.
-    intros until bother.
-    intros mem_store.
+    
+   
+    (* contradiction case *)
+    
+    
 
 
   Lemma meminj_new: Mem.mem_inj injf ma' mb'.
