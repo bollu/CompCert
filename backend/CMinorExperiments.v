@@ -361,13 +361,14 @@ Section STMTINTERCHANGE.
 
 
     - (* second theorem *)
-
-
-      
-      
-
-      apply 
-  Admitted.
+      intros until p.
+      intros INJF_B1_B2.
+      intros RANGE_PERM.
+      unfold injf in INJF_B1_B2.
+      unfold Mem.flat_inj in INJF_B1_B2.
+      destruct (plt b1 (Mem.nextblock ma)); inversion INJF_B1_B2; subst.
+      exists 0. omega.
+      Qed.
 
   Lemma mem_structure_eq_ma'_mb':
     mem_structure_eq injf ma' mb'.
