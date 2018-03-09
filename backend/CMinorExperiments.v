@@ -14,12 +14,18 @@ Require Import Equivalence EquivDec.
 Require Import Coqlib.
 
 
+(* We need this so we don't have to reason about fucking pointers to pointers
+and whatnot *)
+Definition mem_no_pointers (m: mem) : Prop :=
+  forall bptr i q n b ofs,
+  Fragment (Vptr bptr i) q n <> ZMap.get ofs (Mem.mem_contents m) # b.
     
 
 Lemma memval_inject_store_different_block:
   forall (m m': mem),
   forall chunk b ofs v bother injf,
     (injf =  Mem.flat_inj (Mem.nextblock m)) ->
+    mem_no_pointers m ->
     bother <> b ->
     Mem.store chunk m b ofs v = Some m' ->
     memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # bother)
@@ -27,6 +33,7 @@ Lemma memval_inject_store_different_block:
 Proof.
   intros until injf.
   intros INJFVAL.
+  intros NOPOINTERS.
   intros bneq.
   intros mem_store.
 
@@ -48,13 +55,10 @@ Proof.
   (* val inject *)
   destruct v0; try constructor.
   (* pointer injection *)
-  eapply Val.inject_ptr.
-  rewrite INJFVAL.
-  unfold Mem.flat_inj.
-  destruct (plt b0 (Mem.nextblock m)); try auto.
-  assert (NOACCESS_REPERUCSSION: forall ofs k, (Mem.mem_access m)#b0 ofs k = None).
-  intros. apply Mem.nextblock_noaccess. auto.
-Abort.
+  unfold mem_no_pointers in NOPOINTERS.
+  specialize (NOPOINTERS b0 i q n bother ofs).
+  contradiction.
+Qed.
 
 
   
@@ -97,6 +101,10 @@ Section STMTINTERCHANGE.
   Variable e e': env.
   Variable exec_s12: exec_stmt ge f sp  e ma s12 E0 e' ma' Out_normal.
   Variable exec_s21: exec_stmt ge f sp  e mb s21 E0 e' mb' Out_normal.
+
+  Variable arrbase : block.
+
+  Variable GENV_AT_ARR: Genv.find_symbol ge arrname = Some arrbase.
 
   Record mem_structure_eq (f: meminj) (m1 m2: mem) :=
     mk_mem_structure_eq {
@@ -304,7 +312,61 @@ Section STMTINTERCHANGE.
 
       destruct (plt b1 (Mem.nextblock ma)); inversion b2_as_b1; subst.
       intros perm_ma'.
+
+      inversion exec_s12; subst; try contradiction.
+      rename H1 into exec1.
+      rename H6 into exec2.
+
+      assert(t1 = E0 /\ t2 = E0) as t1_t2_E0.
+      apply destruct_trace_app_eq_E0.
+      eassumption.
+      destruct t1_t2_E0.
+      subst.
+
+      inversion exec1. subst.
+      inversion exec2. subst.
+
+      
+      rename H10 into STOREV_INTO_MA.
+      rename H14 into STOREV_INTO_M1.
+
+      rename H6 into EVALVADDR.
+      rename H8 into EVALVADDR0.
+
+      inversion EVALVADDR. subst.
+      inversion EVALVADDR0. subst.
+
+      unfold eval_constant in H0.
+      unfold eval_constant in H1.
+
+      inversion H0. inversion H1. subst.
+
+
+      
+      unfold Mem.storev in *.
+      unfold Genv.symbol_address  in *.
+      rewrite GENV_AT_ARR in *.
+
+
+      assert (Mem.perm m1 b2 ofs k p) as M1_PERM.
+      eapply Mem.perm_store_2; eassumption.
+
+      
+      assert (Mem.perm ma b2 ofs k p) as MA_PERM.
+      eapply Mem.perm_store_2; eassumption.
+
       replace (ofs + 0) with ofs.
+      assumption.
+      omega.
+
+
+    - (* second theorem *)
+
+
+      
+      
+
+      apply 
   Admitted.
 
   Lemma mem_structure_eq_ma'_mb':
