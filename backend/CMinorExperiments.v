@@ -22,6 +22,24 @@ Definition arrofs_expr (arrname: ident) (ofs: nat) : expr :=
 Definition SstoreValAt (arrname: ident) (v: nat) (ix: nat) :=
   Cminor.Sstore STORE_CHUNK_SIZE (arrofs_expr arrname ix)
                 (nat_to_expr v).
+Lemma eval_expr_arrofs: forall (arrname: ident) (ofs: nat),
+    forall (ge: genv) (sp: val) (e: env) (m: mem),
+      forall (arrblock: block),
+      Genv.find_symbol ge arrname = Some arrblock ->
+      eval_expr ge sp e m
+                (arrofs_expr arrname ofs)
+                (Vptr arrblock (nat_to_ptrofs ofs)).
+Proof.
+  intros until arrblock.
+  intros GENV_AT_ARRNAME.
+  eapply eval_Econst.
+  simpl.
+
+  unfold Genv.symbol_address.
+  rewrite GENV_AT_ARRNAME.
+  auto.
+Qed.
+
 
 
 (* We need this so we don't have to reason about fucking pointers to pointers
@@ -389,9 +407,9 @@ Section STMTINTERCHANGE.
   Variable exec_s12: exec_stmt ge f sp  e ma s12 E0 e' ma' Out_normal.
   Variable exec_s21: exec_stmt ge f sp  e mb s21 E0 e' mb' Out_normal.
 
-  Variable arrbase : block.
+  Variable arrblock : block.
 
-  Variable GENV_AT_ARR: Genv.find_symbol ge arrname = Some arrbase.
+  Variable GENV_AT_ARR: Genv.find_symbol ge arrname = Some arrblock.
 
   Lemma mem_structure_eq_ma_ma':
     mem_structure_eq injf ma ma'.
@@ -559,6 +577,8 @@ Section STMTINTERCHANGE.
 
       
       replace (ofs + 0) with ofs.
+
+
   Admitted.
   
 
