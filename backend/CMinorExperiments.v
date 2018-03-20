@@ -15,6 +15,14 @@ Require Import Coqlib.
 
 Definition STORE_CHUNK_SIZE: memory_chunk := Mint8unsigned.
 
+Definition arrofs_expr (arrname: ident) (ofs: nat) : expr :=
+    Econst (Oaddrsymbol arrname (nat_to_ptrofs ofs)).
+
+(* a handy alias for storing 1 byte value *)
+Definition SstoreValAt (arrname: ident) (v: nat) (ix: nat) :=
+  Cminor.Sstore STORE_CHUNK_SIZE (arrofs_expr arrname ix)
+                (nat_to_expr v).
+
 
 (* We need this so we don't have to reason about fucking pointers to pointers
 and whatnot *)
@@ -22,7 +30,7 @@ Definition mem_no_pointers (m: mem) : Prop :=
   forall bptr i q n b ofs,
   Fragment (Vptr bptr i) q n <> ZMap.get ofs (Mem.mem_contents m) # b.
 
-Section SINGLESTMT.
+Section MEMSTORE.
 
   Variable m m': mem.
   Variable NOPOINTERS: mem_no_pointers m.
@@ -75,29 +83,89 @@ Section SINGLESTMT.
   contradiction.
 Qed.
 
-End SINGLESTMT.
+End MEMSTORE.
+
+Section STMT.
+  Variable m m': mem.
+  Variable NOPOINTERS : mem_no_pointers m.
+  
+  Variable ge: genv.
+  Variable f: function.
+  Variable sp: val.
+  Variable e e': env.
+  Variable arrname: ident.
+    
+
+  Variable wix: nat.
+  Variable wval: nat.
+
+  Definition s: Cminor.stmt := SstoreValAt arrname wval wix.
+
+  
+  Variable EXECS: exec_stmt ge f sp e m s E0 e' m' Out_normal.
+
+
+  Variable injf: meminj.
+  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock m).
+
+  Variable wb: block.
+  Variable wofs: ptrofs.
+  (* the array offset has a concrete value,
+   which is the pointer wb with offset wofs *)
+  Variable WBVAL: eval_expr ge sp e m (arrofs_expr arrname wix) (Vptr wb wofs).
+  
+  Lemma memval_inject_store_no_alias_for_stmt:
+    forall rb,
+      rb <> wb ->
+      memval_inject injf
+                    (ZMap.get (Ptrofs.unsigned wofs) (Mem.mem_contents m) # rb)
+                    (ZMap.get (Ptrofs.unsigned wofs) (Mem.mem_contents m') # rb).
+  Proof.
+    intros until rb.
+    intros NOALIAS.
+    inversion EXECS. subst.
+
+    assert (vaddr = Vptr wb wofs) as VADDR_EQ_WBVAL.
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+    rename H10 into STOREM.
+    unfold Mem.storev in STOREM.
+    
+    eapply memval_inject_store_no_alias;
+      try eassumption.
+    auto.
+    Qed.
+End STMT.
 
 Section STMTSEQ.
   Variable m m': mem.
   Variable arrname: ident.
 
-  Definition arrofs_expr(ofs: nat) : expr :=
-    Econst (Oaddrsymbol arrname (nat_to_ptrofs ofs)).
-
   Variable wix1 wix2 : nat.
   Variable wval1 wval2: nat.
 
+
   
-  Definition s1: Cminor.stmt :=
-    Cminor.Sstore STORE_CHUNK_SIZE (arrofs_expr wix1)
-                  (nat_to_expr wval1).
+  (* a[wix1] = wval1] *)
+  Definition s1: Cminor.stmt := SstoreValAt wval1 wix1.
 
-  (* a[1] = 2 *)
-  Definition s2: Cminor.stmt :=
-    Cminor.Sstore STORE_CHUNK_SIZE (arrofs_expr wix2)
-                  (nat_to_expr wval2).
+  (* a[wix2] = wval2 *)
+  Definition s2: Cminor.stmt :=  SstoreValAt wval2 wix2.
 
-  Variable wixnoalias: wix1 <> wix2.
+  Definition s12 : Cminor.stmt := Sseq s1 s2.
+
+  Variable EXECS12: exec_stmt ge f sp e ma s12 e' m' Out_normal.
+  
+  Variable injf: meminj.
+  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock m).
+
+  Lemma memval_inject_stores_noalias:
+    forall rb ofs, wix1 <> rb
+          wix2 <> rb -> 
+    memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # rb)
+                  (ZMap.get ofs (Mem.mem_contents m') # rb).
+
 End STMTSEQ.
 
   
