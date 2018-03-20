@@ -63,8 +63,9 @@ Section MEMSTORE.
 
   Variable MSTORE: Mem.store wchunk m wb wofs wv = Some m'.
 
+  Variable ma: mem.
   Variable injf: meminj.
-  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock m).
+  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock ma).
 
 
   Lemma memval_inject_store_no_alias:
@@ -186,7 +187,8 @@ Section STMTSEQ.
   Variable EXECSSEQ: exec_stmt ge f sp e m s12 E0 e' m' Out_normal.
   
   Variable injf: meminj.
-  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock m).
+  Variable ma: mem.
+  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock ma).
 
   
   Variable wb1 wb2: block.
@@ -578,7 +580,60 @@ Section STMTINTERCHANGE.
       
       replace (ofs + 0) with ofs.
 
+      assert ({b2 = arrblock} + {b2 <> arrblock}) as b2CASES.
+      apply Pos.eq_dec.
 
+      destruct b2CASES as  [b2_EQ_ARRBLOCK | b2_NEQ_ARRBLOCK].
+      + (* we're accessing arrblock *)
+        subst.
+        admit.
+
+      +
+        assert (forall ofs, memval_inject (Mem.flat_inj (Mem.nextblock ma))
+                                     (ZMap.get
+                                        (Ptrofs.unsigned ofs)
+                                        (Mem.mem_contents ma) # b2)
+                                     (ZMap.get
+                                        (Ptrofs.unsigned ofs)
+                                        (Mem.mem_contents ma') # b2))
+          as MEMVALINJ_ma_ma'.
+        intros.
+        eapply memval_inject_store_no_alias_for_sseq with
+            (s1 := (SstoreValAt arrname wval1 wix1))
+            (s2 := (SstoreValAt arrname wval2 wix2));
+          try auto; try eassumption.
+        eapply eval_expr_arrofs.
+        auto.
+        eapply eval_expr_arrofs.
+        auto.
+
+        
+        assert (forall ofs, memval_inject (Mem.flat_inj (Mem.nextblock ma))
+                                     (ZMap.get
+                                        (Ptrofs.unsigned ofs)
+                                        (Mem.mem_contents mb) # b2)
+                                     (ZMap.get
+                                        (Ptrofs.unsigned ofs)
+                                        (Mem.mem_contents mb') # b2))
+          as MEMVALINJ_mb_mb'.
+        intros.
+        eapply memval_inject_store_no_alias_for_sseq with
+            (s2 := (SstoreValAt arrname wval1 wix1))
+            (s1 := (SstoreValAt arrname wval2 wix2));
+          try auto; try eassumption.
+        eapply eval_expr_arrofs.
+        auto.
+        eapply eval_expr_arrofs.
+        auto.
+
+        assert (memval_inject (Mem.flat_inj (Mem.nextblock ma))
+                              (ZMap.get ofs (Mem.mem_contents ma) # b2)
+                              (ZMap.get ofs (Mem.mem_contents mb) # b2))
+          as MEMVALINJ_ma_mb.
+        admit.
+
+        (* now chain the memval_inject up to get the full proof *)
+        
   Admitted.
   
 
