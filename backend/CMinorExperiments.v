@@ -13,53 +13,92 @@ Require Import ExtensionalityFacts.
 Require Import Equivalence EquivDec.
 Require Import Coqlib.
 
+Definition STORE_CHUNK_SIZE: memory_chunk := Mint8unsigned.
+
 
 (* We need this so we don't have to reason about fucking pointers to pointers
 and whatnot *)
 Definition mem_no_pointers (m: mem) : Prop :=
   forall bptr i q n b ofs,
   Fragment (Vptr bptr i) q n <> ZMap.get ofs (Mem.mem_contents m) # b.
-    
 
-Lemma memval_inject_store_different_block:
-  forall (m m': mem),
-  forall chunk b ofs v bother injf,
-    (injf =  Mem.flat_inj (Mem.nextblock m)) ->
-    mem_no_pointers m ->
-    bother <> b ->
-    Mem.store chunk m b ofs v = Some m' ->
-    memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # bother)
-                  (ZMap.get ofs (Mem.mem_contents m') # bother).
-Proof.
-  intros until injf.
-  intros INJFVAL.
-  intros NOPOINTERS.
-  intros bneq.
-  intros mem_store.
+Section SINGLESTMT.
 
-  assert (M'CONTENTS: Mem.mem_contents m' = PMap.set b (Mem.setN (encode_val chunk v) ofs m.(Mem.mem_contents)#b) m.(Mem.mem_contents)).
-  apply Mem.store_mem_contents; assumption.
+  Variable m m': mem.
+  Variable NOPOINTERS: mem_no_pointers m.
+
+  Variable wb: block.
+  Variable rb: block.
+
+  Variable chunk: memory_chunk.
+  Variable ofs: Z.
+  Variable v: val.
 
 
-  assert (M'CONTENTSEQ: (Mem.mem_contents m') #bother = (Mem.mem_contents m)#bother).
+  Variable MSTORE: Mem.store chunk m wb ofs v = Some m'.
+
+  Variable injf: meminj.
+  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock m).
+
+
+  Lemma memval_inject_store_no_alias:
+    wb <> rb -> 
+    memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # rb)
+                  (ZMap.get ofs (Mem.mem_contents m') # rb).
+  Proof.
+    intros NOALIAS.
+
+    assert (M'CONTENTS: Mem.mem_contents m' =
+                        PMap.set wb
+                                 (Mem.setN (encode_val chunk v) ofs
+                                           m.(Mem.mem_contents)# wb)
+                                 m.(Mem.mem_contents)).
+  apply Mem.store_mem_contents. assumption.
+
+
+  assert (M'CONTENTSEQ: (Mem.mem_contents m') # rb = (Mem.mem_contents m)# rb).
   rewrite M'CONTENTS.
   apply PMap.gso.
-  assumption.
+  auto.
 
   rewrite M'CONTENTSEQ.
 
   (* memval_inject *)
-  remember (ZMap.get ofs (Mem.mem_contents m) # bother) as mval.
+  remember (ZMap.get ofs (Mem.mem_contents m) # rb) as mval.
   destruct mval; try constructor.
 
   (* val inject *)
   destruct v0; try constructor.
   (* pointer injection *)
   unfold mem_no_pointers in NOPOINTERS.
-  specialize (NOPOINTERS b0 i q n bother ofs).
+  specialize (NOPOINTERS b i q n rb ofs).
   contradiction.
 Qed.
 
+End SINGLESTMT.
+
+Section STMTSEQ.
+  Variable m m': mem.
+  Variable arrname: ident.
+
+  Definition arrofs_expr(ofs: nat) : expr :=
+    Econst (Oaddrsymbol arrname (nat_to_ptrofs ofs)).
+
+  Variable wix1 wix2 : nat.
+  Variable wval1 wval2: nat.
+
+  
+  Definition s1: Cminor.stmt :=
+    Cminor.Sstore STORE_CHUNK_SIZE (arrofs_expr wix1)
+                  (nat_to_expr wval1).
+
+  (* a[1] = 2 *)
+  Definition s2: Cminor.stmt :=
+    Cminor.Sstore STORE_CHUNK_SIZE (arrofs_expr wix2)
+                  (nat_to_expr wval2).
+
+  Variable wixnoalias: wix1 <> wix2.
+End STMTSEQ.
 
   
 Section STMTINTERCHANGE.
@@ -387,12 +426,7 @@ Section STMTINTERCHANGE.
 
     
    
-    (* contradiction case *)
-    
-    
-
-
-  Lemma meminj_new: Mem.mem_inj injf ma' mb'.
+  Lemma meminj_ma'_mb': Mem.mem_inj injf ma' mb'.
   Proof.
 
     assert (mem_structure_eq injf ma' mb') as structureeq.
@@ -411,16 +445,21 @@ Section STMTINTERCHANGE.
 
     - (* content matching, the difficult part *)
       intros until delta.
-      unfold injf. unfold Mem.flat_inj.
       intros injf_b1.
-      destruct (plt b1 (Mem.nextblock ma)); inv injf_b1.
       intros ma'_readable.
+      unfold injf in injf_b1.
+      unfold Mem.flat_inj in injf_b1.
+      destruct (plt b1 (Mem.nextblock ma)); try contradiction.
+      inversion injf_b1.
+      subst.
 
-      (* memval inject *)
-  Abort.
+      
+      replace (ofs + 0) with ofs.
+  Admitted.
 
   Theorem flip_valid: Mem.inject injf ma' mb'.
   Proof.
+    
   Abort.
   
 
