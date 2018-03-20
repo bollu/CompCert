@@ -38,27 +38,29 @@ Section MEMSTORE.
   Variable wb: block.
   Variable rb: block.
 
-  Variable chunk: memory_chunk.
-  Variable ofs: Z.
-  Variable v: val.
+  Variable wchunk: memory_chunk.
+  Variable wofs: Z.
+  Variable wv: val.
 
 
-  Variable MSTORE: Mem.store chunk m wb ofs v = Some m'.
+  Variable MSTORE: Mem.store wchunk m wb wofs wv = Some m'.
 
   Variable injf: meminj.
   Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock m).
 
 
   Lemma memval_inject_store_no_alias:
+    forall ofs,
     wb <> rb -> 
     memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # rb)
                   (ZMap.get ofs (Mem.mem_contents m') # rb).
   Proof.
+    intros until ofs.
     intros NOALIAS.
 
     assert (M'CONTENTS: Mem.mem_contents m' =
                         PMap.set wb
-                                 (Mem.setN (encode_val chunk v) ofs
+                                 (Mem.setN (encode_val wchunk wv) wofs
                                            m.(Mem.mem_contents)# wb)
                                  m.(Mem.mem_contents)).
   apply Mem.store_mem_contents. assumption.
@@ -76,7 +78,7 @@ Section MEMSTORE.
   destruct mval; try constructor.
 
   (* val inject *)
-  destruct v0; try constructor.
+  destruct v; try constructor.
   (* pointer injection *)
   unfold mem_no_pointers in NOPOINTERS.
   specialize (NOPOINTERS b i q n rb ofs).
@@ -89,19 +91,18 @@ Section STMT.
   Variable m m': mem.
   Variable NOPOINTERS : mem_no_pointers m.
   
-  Variable ge: genv.
-  Variable f: function.
-  Variable sp: val.
-  Variable e e': env.
-  Variable arrname: ident.
     
-
+  Variable arrname: ident.
   Variable wix: nat.
   Variable wval: nat.
 
   Definition s: Cminor.stmt := SstoreValAt arrname wval wix.
 
   
+  Variable ge: genv.
+  Variable f: function.
+  Variable sp: val.
+  Variable e e': env.
   Variable EXECS: exec_stmt ge f sp e m s E0 e' m' Out_normal.
 
 
@@ -148,23 +149,22 @@ Section STMTSEQ.
 
   
   (* a[wix1] = wval1] *)
-  Definition s1: Cminor.stmt := SstoreValAt wval1 wix1.
+  Definition s1: Cminor.stmt := SstoreValAt arrname wval1 wix1.
 
   (* a[wix2] = wval2 *)
-  Definition s2: Cminor.stmt :=  SstoreValAt wval2 wix2.
+  Definition s2: Cminor.stmt :=  SstoreValAt arrname wval2 wix2.
 
   Definition s12 : Cminor.stmt := Sseq s1 s2.
 
-  Variable EXECS12: exec_stmt ge f sp e ma s12 e' m' Out_normal.
+  Variable ge: genv.
+  Variable f: function.
+  Variable sp: val.
+  Variable e e': env.
+  Variable EXECS12: exec_stmt ge f sp e m s12 E0 e' m' Out_normal.
   
   Variable injf: meminj.
   Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock m).
 
-  Lemma memval_inject_stores_noalias:
-    forall rb ofs, wix1 <> rb
-          wix2 <> rb -> 
-    memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # rb)
-                  (ZMap.get ofs (Mem.mem_contents m') # rb).
 
 End STMTSEQ.
 
