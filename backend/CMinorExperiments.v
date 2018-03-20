@@ -226,9 +226,9 @@ Section MEMSTRUCTURE.
   Qed.
 
   Lemma mem_structure_eq_store:
-    forall f ge sp  e e' m m' injf,
+    forall f ge sp  e e' m m' injf minj,
     forall chunk addr a,
-      injf =  Mem.flat_inj (Mem.nextblock m) ->
+      injf =  Mem.flat_inj (Mem.nextblock minj) ->
       exec_stmt ge f sp e m
                 (Sstore chunk addr a)
                 E0 e' m' Out_normal ->
@@ -250,7 +250,7 @@ Section MEMSTRUCTURE.
       intros perm_m.
 
       unfold Mem.flat_inj in inj.
-      destruct (plt b1 (Mem.nextblock m)); inversion inj; subst.
+      destruct (plt b1 (Mem.nextblock minj)); inversion inj; subst.
       replace (ofs + 0) with ofs.
 
       eapply Mem.perm_store_1; try eassumption.
@@ -261,7 +261,7 @@ Section MEMSTRUCTURE.
       
       
       unfold Mem.flat_inj in inj.
-      destruct (plt b1 (Mem.nextblock m)); inversion inj; subst.
+      destruct (plt b1 (Mem.nextblock minj)); inversion inj; subst.
 
       exists 0.
       omega.
@@ -269,9 +269,9 @@ Section MEMSTRUCTURE.
 
   
   Lemma mem_structure_eq_store_sym:
-    forall m1 m2,
+    forall m1 m2 minj,
     forall chunk b ofs v,
-      forall injf,  injf =  Mem.flat_inj (Mem.nextblock m1) ->
+    forall injf,  injf =  Mem.flat_inj (Mem.nextblock minj) ->
       mem_structure_eq injf m1 m2  ->
       Mem.store chunk m1 b ofs v = Some m2 ->
       mem_structure_eq injf m2 m1.
@@ -288,7 +288,7 @@ Section MEMSTRUCTURE.
       intros inj_b1.
       rewrite injfVAL in inj_b1.
       unfold Mem.flat_inj in inj_b1.
-      destruct (plt b1 (Mem.nextblock m1));  inversion inj_b1.
+      destruct (plt b1 (Mem.nextblock minj));  inversion inj_b1.
 
       intros m2_perm.
       subst.
@@ -305,7 +305,7 @@ Section MEMSTRUCTURE.
       intros inj_b1.
       rewrite injfVAL in inj_b1.
       unfold Mem.flat_inj in inj_b1.
-      destruct (plt b1 (Mem.nextblock m1));  inversion inj_b1.
+      destruct (plt b1 (Mem.nextblock minj));  inversion inj_b1.
       subst.
       intros range_perm.
       exists 0.
@@ -314,14 +314,14 @@ Section MEMSTRUCTURE.
       
 
   Lemma mem_structure_eq_trans:
-    forall m1 m2 m3,
-      forall injf, injf =  Mem.flat_inj (Mem.nextblock m1) ->
+    forall m1 m2 m3 minj,
+      forall injf, injf =  Mem.flat_inj (Mem.nextblock minj) ->
       mem_structure_eq injf m1 m2  ->
                  mem_structure_eq injf m2 m3 ->
                  mem_structure_eq injf m1 m3.
   
   Proof.
-    intros until m3.
+    intros until minj.
     intros injf. intros injfVAL.
     intros eq12 eq23.
 
@@ -340,7 +340,7 @@ Section MEMSTRUCTURE.
       eapply mseq_perm0 with (b1 := b1).
       rewrite injfVAL in *.
       unfold Mem.flat_inj in *.
-      destruct (plt b1 (Mem.nextblock m1));
+      destruct (plt b1 (Mem.nextblock minj));
         inversion inj_b1.
       reflexivity.
       eassumption.
@@ -352,10 +352,10 @@ Section MEMSTRUCTURE.
       exists 0.
       rewrite injfVAL in inj_b1.
       unfold Mem.flat_inj in inj_b1.
-      destruct (plt b1 (Mem.nextblock m1)); inversion inj_b1; try omega.
+      destruct (plt b1 (Mem.nextblock minj)); inversion inj_b1; try omega.
   Qed.
 
-  End MEMSTRUCTURE.
+End MEMSTRUCTURE.
 
   
 Section STMTINTERCHANGE.
@@ -395,59 +395,53 @@ Section STMTINTERCHANGE.
 
   Lemma mem_structure_eq_ma_ma':
     mem_structure_eq injf ma ma'.
+    subst.
+    unfold SstoreValAt in *.
 
-    revert s1VAL.
-    revert s2VAL.
-    revert injfVAL.
-        
-    
     inversion exec_s12; subst; try congruence.
       assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
       apply destruct_trace_app_eq_E0. assumption.
       destruct t1_t2_E0.
       subst.
 
-      assert (mem_structure_eq injf ma m1) as eq_ma_m1.
-    + admit.
-      (* + eapply mem_structure_eq_store.
-
-      unfold s1 in *.
+      assert (mem_structure_eq (Mem.flat_inj (Mem.nextblock ma)) ma m1) as eq_ma_m1.
+    + eapply mem_structure_eq_store.
+      auto.
       eassumption.
-       *)
 
-    + assert (mem_structure_eq injf m1 ma') as eq_m1_ma'.
-      (* 
+    + assert (mem_structure_eq (Mem.flat_inj (Mem.nextblock ma)) m1 ma') as eq_m1_ma'.
       eapply mem_structure_eq_store.
-      unfold s2 in *.
+      auto.
       eassumption.
-      *)
 
 
-      eapply mem_structure_eq_trans; eassumption.
+      eapply mem_structure_eq_trans; try auto; try eassumption.
       Qed.
 
   
   Lemma mem_structure_eq_mb_mb':
     mem_structure_eq injf mb mb'.
-    inversion exec_s21; subst; try contradiction.
+    subst.
+    inversion exec_s21; subst; try congruence.
     assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
     apply destruct_trace_app_eq_E0. assumption.
     destruct t1_t2_E0.
     subst.
 
-    assert (mem_structure_eq injf mb m1) as eq_ma_m1.
+    unfold SstoreValAt in *.
+
+    assert (mem_structure_eq (Mem.flat_inj (Mem.nextblock ma)) mb m1) as eq_ma_m1.
     + eapply mem_structure_eq_store.
-
-      unfold s2 in *.
+      auto.
       eassumption.
 
-    + assert (mem_structure_eq injf m1 mb') as eq_m1_ma'.
+    + assert (mem_structure_eq (Mem.flat_inj (Mem.nextblock ma)) m1 mb') as eq_m1_ma'.
       eapply mem_structure_eq_store.
-      unfold s2 in *.
+      auto.
       eassumption.
 
 
-      eapply mem_structure_eq_trans; eassumption.
+      eapply mem_structure_eq_trans; try auto; eassumption.
   Qed.
 
   Lemma mem_structure_eq_ma'_ma:
@@ -455,7 +449,7 @@ Section STMTINTERCHANGE.
     constructor.
 
     - intros until p.
-      unfold injf.
+      rewrite injfVAL.
       unfold Mem.flat_inj.
 
       intros b2_as_b1.
@@ -514,7 +508,7 @@ Section STMTINTERCHANGE.
       intros until p.
       intros INJF_B1_B2.
       intros RANGE_PERM.
-      unfold injf in INJF_B1_B2.
+      rewrite injfVAL in INJF_B1_B2.
       unfold Mem.flat_inj in INJF_B1_B2.
       destruct (plt b1 (Mem.nextblock ma)); inversion INJF_B1_B2; subst.
       exists 0. omega.
@@ -522,20 +516,19 @@ Section STMTINTERCHANGE.
 
   Lemma mem_structure_eq_ma'_mb':
     mem_structure_eq injf ma' mb'.
-    assert (mem_structure_eq injf ma mb) as structure_eq_begin.
+    
+    assert (mem_structure_eq injf ma mb) as MEMSTRUCTURE_EQ_MA_MB.
     eapply mem_inj_mem_structure_eq. inversion begininj. eassumption.
 
 
-    eapply mem_structure_eq_trans with (m2 := mb).
-    eapply mem_structure_eq_trans with (m2 := ma).
+
+    eapply mem_structure_eq_trans with (m2 := mb). rewrite injfVAL. auto. 
+    eapply mem_structure_eq_trans with (m2 := ma). rewrite injfVAL. auto.
     eapply mem_structure_eq_ma'_ma.
     assumption.
     eapply mem_structure_eq_mb_mb'.
   Qed.
 
-      
-
-    
    
   Lemma meminj_ma'_mb': Mem.mem_inj injf ma' mb'.
   Proof.
@@ -558,7 +551,7 @@ Section STMTINTERCHANGE.
       intros until delta.
       intros injf_b1.
       intros ma'_readable.
-      unfold injf in injf_b1.
+      rewrite injfVAL in injf_b1.
       unfold Mem.flat_inj in injf_b1.
       destruct (plt b1 (Mem.nextblock ma)); try contradiction.
       inversion injf_b1.
@@ -567,11 +560,6 @@ Section STMTINTERCHANGE.
       
       replace (ofs + 0) with ofs.
   Admitted.
-
-  Theorem flip_valid: Mem.inject injf ma' mb'.
-  Proof.
-    
-  Abort.
   
 
   
