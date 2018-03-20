@@ -115,14 +115,14 @@ Section STMT.
    which is the pointer wb with offset wofs *)
   Variable WBVAL: eval_expr ge sp e m (arrofs_expr arrname wix) (Vptr wb wofs).
   
-  Lemma memval_inject_store_no_alias_for_stmt:
-    forall rb,
+  Lemma memval_inject_store_no_alias_for_sstore:
+    forall rb ofs,
       rb <> wb ->
       memval_inject injf
-                    (ZMap.get (Ptrofs.unsigned wofs) (Mem.mem_contents m) # rb)
-                    (ZMap.get (Ptrofs.unsigned wofs) (Mem.mem_contents m') # rb).
+                    (ZMap.get (Ptrofs.unsigned ofs) (Mem.mem_contents m) # rb)
+                    (ZMap.get (Ptrofs.unsigned ofs) (Mem.mem_contents m') # rb).
   Proof.
-    intros until rb.
+    intros until ofs.
     intros NOALIAS.
     inversion EXECS. subst.
 
@@ -147,24 +147,52 @@ Section STMTSEQ.
   Variable wval1 wval2: nat.
 
 
-  
   (* a[wix1] = wval1] *)
-  Definition s1: Cminor.stmt := SstoreValAt arrname wval1 wix1.
+  Variable s1: Cminor.stmt.
+  Variable s1DEFN : s1 = SstoreValAt arrname wval1 wix1.
 
   (* a[wix2] = wval2 *)
-  Definition s2: Cminor.stmt :=  SstoreValAt arrname wval2 wix2.
+  Variable s2: Cminor.stmt.
+  Variable s2DEFN : s2 = SstoreValAt arrname wval2 wix2.
 
-  Definition s12 : Cminor.stmt := Sseq s1 s2.
+  Variable s12 : Cminor.stmt.
+  Variable s12DEFN : s12 = Sseq s1 s2.
 
   Variable ge: genv.
   Variable f: function.
   Variable sp: val.
   Variable e e': env.
-  Variable EXECS12: exec_stmt ge f sp e m s12 E0 e' m' Out_normal.
+  Variable EXECSSEQ: exec_stmt ge f sp e m s12 E0 e' m' Out_normal.
   
   Variable injf: meminj.
   Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock m).
 
+  
+  Variable wb1 wb2: block.
+  Variable wofs1 wofs2: ptrofs.
+  (* the array offset has a concrete value,
+   which is the pointer wb with offset wofs *)
+  Variable WB1VAL: eval_expr ge sp e m
+                             (arrofs_expr arrname wix1)
+                             (Vptr wb1 wofs1).
+  
+  Variable WB2VAL: eval_expr ge sp e m
+                             (arrofs_expr arrname wix2)
+                             (Vptr wb2 wofs2).
+  
+  Lemma memval_inject_store_no_alias_for_sseq:
+    forall rb ofs,
+      rb <> wb1 ->
+      rb <> wb2 ->
+      memval_inject injf
+                    (ZMap.get (Ptrofs.unsigned ofs) (Mem.mem_contents m) # rb)
+                    (ZMap.get (Ptrofs.unsigned ofs) (Mem.mem_contents m') # rb).
+  Proof.
+    intros until ofs.
+    intros NOALIAS_WB1.
+    intros NOALIAS_WB2.
+    inversion EXECSSEQ. subst.
+    Admitted.
 
 End STMTSEQ.
 
@@ -173,32 +201,23 @@ Section STMTINTERCHANGE.
   Variable ma mb ma' mb': mem.
   
   Variable arrname: ident.
-  Definition STORE_CHUNK_SIZE: memory_chunk := Mint8unsigned.
 
-  Definition nat_to_expr (n: nat) : expr :=
-    Econst (Ointconst (Int.repr (Z.of_nat n))).
-  Definition nat_to_ptrofs (n: nat) : ptrofs :=
-    Ptrofs.repr (Z.of_nat n).
-  Definition arrofs_expr(ofs: nat) : expr :=
-    Econst (Oaddrsymbol arrname (nat_to_ptrofs ofs)).
+  Variable wval1 wval2: nat.
+  Variable wix1 wix2: nat.
+  Variable WIX_NOALIAS: wix1 <> wix2.
+
+  Variable s1 s2 s12 s21: Cminor.stmt.
   
+  Variable s1VAL: s1 = SstoreValAt arrname wval1 wix1.
+  Variable s2VAL: s1 = SstoreValAt arrname wval2 wix2.
 
+
+  Variable s12val: s12 = Cminor.Sseq s1 s2.
+  Variable s21val: s21 = Cminor.Sseq s2 s1.
+
+  Variable injf : meminj.
+  Variable injfVAL: injf = Mem.flat_inj (Mem.nextblock ma).
   
-  (* a[0] = 1*)
-  Definition s1: Cminor.stmt :=
-    Cminor.Sstore STORE_CHUNK_SIZE (arrofs_expr 0)
-                  (nat_to_expr 1).
-
-  (* a[1] = 2 *)
-  Definition s2: Cminor.stmt :=
-    Cminor.Sstore STORE_CHUNK_SIZE (arrofs_expr 1)
-                  (nat_to_expr 2).
-
-
-  Definition s12: Cminor.stmt := Cminor.Sseq s1 s2.
-  Definition s21: Cminor.stmt := Cminor.Sseq s2 s1.
-
-  Definition injf : meminj := Mem.flat_inj (Mem.nextblock ma).
   Variable begininj: Mem.inject injf ma mb.
 
 
