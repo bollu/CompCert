@@ -96,7 +96,8 @@ Section STMT.
   Variable wix: nat.
   Variable wval: nat.
 
-  Definition s: Cminor.stmt := SstoreValAt arrname wval wix.
+  Variable s: Cminor.stmt.
+  Variable sVAL: s= SstoreValAt arrname wval wix.
 
   
   Variable ge: genv.
@@ -124,6 +125,8 @@ Section STMT.
   Proof.
     intros until ofs.
     intros NOALIAS.
+
+    rewrite sVAL in EXECS.
     inversion EXECS. subst.
 
     assert (vaddr = Vptr wb wofs) as VADDR_EQ_WBVAL.
@@ -196,42 +199,8 @@ Section STMTSEQ.
 
 End STMTSEQ.
 
+Section MEMSTRUCTURE.
   
-Section STMTINTERCHANGE.
-  Variable ma mb ma' mb': mem.
-  
-  Variable arrname: ident.
-
-  Variable wval1 wval2: nat.
-  Variable wix1 wix2: nat.
-  Variable WIX_NOALIAS: wix1 <> wix2.
-
-  Variable s1 s2 s12 s21: Cminor.stmt.
-  
-  Variable s1VAL: s1 = SstoreValAt arrname wval1 wix1.
-  Variable s2VAL: s1 = SstoreValAt arrname wval2 wix2.
-
-
-  Variable s12val: s12 = Cminor.Sseq s1 s2.
-  Variable s21val: s21 = Cminor.Sseq s2 s1.
-
-  Variable injf : meminj.
-  Variable injfVAL: injf = Mem.flat_inj (Mem.nextblock ma).
-  
-  Variable begininj: Mem.inject injf ma mb.
-
-
-  Variable ge: genv.
-  Variable f: function.
-  Variable sp: val.
-  Variable e e': env.
-  Variable exec_s12: exec_stmt ge f sp  e ma s12 E0 e' ma' Out_normal.
-  Variable exec_s21: exec_stmt ge f sp  e mb s21 E0 e' mb' Out_normal.
-
-  Variable arrbase : block.
-
-  Variable GENV_AT_ARR: Genv.find_symbol ge arrname = Some arrbase.
-
   Record mem_structure_eq (f: meminj) (m1 m2: mem) :=
     mk_mem_structure_eq {
         mseq_perm:
@@ -257,17 +226,18 @@ Section STMTINTERCHANGE.
   Qed.
 
   Lemma mem_structure_eq_store:
-    forall f ge sp  e e' m m',
+    forall f ge sp  e e' m m' injf,
     forall chunk addr a,
+      injf =  Mem.flat_inj (Mem.nextblock m) ->
       exec_stmt ge f sp e m
                 (Sstore chunk addr a)
                 E0 e' m' Out_normal ->
       mem_structure_eq injf m m'.
   Proof.
-    unfold injf.
     intros until a.
-    intros execs.
-    inversion execs; subst.
+    intros injfVAL.
+    intros EXECS.
+    inversion EXECS; subst.
 
     rename H10 into store.
     unfold Mem.storev in store.
@@ -280,7 +250,7 @@ Section STMTINTERCHANGE.
       intros perm_m.
 
       unfold Mem.flat_inj in inj.
-      destruct (plt b1 (Mem.nextblock ma)); inversion inj; subst.
+      destruct (plt b1 (Mem.nextblock m)); inversion inj; subst.
       replace (ofs + 0) with ofs.
 
       eapply Mem.perm_store_1; try eassumption.
@@ -291,7 +261,7 @@ Section STMTINTERCHANGE.
       
       
       unfold Mem.flat_inj in inj.
-      destruct (plt b1 (Mem.nextblock ma)); inversion inj; subst.
+      destruct (plt b1 (Mem.nextblock m)); inversion inj; subst.
 
       exists 0.
       omega.
@@ -301,11 +271,13 @@ Section STMTINTERCHANGE.
   Lemma mem_structure_eq_store_sym:
     forall m1 m2,
     forall chunk b ofs v,
+      forall injf,  injf =  Mem.flat_inj (Mem.nextblock m1) ->
       mem_structure_eq injf m1 m2  ->
       Mem.store chunk m1 b ofs v = Some m2 ->
       mem_structure_eq injf m2 m1.
   Proof.
     intros until v.
+    intros injf. intros injfVAL.
     intros eq_m1_m2.
     intros m2_as_store_m1.
 
@@ -314,9 +286,9 @@ Section STMTINTERCHANGE.
     constructor.
     - intros until p.
       intros inj_b1.
-      unfold injf in inj_b1.
+      rewrite injfVAL in inj_b1.
       unfold Mem.flat_inj in inj_b1.
-      destruct (plt b1 (Mem.nextblock ma));  inversion inj_b1.
+      destruct (plt b1 (Mem.nextblock m1));  inversion inj_b1.
 
       intros m2_perm.
       subst.
@@ -331,9 +303,9 @@ Section STMTINTERCHANGE.
 
     - intros until p.
       intros inj_b1.
-      unfold injf in inj_b1.
+      rewrite injfVAL in inj_b1.
       unfold Mem.flat_inj in inj_b1.
-      destruct (plt b1 (Mem.nextblock ma));  inversion inj_b1.
+      destruct (plt b1 (Mem.nextblock m1));  inversion inj_b1.
       subst.
       intros range_perm.
       exists 0.
@@ -342,11 +314,15 @@ Section STMTINTERCHANGE.
       
 
   Lemma mem_structure_eq_trans:
-    forall m1 m2 m3, mem_structure_eq injf m1 m2  ->
+    forall m1 m2 m3,
+      forall injf, injf =  Mem.flat_inj (Mem.nextblock m1) ->
+      mem_structure_eq injf m1 m2  ->
                  mem_structure_eq injf m2 m3 ->
                  mem_structure_eq injf m1 m3.
+  
   Proof.
     intros until m3.
+    intros injf. intros injfVAL.
     intros eq12 eq23.
 
     inversion eq12.
@@ -362,9 +338,9 @@ Section STMTINTERCHANGE.
 
       replace ofs with (ofs + 0).
       eapply mseq_perm0 with (b1 := b1).
-      unfold injf in *.
+      rewrite injfVAL in *.
       unfold Mem.flat_inj in *.
-      destruct (plt b1 (Mem.nextblock ma));
+      destruct (plt b1 (Mem.nextblock m1));
         inversion inj_b1.
       reflexivity.
       eassumption.
@@ -374,29 +350,77 @@ Section STMTINTERCHANGE.
       intros inj_b1.
       intros perm.
       exists 0.
-      unfold injf in inj_b1.
+      rewrite injfVAL in inj_b1.
       unfold Mem.flat_inj in inj_b1.
-      destruct (plt b1 (Mem.nextblock ma)); inversion inj_b1; try omega.
+      destruct (plt b1 (Mem.nextblock m1)); inversion inj_b1; try omega.
   Qed.
+
+  End MEMSTRUCTURE.
+
+  
+Section STMTINTERCHANGE.
+  Variable ma mb ma' mb': mem.
+  
+  Variable arrname: ident.
+
+  Variable wval1 wval2: nat.
+  Variable wix1 wix2: nat.
+  Variable WIX_NOALIAS: wix1 <> wix2.
+
+  Variable s1 s2 s12 s21: Cminor.stmt.
+  
+  Variable s1VAL: s1 = SstoreValAt arrname wval1 wix1.
+  Variable s2VAL: s2 = SstoreValAt arrname wval2 wix2.
+
+
+  Variable s12val: s12 = Cminor.Sseq s1 s2.
+  Variable s21val: s21 = Cminor.Sseq s2 s1.
+
+  Variable injf : meminj.
+  Variable injfVAL: injf = Mem.flat_inj (Mem.nextblock ma).
+  
+  Variable begininj: Mem.inject injf ma mb.
+
+
+  Variable ge: genv.
+  Variable f: function.
+  Variable sp: val.
+  Variable e e': env.
+  Variable exec_s12: exec_stmt ge f sp  e ma s12 E0 e' ma' Out_normal.
+  Variable exec_s21: exec_stmt ge f sp  e mb s21 E0 e' mb' Out_normal.
+
+  Variable arrbase : block.
+
+  Variable GENV_AT_ARR: Genv.find_symbol ge arrname = Some arrbase.
 
   Lemma mem_structure_eq_ma_ma':
     mem_structure_eq injf ma ma'.
-      inversion exec_s12; subst; try contradiction.
+
+    revert s1VAL.
+    revert s2VAL.
+    revert injfVAL.
+        
+    
+    inversion exec_s12; subst; try congruence.
       assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
       apply destruct_trace_app_eq_E0. assumption.
       destruct t1_t2_E0.
       subst.
 
       assert (mem_structure_eq injf ma m1) as eq_ma_m1.
-      + eapply mem_structure_eq_store.
+    + admit.
+      (* + eapply mem_structure_eq_store.
 
       unfold s1 in *.
       eassumption.
+       *)
 
-      + assert (mem_structure_eq injf m1 ma') as eq_m1_ma'.
+    + assert (mem_structure_eq injf m1 ma') as eq_m1_ma'.
+      (* 
       eapply mem_structure_eq_store.
       unfold s2 in *.
       eassumption.
+      *)
 
 
       eapply mem_structure_eq_trans; eassumption.
