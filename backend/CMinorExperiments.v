@@ -114,6 +114,7 @@ Section MEMSTORE.
     specialize (NOPOINTERS b i q n rb ofs).
     contradiction.
   Qed.
+  
 
 End MEMSTORE.
 
@@ -145,6 +146,59 @@ Section STMT.
   (* the array offset has a concrete value,
    which is the pointer wb with offset wofs *)
   Variable WBVAL: eval_expr ge sp e m (arrofs_expr arrname wix) (Vptr wb wofs).
+
+
+  Lemma memextend_sstore:
+    forall (arrblock: block),
+    Genv.find_symbol ge arrname = Some arrblock ->
+    Mem.mem_inj injf m m' ->
+    Mem.extends m m'.
+  Proof.
+    intros arrblock.
+    intros arrblockVAL.
+    intros MEMINJ.
+    rewrite sVAL in EXECS.
+    unfold SstoreValAt in EXECS.
+    inversion EXECS. subst.
+
+    assert (vaddr = Vptr wb wofs).
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+    assert (wb = arrblock /\ wofs = (nat_to_ptrofs wix)) as WB_WOFS_VAL.
+    assert (eval_expr ge sp e' m (arrofs_expr arrname wix)
+                      (Vptr arrblock (nat_to_ptrofs wix))) as EVAL_ARROFS_EXPR.
+    apply eval_expr_arrofs; eassumption.
+
+    assert (Vptr wb wofs = Vptr arrblock (nat_to_ptrofs wix)).
+    eapply eval_expr_is_function; eassumption.
+    inversion H.
+    auto.
+
+    destruct WB_WOFS_VAL as [wbeq wofseq].
+    subst.
+
+    constructor.
+    - unfold Mem.storev in H10.
+      symmetry.
+      eapply Mem.nextblock_store. eassumption.
+      
+    - constructor; intros; unfold inject_id in H; inversion H; subst.
+      + intros.
+        replace (ofs + 0) with ofs.
+        eapply Mem.perm_store_1; eassumption.
+        omega.
+      + exists 0. omega.
+      + replace (ofs + 0) with ofs.
+        admit.
+        omega.
+          
+    -  intros.
+       left.
+       eapply Mem.perm_store_2; eassumption.
+  Admitted.
+                                        
+
   
   Lemma memval_inject_store_no_alias_for_sstore:
     forall rb ofs,
@@ -170,6 +224,8 @@ Section STMT.
       try eassumption.
     auto.
   Qed.
+
+  
 End STMT.
 
 Section STMTSEQ.
@@ -213,7 +269,7 @@ Section STMTSEQ.
   Variable WB2VAL: eval_expr ge sp e m
                              (arrofs_expr arrname wix2)
                              (Vptr wb2 wofs2).
-  
+
   Lemma memval_inject_store_no_alias_for_sseq:
     forall rb ofs,
       rb <> wb1 ->
@@ -667,8 +723,15 @@ Section STMTINTERCHANGE.
   Lemma meminject_ma'_mb': Mem.inject injf ma' mb'.
   Proof.
     constructor.
+
+    assert (Mem.inject injf ma ma') as INJECT_MA_MA'.
+    rewrite s12val in exec_s12.
+    rewrite s1VAL in exec_s12.
+    rewrite s2VAL in exec_s12.
+    
     - apply meminj_ma'_mb'.
-    - admit.
+    - intros b bINVALID_MA'.
+      rewrite injfVAL.
     - admit.
     - admit.
     - admit.
