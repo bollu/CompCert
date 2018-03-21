@@ -110,6 +110,7 @@ Lemma nat_to_int64_neq:
     Z.of_nat n' < Int64.modulus ->
     n <> n' ->
     nat_to_int64 n <> nat_to_int64 n'.
+Proof.
   intros until n'.
   intros n_inrange n'_inrange.
 

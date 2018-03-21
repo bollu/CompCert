@@ -13,10 +13,15 @@ Require Import ExtensionalityFacts.
 Require Import Equivalence EquivDec.
 Require Import Coqlib.
 
+Definition nat_to_int64 (n: nat): int64 := (Int64.repr (Z.of_nat n)).
+Definition nat_to_ptrofs (n: nat): ptrofs := (Ptrofs.repr (Z.of_nat n)).
+Definition nat_to_expr(n: nat): expr := Econst (Olongconst (nat_to_int64 n)).
+
+Check (nat_to_ptrofs).
 Definition STORE_CHUNK_SIZE: memory_chunk := Mint8unsigned.
 
 Definition arrofs_expr (arrname: ident) (ofs: nat) : expr :=
-    Econst (Oaddrsymbol arrname (nat_to_ptrofs ofs)).
+  Econst (Oaddrsymbol arrname (nat_to_ptrofs ofs)).
 
 (* a handy alias for storing 1 byte value *)
 Definition SstoreValAt (arrname: ident) (v: nat) (ix: nat) :=
@@ -24,7 +29,7 @@ Definition SstoreValAt (arrname: ident) (v: nat) (ix: nat) :=
                 (nat_to_expr v).
 Lemma eval_expr_arrofs: forall (arrname: ident) (ofs: nat),
     forall (ge: genv) (sp: val) (e: env) (m: mem),
-      forall (arrblock: block),
+    forall (arrblock: block),
       Genv.find_symbol ge arrname = Some arrblock ->
       eval_expr ge sp e m
                 (arrofs_expr arrname ofs)
@@ -46,7 +51,7 @@ Qed.
 and whatnot *)
 Definition mem_no_pointers (m: mem) : Prop :=
   forall bptr i q n b ofs,
-  Fragment (Vptr bptr i) q n <> ZMap.get ofs (Mem.mem_contents m) # b.
+    Fragment (Vptr bptr i) q n <> ZMap.get ofs (Mem.mem_contents m) # b.
 
 Section MEMSTORE.
 
@@ -70,9 +75,9 @@ Section MEMSTORE.
 
   Lemma memval_inject_store_no_alias:
     forall ofs,
-    wb <> rb -> 
-    memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # rb)
-                  (ZMap.get ofs (Mem.mem_contents m') # rb).
+      wb <> rb -> 
+      memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # rb)
+                    (ZMap.get ofs (Mem.mem_contents m') # rb).
   Proof.
     intros until ofs.
     intros NOALIAS.
@@ -82,27 +87,27 @@ Section MEMSTORE.
                                  (Mem.setN (encode_val wchunk wv) wofs
                                            m.(Mem.mem_contents)# wb)
                                  m.(Mem.mem_contents)).
-  apply Mem.store_mem_contents. assumption.
+    apply Mem.store_mem_contents. assumption.
 
 
-  assert (M'CONTENTSEQ: (Mem.mem_contents m') # rb = (Mem.mem_contents m)# rb).
-  rewrite M'CONTENTS.
-  apply PMap.gso.
-  auto.
+    assert (M'CONTENTSEQ: (Mem.mem_contents m') # rb = (Mem.mem_contents m)# rb).
+    rewrite M'CONTENTS.
+    apply PMap.gso.
+    auto.
 
-  rewrite M'CONTENTSEQ.
+    rewrite M'CONTENTSEQ.
 
-  (* memval_inject *)
-  remember (ZMap.get ofs (Mem.mem_contents m) # rb) as mval.
-  destruct mval; try constructor.
+    (* memval_inject *)
+    remember (ZMap.get ofs (Mem.mem_contents m) # rb) as mval.
+    destruct mval; try constructor.
 
-  (* val inject *)
-  destruct v; try constructor.
-  (* pointer injection *)
-  unfold mem_no_pointers in NOPOINTERS.
-  specialize (NOPOINTERS b i q n rb ofs).
-  contradiction.
-Qed.
+    (* val inject *)
+    destruct v; try constructor.
+    (* pointer injection *)
+    unfold mem_no_pointers in NOPOINTERS.
+    specialize (NOPOINTERS b i q n rb ofs).
+    contradiction.
+  Qed.
 
 End MEMSTORE.
 
@@ -110,7 +115,7 @@ Section STMT.
   Variable m m': mem.
   Variable NOPOINTERS : mem_no_pointers m.
   
-    
+  
   Variable arrname: ident.
   Variable wix: nat.
   Variable wval: nat.
@@ -158,7 +163,7 @@ Section STMT.
     eapply memval_inject_store_no_alias;
       try eassumption.
     auto.
-    Qed.
+  Qed.
 End STMT.
 
 Section STMTSEQ.
@@ -215,7 +220,7 @@ Section STMTSEQ.
     intros NOALIAS_WB1.
     intros NOALIAS_WB2.
     inversion EXECSSEQ. subst.
-    Admitted.
+  Admitted.
 
 End STMTSEQ.
 
@@ -292,9 +297,9 @@ Section MEMSTRUCTURE.
     forall m1 m2 minj,
     forall chunk b ofs v,
     forall injf,  injf =  Mem.flat_inj (Mem.nextblock minj) ->
-      mem_structure_eq injf m1 m2  ->
-      Mem.store chunk m1 b ofs v = Some m2 ->
-      mem_structure_eq injf m2 m1.
+                  mem_structure_eq injf m1 m2  ->
+                  Mem.store chunk m1 b ofs v = Some m2 ->
+                  mem_structure_eq injf m2 m1.
   Proof.
     intros until v.
     intros injf. intros injfVAL.
@@ -331,12 +336,12 @@ Section MEMSTRUCTURE.
       exists 0.
       omega.
   Qed.
-      
+  
 
   Lemma mem_structure_eq_trans:
     forall m1 m2 m3 minj,
-      forall injf, injf =  Mem.flat_inj (Mem.nextblock minj) ->
-      mem_structure_eq injf m1 m2  ->
+    forall injf, injf =  Mem.flat_inj (Mem.nextblock minj) ->
+                 mem_structure_eq injf m1 m2  ->
                  mem_structure_eq injf m2 m3 ->
                  mem_structure_eq injf m1 m3.
   
@@ -377,7 +382,7 @@ Section MEMSTRUCTURE.
 
 End MEMSTRUCTURE.
 
-  
+
 Section STMTINTERCHANGE.
   Variable ma mb ma' mb': mem.
   
@@ -415,16 +420,17 @@ Section STMTINTERCHANGE.
 
   Lemma mem_structure_eq_ma_ma':
     mem_structure_eq injf ma ma'.
+  Proof.
     subst.
     unfold SstoreValAt in *.
 
     inversion exec_s12; subst; try congruence.
-      assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
-      apply destruct_trace_app_eq_E0. assumption.
-      destruct t1_t2_E0.
-      subst.
+    assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
+    apply destruct_trace_app_eq_E0. assumption.
+    destruct t1_t2_E0.
+    subst.
 
-      assert (mem_structure_eq (Mem.flat_inj (Mem.nextblock ma)) ma m1) as eq_ma_m1.
+    assert (mem_structure_eq (Mem.flat_inj (Mem.nextblock ma)) ma m1) as eq_ma_m1.
     + eapply mem_structure_eq_store.
       auto.
       eassumption.
@@ -436,11 +442,12 @@ Section STMTINTERCHANGE.
 
 
       eapply mem_structure_eq_trans; try auto; try eassumption.
-      Qed.
+  Qed.
 
   
   Lemma mem_structure_eq_mb_mb':
     mem_structure_eq injf mb mb'.
+  Proof.
     subst.
     inversion exec_s21; subst; try congruence.
     assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
@@ -466,6 +473,7 @@ Section STMTINTERCHANGE.
 
   Lemma mem_structure_eq_ma'_ma:
     mem_structure_eq injf ma' ma.
+  Proof.
     constructor.
 
     - intros until p.
@@ -532,11 +540,11 @@ Section STMTINTERCHANGE.
       unfold Mem.flat_inj in INJF_B1_B2.
       destruct (plt b1 (Mem.nextblock ma)); inversion INJF_B1_B2; subst.
       exists 0. omega.
-      Qed.
+  Qed.
 
   Lemma mem_structure_eq_ma'_mb':
     mem_structure_eq injf ma' mb'.
-    
+  Proof. 
     assert (mem_structure_eq injf ma mb) as MEMSTRUCTURE_EQ_MA_MB.
     eapply mem_inj_mem_structure_eq. inversion begininj. eassumption.
 
@@ -549,7 +557,7 @@ Section STMTINTERCHANGE.
     eapply mem_structure_eq_mb_mb'.
   Qed.
 
-   
+  
   Lemma meminj_ma'_mb': Mem.mem_inj injf ma' mb'.
   Proof.
 
@@ -561,7 +569,7 @@ Section STMTINTERCHANGE.
     
     constructor.
     - intros.
-    eapply mseq_perm0; eassumption.
+      eapply mseq_perm0; eassumption.
 
     - (* permission *)
       intros.
@@ -590,12 +598,12 @@ Section STMTINTERCHANGE.
 
       +
         assert (forall ofs, memval_inject (Mem.flat_inj (Mem.nextblock ma))
-                                     (ZMap.get
-                                        (Ptrofs.unsigned ofs)
-                                        (Mem.mem_contents ma) # b2)
-                                     (ZMap.get
-                                        (Ptrofs.unsigned ofs)
-                                        (Mem.mem_contents ma') # b2))
+                                          (ZMap.get
+                                             (Ptrofs.unsigned ofs)
+                                             (Mem.mem_contents ma) # b2)
+                                          (ZMap.get
+                                             (Ptrofs.unsigned ofs)
+                                             (Mem.mem_contents ma') # b2))
           as MEMVALINJ_ma_ma'.
         intros.
         eapply memval_inject_store_no_alias_for_sseq with
