@@ -53,6 +53,12 @@ Definition mem_no_pointers (m: mem) : Prop :=
   forall bptr i q n b ofs,
     Fragment (Vptr bptr i) q n <> ZMap.get ofs (Mem.mem_contents m) # b.
 
+Section MEMVAL_INJECT.
+  Variable ma: mem.
+  Variable injf: meminj.
+  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock ma).
+End MEMVAL_INJECT.
+
 Section MEMSTORE.
 
   Variable m m': mem.
@@ -564,15 +570,17 @@ Section STMTINTERCHANGE.
     assert (mem_structure_eq injf ma' mb') as structureeq.
     apply mem_structure_eq_ma'_mb'.
 
-    inversion structureeq.
 
     
     constructor.
+    
     - intros.
+      inversion structureeq.
       eapply mseq_perm0; eassumption.
 
     - (* permission *)
       intros.
+      inversion structureeq.
       eapply mseq_align0; eassumption.
 
     - (* content matching, the difficult part *)
@@ -638,12 +646,34 @@ Section STMTINTERCHANGE.
                               (ZMap.get ofs (Mem.mem_contents ma) # b2)
                               (ZMap.get ofs (Mem.mem_contents mb) # b2))
           as MEMVALINJ_ma_mb.
+        inversion begininj.
+        inversion mi_inj.
+        specialize (mi_memval b2 ofs b2 0).
+        replace (ofs + 0) with ofs in mi_memval.
+        apply mi_memval.
+        unfold Mem.flat_inj.
+        destruct (plt b2 (Mem.nextblock ma)); try contradiction.
+        auto.
+        assert (Mem.perm ma b2 ofs Cur Readable) as MA_READABLE.
+        (* show that because ma' is readable, ma is also readable *)
         admit.
+        apply MA_READABLE.
+        omega.
 
         (* now chain the memval_inject up to get the full proof *)
         
   Admitted.
   
+  Lemma meminject_ma'_mb': Mem.inject injf ma' mb'.
+  Proof.
+    constructor.
+    - apply meminj_ma'_mb'.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+    - admit.
+  Admitted.
 
   
 End STMTINTERCHANGE.
