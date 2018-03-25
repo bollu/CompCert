@@ -57,6 +57,51 @@ Section MEMVAL_INJECT.
   Variable ma: mem.
   Variable injf: meminj.
   Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock ma).
+
+
+  (* Note that this is NOT TRUE!
+  We can inject a Vundef into whatever we want *)
+  Lemma memval_inject_trans:
+    forall (ofs: Z) (rb: block) (m1 m2 m3: mem),
+      mem_no_pointers m1 ->
+      memval_inject injf (ZMap.get ofs (Mem.mem_contents m1) # rb)
+                    (ZMap.get ofs (Mem.mem_contents m2) # rb) ->
+      memval_inject injf (ZMap.get ofs (Mem.mem_contents m2) # rb)
+                    (ZMap.get ofs (Mem.mem_contents m3) # rb) ->
+      memval_inject injf (ZMap.get ofs (Mem.mem_contents m1) # rb)
+                    (ZMap.get ofs (Mem.mem_contents m3) # rb).
+  Proof.
+    intros until m3.
+    intros NOPOINTERS.
+    intros INJ_M1_M2.
+    intros INJ_M2_M3.
+    remember (ZMap.get ofs (Mem.mem_contents m1) # rb) as M1_AT_RB.
+
+    induction M1_AT_RB.
+
+    - apply memval_inject_undef.
+    - inversion INJ_M1_M2; subst;
+        inversion INJ_M2_M3; subst; try congruence.
+    - inversion INJ_M1_M2; subst;
+        inversion INJ_M2_M3; subst; try congruence.
+
+      assert (Fragment v2 q n = Fragment v1 q0 n0) as FRAG_EQ.
+      rewrite H3. rewrite H.
+      reflexivity.
+
+      inv FRAG_EQ.
+
+      assert (v = v1) as V_EQ_V1.
+      inversion H0; try auto; try congruence.
+      unfold Mem.flat_inj in H4.
+      destruct (plt b1 (Mem.nextblock ma)); try congruence.
+      
+      inversion H4.
+      subst.
+      replace (Ptrofs.add ofs1 (Ptrofs.repr 0)) with ofs1.
+      auto.
+  Abort.
+    
 End MEMVAL_INJECT.
 
 Section MEMSTORE.
@@ -147,59 +192,6 @@ Section STMT.
    which is the pointer wb with offset wofs *)
   Variable WBVAL: eval_expr ge sp e m (arrofs_expr arrname wix) (Vptr wb wofs).
 
-
-  Lemma memextend_sstore:
-    forall (arrblock: block),
-    Genv.find_symbol ge arrname = Some arrblock ->
-    Mem.mem_inj injf m m' ->
-    Mem.extends m m'.
-  Proof.
-    intros arrblock.
-    intros arrblockVAL.
-    intros MEMINJ.
-    rewrite sVAL in EXECS.
-    unfold SstoreValAt in EXECS.
-    inversion EXECS. subst.
-
-    assert (vaddr = Vptr wb wofs).
-    eapply eval_expr_is_function; eassumption.
-    subst.
-
-    assert (wb = arrblock /\ wofs = (nat_to_ptrofs wix)) as WB_WOFS_VAL.
-    assert (eval_expr ge sp e' m (arrofs_expr arrname wix)
-                      (Vptr arrblock (nat_to_ptrofs wix))) as EVAL_ARROFS_EXPR.
-    apply eval_expr_arrofs; eassumption.
-
-    assert (Vptr wb wofs = Vptr arrblock (nat_to_ptrofs wix)).
-    eapply eval_expr_is_function; eassumption.
-    inversion H.
-    auto.
-
-    destruct WB_WOFS_VAL as [wbeq wofseq].
-    subst.
-
-    constructor.
-    - unfold Mem.storev in H10.
-      symmetry.
-      eapply Mem.nextblock_store. eassumption.
-      
-    - constructor; intros; unfold inject_id in H; inversion H; subst.
-      + intros.
-        replace (ofs + 0) with ofs.
-        eapply Mem.perm_store_1; eassumption.
-        omega.
-      + exists 0. omega.
-      + replace (ofs + 0) with ofs.
-        admit.
-        omega.
-          
-    -  intros.
-       left.
-       eapply Mem.perm_store_2; eassumption.
-  Admitted.
-                                        
-
-  
   Lemma memval_inject_store_no_alias_for_sstore:
     forall rb ofs,
       rb <> wb ->
@@ -281,7 +273,24 @@ Section STMTSEQ.
     intros until ofs.
     intros NOALIAS_WB1.
     intros NOALIAS_WB2.
-    inversion EXECSSEQ. subst.
+    inversion EXECSSEQ; subst; try congruence.
+
+
+    assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
+    apply destruct_trace_app_eq_E0. assumption.
+
+    destruct t1_t2_E0 as [t1E0 t2E0].
+    subst.
+
+    rename H6 into Sseq_EQUIV.
+    inversion Sseq_EQUIV.
+    subst.
+
+    rename H into EXECS1.
+    rename H0 into EXECS2.
+
+
+
   Admitted.
 
 End STMTSEQ.
@@ -622,12 +631,13 @@ Section STMTINTERCHANGE.
   
   Lemma meminj_ma'_mb': Mem.mem_inj injf ma' mb'.
   Proof.
+  Admitted.
 
+
+
+  (* 
     assert (mem_structure_eq injf ma' mb') as structureeq.
     apply mem_structure_eq_ma'_mb'.
-
-
-    
     constructor.
     
     - intros.
@@ -658,10 +668,17 @@ Section STMTINTERCHANGE.
       destruct b2CASES as  [b2_EQ_ARRBLOCK | b2_NEQ_ARRBLOCK].
       + (* we're accessing arrblock *)
         subst.
+        assert (ofs =  Z.of_nat wix1 \/
+                ofs = Z.of_nat wix2 \/
+                (ofs <> Z.of_nat wix1 /\ ofs <> Z.of_nat wix2)) as OFSCASES.
+        omega.
+
+        destruct OFSCASES as [ OFS_WIX1  | [OFS_WIX2 | OFS_NEQ_WIX1_WIX2]].
+        admit.
+        admit.
         admit.
 
-      +
-        assert (forall ofs, memval_inject (Mem.flat_inj (Mem.nextblock ma))
+        + assert (forall ofs, memval_inject (Mem.flat_inj (Mem.nextblock ma))
                                           (ZMap.get
                                              (Ptrofs.unsigned ofs)
                                              (Mem.mem_contents ma) # b2)
@@ -719,19 +736,19 @@ Section STMTINTERCHANGE.
         (* now chain the memval_inject up to get the full proof *)
         
   Admitted.
+   *)
   
   Lemma meminject_ma'_mb': Mem.inject injf ma' mb'.
   Proof.
     constructor.
 
     assert (Mem.inject injf ma ma') as INJECT_MA_MA'.
-    rewrite s12val in exec_s12.
-    rewrite s1VAL in exec_s12.
-    rewrite s2VAL in exec_s12.
+    admit.
     
     - apply meminj_ma'_mb'.
     - intros b bINVALID_MA'.
       rewrite injfVAL.
+      admit.
     - admit.
     - admit.
     - admit.
