@@ -234,6 +234,21 @@ Section MEMVAL_INJECT.
   Variable injf: meminj.
   Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock ma).
 
+  (* When we disallow pointers, we can make memval_inject reflexive *)
+  Lemma memval_inject_refl:
+    forall (mv: memval),
+      (forall b ptrofs q n, mv <> Fragment (Vptr b ptrofs) q n) -> 
+      memval_inject injf mv mv.
+  Proof.
+    intros.
+    destruct mv; try constructor.
+
+    (* val inject *)
+    destruct v; try constructor.
+    (* pointer injection *)
+    specialize (H b i q n). contradiction.
+  Qed.
+
 
   (* Note that this is NOT TRUE!
   We can inject a Vundef into whatever we want *)
@@ -326,12 +341,11 @@ Section MEMSTORE.
   Variable wb: block.
   Variable rb: block.
 
-  Variable wchunk: memory_chunk.
   Variable wofs: Z.
   Variable wv: val.
 
 
-  Variable MSTORE: Mem.store wchunk m wb wofs wv = Some m'.
+  Variable MSTORE: Mem.store STORE_CHUNK_SIZE m wb wofs wv = Some m'.
 
   Variable ma: mem.
   Variable injf: meminj.
@@ -349,7 +363,7 @@ Section MEMSTORE.
 
     assert (M'CONTENTS: Mem.mem_contents m' =
                         PMap.set wb
-                                 (Mem.setN (encode_val wchunk wv) wofs
+                                 (Mem.setN (encode_val STORE_CHUNK_SIZE wv) wofs
                                            m.(Mem.mem_contents)# wb)
                                  m.(Mem.mem_contents)).
     apply Mem.store_mem_contents. assumption.
@@ -362,16 +376,73 @@ Section MEMSTORE.
 
     rewrite M'CONTENTSEQ.
 
-    (* memval_inject *)
-    remember (ZMap.get ofs (Mem.mem_contents m) # rb) as mval.
-    destruct mval; try constructor.
+    apply memval_inject_refl.
+    intros.
 
-    (* val inject *)
-    destruct v; try constructor.
-    (* pointer injection *)
+    assert (M_AT_RB_CASES: {ZMap.get ofs (Mem.mem_contents m) # rb = Fragment (Vptr b ptrofs) q n} +
+            {ZMap.get ofs (Mem.mem_contents m) # rb <> Fragment (Vptr b ptrofs) q n}).
+    apply memval_eq_dec.
+    destruct M_AT_RB_CASES as [M_AT_RB_FRAG | M_AT_RB_NOT_FRAG].
     unfold mem_no_pointers in NOPOINTERS.
-    specialize (NOPOINTERS b i q n rb ofs).
-    contradiction.
+    (* M at frag *)
+    specialize (NOPOINTERS b ptrofs q n rb ofs).
+    congruence.
+    auto.
+
+  Qed.
+
+  
+  Lemma memval_inject_store_no_alias_same_block:
+        forall ofs,
+          ofs <> wofs ->
+      memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # wb)
+                    (ZMap.get ofs (Mem.mem_contents m') # wb).
+  Proof.
+    intros until ofs.
+    intros NOALIASOFS.
+
+    assert (M'CONTENTS: Mem.mem_contents m' =
+                        PMap.set wb
+                                 (Mem.setN (encode_val STORE_CHUNK_SIZE wv) wofs
+                                           m.(Mem.mem_contents)# wb)
+                                 m.(Mem.mem_contents)).
+    apply Mem.store_mem_contents. assumption.
+
+
+
+    assert (M'CONTENTSEQ: (Mem.mem_contents m') # wb =
+            Mem.setN (encode_val STORE_CHUNK_SIZE wv) wofs m.(Mem.mem_contents) # wb).
+    rewrite M'CONTENTS.
+    apply PMap.gss.
+
+    rewrite M'CONTENTSEQ.
+
+    (* memval_inject *)
+    remember (ZMap.get ofs (Mem.mem_contents m') # wb) as mval.
+    remember (encode_val STORE_CHUNK_SIZE wv) as WVENC.
+    
+    assert (M'_AT_OFS: ZMap.get ofs (Mem.setN WVENC wofs (Mem.mem_contents m) # wb) =
+            ZMap.get ofs (Mem.mem_contents m) # wb).
+    apply Mem.setN_outside.
+    rewrite HeqWVENC.
+    rewrite Memdata.encode_val_length.
+    simpl.
+    omega.
+
+    rewrite M'_AT_OFS.
+
+    
+    apply memval_inject_refl.
+    intros.
+    assert (M_AT_RB_CASES: {ZMap.get ofs (Mem.mem_contents m) # rb = Fragment (Vptr b ptrofs) q n} +
+            {ZMap.get ofs (Mem.mem_contents m) # rb <> Fragment (Vptr b ptrofs) q n}).
+    apply memval_eq_dec.
+    destruct M_AT_RB_CASES as [M_AT_RB_FRAG | M_AT_RB_NOT_FRAG].
+    unfold mem_no_pointers in NOPOINTERS.
+    (* M at frag *)
+    specialize (NOPOINTERS b ptrofs q n rb ofs).
+    congruence.
+    auto.
   Qed.
   
 
@@ -416,6 +487,32 @@ Section STMT.
   Proof.
     intros until ofs.
     intros NOALIAS.
+
+    rewrite sVAL in EXECS.
+    inversion EXECS. subst.
+
+    assert (vaddr = Vptr wb wofs) as VADDR_EQ_WBVAL.
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+    rename H10 into STOREM.
+    unfold Mem.storev in STOREM.
+    
+    eapply memval_inject_store_no_alias;
+      try eassumption.
+    auto.
+  Qed.
+
+  
+  Lemma memval_inject_store_no_alias_for_sstore_same_block:
+    forall ofs,
+      ofs <> Z.of_nat wix ->
+      memval_inject injf
+                    (ZMap.get ofs (Mem.mem_contents m) # wb)
+                    (ZMap.get ofs (Mem.mem_contents m') # wb).
+  Proof.
+    intros until ofs.
+    intros NOALIASWIX.
 
     rewrite sVAL in EXECS.
     inversion EXECS. subst.
@@ -927,6 +1024,11 @@ Section STMTINTERCHANGE.
 
       destruct b2CASES as  [b2_EQ_ARRBLOCK | b2_NEQ_ARRBLOCK].
       + (* we're accessing arrblock *)
+        subst.
+        assert (ofs = Z.of_nat wix1 \/ ofs = Z.of_nat wix2 \/
+                (ofs <> Z.of_nat wix1 \/ ofs <> Z.of_nat wix2)) as OFS_CASES.
+        omega.
+        
         admit.
       + (* we're not accessing ARRBLOCK *)
         assert (memval_inject (Mem.flat_inj (Mem.nextblock m))
