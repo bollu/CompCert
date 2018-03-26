@@ -506,7 +506,7 @@ Section STMT.
   
   Lemma memval_inject_store_no_alias_for_sstore_same_block:
     forall ofs,
-      ofs <> Z.of_nat wix ->
+      ofs <> Ptrofs.unsigned wofs ->
       memval_inject injf
                     (ZMap.get ofs (Mem.mem_contents m) # wb)
                     (ZMap.get ofs (Mem.mem_contents m') # wb).
@@ -524,9 +524,8 @@ Section STMT.
     rename H10 into STOREM.
     unfold Mem.storev in STOREM.
     
-    eapply memval_inject_store_no_alias;
+    eapply memval_inject_store_no_alias_same_block;
       try eassumption.
-    auto.
   Qed.
 
   
