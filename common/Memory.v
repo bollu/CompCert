@@ -533,20 +533,20 @@ Qed.
 (* NOTE: this theorem can be generalised to talk about what happens
 when you get into a setN in the range of ptrbase <= i <= ptrbase + encode_size (v)
  *)
-Remark get_setN_at_base_chunk_Mint8unisnged:
-  forall (v: val) (ptr: Z) (c: ZMap.t memval) (mvbase: memval),
-    ZMap.get ptr (setN (encode_val Mint8unsigned v) ptr c) = mvbase ->
-    Some mvbase =  List.hd_error (encode_val Mint8unsigned v).
+Remark get_setN_at_base_chunk_Mint8unsigned:
+  forall (v: val) (ptr: Z) (c: ZMap.t memval),
+    Some (ZMap.get ptr (setN (encode_val Mint8unsigned v) ptr c)) =
+    List.hd_error (encode_val Mint8unsigned v).
 Proof.
-  intros until mvbase.
-  intros MVBASE.
+  intros until c.
+  remember ((ZMap.get ptr (setN (encode_val Mint8unsigned v) ptr c))) as C_AT_PTR.
   assert (MVBASE':
             hd_error
               (getN 1 ptr  (setN (encode_val Mint8unsigned v) ptr c)) =
-            Some mvbase).
+            Some (C_AT_PTR)).
     rewrite getN_1_get.
     simpl.
-    rewrite MVBASE.
+    subst.
     auto.
 
     assert (length (encode_val Mint8unsigned v) = 1%nat) as LEN_ENCODE_V.
@@ -556,6 +556,11 @@ Proof.
     rewrite getN_setN_same in MVBASE'.
     auto.
 Qed.
+
+
+
+    
+    
 
 Remark getN_exten:
   forall c1 c2 n p,
