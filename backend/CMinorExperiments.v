@@ -12,6 +12,7 @@ Require Import PeanoNat.
 Require Import ExtensionalityFacts.
 Require Import Equivalence EquivDec.
 Require Import Coqlib.
+Require Import Floats.
 
 Definition nat_to_int64 (n: nat): int64 := (Int64.repr (Z.of_nat n)).
 Definition nat_to_ptrofs (n: nat): ptrofs := (Ptrofs.repr (Z.of_nat n)).
@@ -45,6 +46,44 @@ Proof.
   auto.
 Qed.
 
+(*
+Error:
+Unexpected error during scheme creation: Anomaly
+                                         "Uncaught exception Type_errors.TypeError(_, _)."
+Please report at http://coq.inria.fr/bugs/.
+Scheme Equality for memval.
+*)
+
+Lemma val_eq_dec: forall (v1 v2: val), {v1 = v2} + {v1 <> v2}.
+Proof.
+  intros.
+  decide equality.
+  apply Int.eq_dec.
+  apply Int64.eq_dec.
+  apply Float.eq_dec.
+  apply Float32.eq_dec.
+  apply Ptrofs.eq_dec.
+  apply eq_block.
+Qed.
+Lemma memval_eq_dec: forall (mv1 mv2: memval), {mv1 = mv2} + {mv1 <> mv2}.
+Proof.
+  intros.
+  decide equality.
+  apply Byte.eq_dec.
+  apply Nat.eq_dec.
+  apply Memdata.quantity_eq.
+  apply val_eq_dec.
+Qed.
+   
+    
+
+(* I have no idea why I need to prove this as a separate theorem *)
+Lemma integer_split_number_line:
+  forall (y z: Z), y <> z -> y < z \/ y >= z + 1.
+Proof.
+  intros.
+  omega.
+Qed.
 
 
 (* We need this so we don't have to reason about fucking pointers to pointers
@@ -52,6 +91,71 @@ and whatnot *)
 Definition mem_no_pointers (m: mem) : Prop :=
   forall bptr i q n b ofs,
     Fragment (Vptr bptr i) q n <> ZMap.get ofs (Mem.mem_contents m) # b.
+
+
+(* If we have a mem_inj, then we can continue to claim that memory does not
+contain pointers *)
+Lemma mem_no_pointers_forward_on_mem_inj:
+  forall (m m': mem) (addr v : val),
+    mem_no_pointers m ->
+    Mem.storev STORE_CHUNK_SIZE m addr v = Some m' ->
+    mem_no_pointers m'.
+Proof.
+  intros until v.
+  intros M_NO_POINTERS.
+  intros M'_AS_STORE_M.
+  unfold mem_no_pointers in *.
+  intros until ofs.
+  unfold Mem.storev in M'_AS_STORE_M.
+
+  induction addr; try congruence.
+
+  erewrite Mem.store_mem_contents with (m1 := m)
+                                       (chunk := STORE_CHUNK_SIZE)
+                                       (ofs := (Ptrofs.unsigned i0))
+                                       (b := b0)
+                                       (v := v).
+  assert ({b = b0} + {b <> b0}) as BCASES.
+  apply Pos.eq_dec.
+
+ 
+ destruct BCASES as [BEQ | BNEQ].
+  + subst.
+    rewrite PMap.gss.
+    assert ({ofs = Ptrofs.unsigned i0} +  {ofs <> Ptrofs.unsigned i0}) as
+        ofs_cases.
+    apply Z.eq_dec.
+
+    destruct ofs_cases as [OFSEQ | OFSNEQ].
+    * remember  (ZMap.get ofs
+                          (Mem.setN (encode_val STORE_CHUNK_SIZE v) (Ptrofs.unsigned i0) (Mem.mem_contents m) # b0)) as m'_at_ofs.
+      remember (Fragment (Vptr bptr i) q n) as frag.
+      assert ({frag = m'_at_ofs} + {frag <> m'_at_ofs}) as FRAG_CASES.
+      apply memval_eq_dec.
+
+      destruct FRAG_CASES as [FRAGEQ | FRAGNEQ].
+      ** (* We may need to assume that we never store pointers. That is,
+            v is not a pointer. Use this fact to show that m'_at_ofs cannot contain
+            a pointer fragment *)
+          admit.
+      ** auto.
+
+      
+    * rewrite Mem.setN_outside.
+      apply M_NO_POINTERS.
+      rewrite encode_val_length.
+      simpl.
+      apply integer_split_number_line.
+      eassumption.
+      
+    
+  + rewrite PMap.gso.
+    apply M_NO_POINTERS.
+    auto.
+Admitted.
+    
+    
+
 
 Section MEMVAL_INJECT.
   Variable ma: mem.
@@ -184,7 +288,8 @@ Section STMT.
 
 
   Variable injf: meminj.
-  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock m).
+  Variable ma: mem.
+  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock ma).
 
   Variable wb: block.
   Variable wofs: ptrofs.
@@ -222,6 +327,7 @@ End STMT.
 
 Section STMTSEQ.
   Variable m m': mem.
+  Variable NOPOINTERS: mem_no_pointers m.
   Variable arrname: ident.
 
   Variable wix1 wix2 : nat.
@@ -249,6 +355,8 @@ Section STMTSEQ.
   Variable ma: mem.
   Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock ma).
 
+    
+
   
   Variable wb1 wb2: block.
   Variable wofs1 wofs2: ptrofs.
@@ -258,9 +366,9 @@ Section STMTSEQ.
                              (arrofs_expr arrname wix1)
                              (Vptr wb1 wofs1).
   
-  Variable WB2VAL: eval_expr ge sp e m
+  (* Variable WB2VAL: eval_expr ge sp e1 m1
                              (arrofs_expr arrname wix2)
-                             (Vptr wb2 wofs2).
+                             (Vptr wb2 wofs2). *)
 
   Lemma memval_inject_store_no_alias_for_sseq:
     forall rb ofs,
@@ -289,9 +397,38 @@ Section STMTSEQ.
     rename H into EXECS1.
     rename H0 into EXECS2.
 
+    assert (memval_inject (Mem.flat_inj (Mem.nextblock ma))
+                          (ZMap.get (Ptrofs.unsigned ofs) (Mem.mem_contents m) # rb)
+                          (ZMap.get (Ptrofs.unsigned ofs) (Mem.mem_contents m1) # rb))
+      as INJ_M_M1.
+    eapply memval_inject_store_no_alias_for_sstore with
+        (arrname := arrname)
+        (wix := wix1)
+        (wval := wval1); try eassumption; try auto.
+
+    
+    assert (memval_inject (Mem.flat_inj (Mem.nextblock ma))
+                          (ZMap.get (Ptrofs.unsigned ofs) (Mem.mem_contents m1) # rb)
+                          (ZMap.get (Ptrofs.unsigned ofs) (Mem.mem_contents m') # rb))
+      as INJ_M1_M'.
+    eapply memval_inject_store_no_alias_for_sstore with
+        (arrname := arrname)
+        (wix := wix2)
+        (wval := wval2); try eassumption; try auto.
+
+    inversion EXECS2. subst.
+    inversion EXECS1. subst.
+    eapply mem_no_pointers_forward_on_mem_inj with (m := m) (m' := m1).
+    eassumption.
+    exact H14.
+    apply eval_expr_arrofs.
+    
 
 
-  Admitted.
+    
+  Abort.
+
+
 
 End STMTSEQ.
 
@@ -631,11 +768,6 @@ Section STMTINTERCHANGE.
   
   Lemma meminj_ma'_mb': Mem.mem_inj injf ma' mb'.
   Proof.
-  Admitted.
-
-
-
-  (* 
     assert (mem_structure_eq injf ma' mb') as structureeq.
     apply mem_structure_eq_ma'_mb'.
     constructor.
@@ -674,17 +806,16 @@ Section STMTINTERCHANGE.
         omega.
 
         destruct OFSCASES as [ OFS_WIX1  | [OFS_WIX2 | OFS_NEQ_WIX1_WIX2]].
-        admit.
-        admit.
-        admit.
-
-        + assert (forall ofs, memval_inject (Mem.flat_inj (Mem.nextblock ma))
+        * admit.
+        * admit.
+        *
+          assert (forall ofs, memval_inject (Mem.flat_inj (Mem.nextblock ma))
                                           (ZMap.get
                                              (Ptrofs.unsigned ofs)
-                                             (Mem.mem_contents ma) # b2)
+                                             (Mem.mem_contents ma) # arrblock)
                                           (ZMap.get
                                              (Ptrofs.unsigned ofs)
-                                             (Mem.mem_contents ma') # b2))
+                                             (Mem.mem_contents ma') # arrblock))
           as MEMVALINJ_ma_ma'.
         intros.
         eapply memval_inject_store_no_alias_for_sseq with
@@ -755,5 +886,4 @@ Section STMTINTERCHANGE.
     - admit.
   Admitted.
 
-  
 End STMTINTERCHANGE.
