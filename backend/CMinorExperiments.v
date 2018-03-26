@@ -154,7 +154,7 @@ Proof.
 
       assert (ENCODEV: Some MNEW = List.hd_error (encode_val Mint8unsigned v)).
       rewrite HeqMNEW.
-      erewrite Mem.get_setN_at_base_chunk_Mint8unisnged;
+      erewrite Mem.get_setN_at_base_chunk_Mint8unsigned;
         try auto;
         try eassumption.
 
@@ -535,7 +535,19 @@ Section STMTSEQ.
 
     inversion EXECS2. subst.
     inversion EXECS1. subst.
-    eapply mem_no_pointers_forward_on_mem_inj with (m := m) (m' := m1).
+    eapply mem_no_pointers_forward_on_mem_inj with (m := m) (m' := m1) (v := v0).
+
+    assert (val_no_pointer v0) as V0_NO_PTR.
+    unfold val_no_pointer.
+    intros.
+    rename H10 into eval_v0.
+    inversion eval_v0. subst.
+    rename H0 into eval_v0_const.
+    simpl in eval_v0_const.
+    inversion eval_v0_const.
+    congruence.
+
+    apply V0_NO_PTR.
     eassumption.
     exact H14.
     eapply eval_expr_arrofs. eassumption.
@@ -934,17 +946,16 @@ Section STMTINTERCHANGE.
         
         
   Admitted.
-   *)
   
-  Lemma meminject_ma'_mb': Mem.inject injf ma' mb'.
+  Lemma meminject_ma'_mb': Mem.inject injf m12 m21.
   Proof.
     constructor.
 
-    assert (Mem.inject injf ma ma') as INJECT_MA_MA'.
+    assert (Mem.inject injf m12 m21) as INJECT_M12_M21.
     admit.
     
-    - apply meminj_ma'_mb'.
-    - intros b bINVALID_MA'.
+    - apply INJECT_M12_M21.
+    - intros b bINVALID_M12.
       rewrite injfVAL.
       admit.
     - admit.

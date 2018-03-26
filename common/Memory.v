@@ -557,11 +557,6 @@ Proof.
     auto.
 Qed.
 
-
-
-    
-    
-
 Remark getN_exten:
   forall c1 c2 n p,
   (forall i, p <= i < p + Z.of_nat n -> ZMap.get i c1 = ZMap.get i c2) ->
@@ -4548,7 +4543,8 @@ Notation mem := Mem.mem.
 Global Opaque Mem.alloc Mem.free Mem.store Mem.load Mem.storebytes Mem.loadbytes.
 
 Hint Resolve
-  Mem.valid_not_valid_diff
+     Mem.valid_not_valid_diff
+     Mem.get_setN_at_base_chunk_Mint8unsigned
   Mem.perm_implies
   Mem.perm_cur
   Mem.perm_max
