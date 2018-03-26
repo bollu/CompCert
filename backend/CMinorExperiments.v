@@ -100,16 +100,20 @@ Definition mem_no_undef_fragment (m: mem) : Prop :=
   forall b ofs q n,
     Fragment (Vundef) q n <> ZMap.get ofs (Mem.mem_contents m) # b.
 
+Definition val_no_pointer (v: val) : Prop :=
+  forall bptr i, v <> Vptr bptr i.
 
 (* If we have a mem_inj, then we can continue to claim that memory does not
 contain pointers *)
 Lemma mem_no_pointers_forward_on_mem_inj:
   forall (m m': mem) (addr v : val),
+    val_no_pointer v ->
     mem_no_pointers m ->
     Mem.storev STORE_CHUNK_SIZE m addr v = Some m' ->
     mem_no_pointers m'.
 Proof.
   intros until v.
+  intros V_NO_POINTER.
   intros M_NO_POINTERS.
   intros M'_AS_STORE_M.
   unfold mem_no_pointers in *.
@@ -135,18 +139,16 @@ Proof.
     apply Z.eq_dec.
 
     destruct ofs_cases as [OFSEQ | OFSNEQ].
-    * remember  (ZMap.get ofs
-                          (Mem.setN (encode_val STORE_CHUNK_SIZE v) (Ptrofs.unsigned i0) (Mem.mem_contents m) # b0)) as m'_at_ofs.
-      remember (Fragment (Vptr bptr i) q n) as frag.
-      assert ({frag = m'_at_ofs} + {frag <> m'_at_ofs}) as FRAG_CASES.
-      apply memval_eq_dec.
-
-      destruct FRAG_CASES as [FRAGEQ | FRAGNEQ].
-      ** (* We may need to assume that we never store pointers. That is,
-            v is not a pointer. Use this fact to show that m'_at_ofs cannot contain
-            a pointer fragment *)
-          admit.
-      ** auto.
+    * subst.
+      unfold val_no_pointer in V_NO_POINTER.
+      destruct v;
+      simpl;
+      try (rewrite ZMap.gss);
+      try auto;
+      try congruence.
+      
+      
+      
 
       
     * rewrite Mem.setN_outside.
@@ -160,6 +162,8 @@ Proof.
   + rewrite PMap.gso.
     apply M_NO_POINTERS.
     auto.
+
+  + auto.
 Admitted.
 
 Section VAL_INJECT.

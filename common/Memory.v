@@ -495,6 +495,52 @@ Proof.
   intros. omega.
 Qed.
 
+Remark getN_1_get:
+  forall (p: Z) (c: ZMap.t memval),
+    getN 1 p c =(ZMap.get p c) :: nil.
+Proof.
+  intros.
+  unfold getN.
+  reflexivity.
+Qed.
+
+(* NOTE: this theorem can be generalised to talk about what happens
+when you get into a setN in the range of ptrbase <= i <= ptrbase + encode_size (v)
+ *)
+Remark get_setN_at_base_chunk_Mint8unisnged:
+  forall (v: val) (ptr: Z) (c: ZMap.t memval) (mvbase: memval)
+    (encmv: list memval),
+    ZMap.get ptr (setN (encode_val Mint8unsigned v) ptr c) = mvbase ->
+    shape_encoding Mint8unsigned v encmv ->
+    Some mvbase =  List.hd_error encmv.
+Proof.
+  intros until encmv.
+  intros MVBASE.
+  intros ENCODING.
+
+  induction v.
+  - simpl in MVBASE.
+    rewrite ZMap.gss in MVBASE.
+    subst.
+    inversion ENCODING.
+    destruct H as [contra1 | [contra2 | [contra3 | contra4]]];
+      congruence.
+    contradiction.
+    simpl. auto.
+    
+  - simpl in MVBASE.
+    inversion ENCODING.
+    destruct H as [contra1 | [contra2 | [contra3 | contra4]]];
+      congruence.
+    simpl.
+
+    
+Proof.
+  intros until mv.
+  induction v.
+  
+  
+
 Remark getN_setN_same:
   forall vl p c,
   getN (length vl) p (setN vl p c) = vl.
