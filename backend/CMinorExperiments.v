@@ -368,6 +368,7 @@ End STMT.
 Section STMTSEQ.
   Variable m m': mem.
   Variable NOPOINTERS: mem_no_pointers m.
+  Variable NOUNDEF: mem_no_undef m.
   Variable arrname: ident.
 
   Variable wix1 wix2 : nat.
@@ -468,12 +469,10 @@ Section STMTSEQ.
     eassumption.
     exact H14.
     eapply eval_expr_arrofs. eassumption.
-    
 
-
-    
-  Abort.
-
+    eapply memval_inject_trans; try eassumption.
+    auto.
+  Qed.
 
 
 End STMTSEQ.
