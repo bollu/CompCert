@@ -92,6 +92,10 @@ Definition mem_no_pointers (m: mem) : Prop :=
   forall bptr i q n b ofs,
     Fragment (Vptr bptr i) q n <> ZMap.get ofs (Mem.mem_contents m) # b.
 
+Definition mem_no_undef (m: mem) : Prop :=
+  forall m b ofs,
+    Undef <> ZMap.get ofs (Mem.mem_contents m) # b.
+
 
 (* If we have a mem_inj, then we can continue to claim that memory does not
 contain pointers *)
@@ -153,6 +157,47 @@ Proof.
     apply M_NO_POINTERS.
     auto.
 Admitted.
+
+Section VAL_INJECT.
+  
+  Variable ma: mem.
+  Variable injf: meminj.
+  Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock ma).
+  
+  Lemma val_inject_trans:
+    forall v1 v2 v3,
+      Val.inject injf v1 v2 ->
+      Val.inject injf v2 v3 ->
+      Val.inject injf v1 v3.
+  Proof.
+    intros until v3.
+    intros INJ12 INJ23.
+
+    inversion INJ12; subst; inversion INJ23; subst; try constructor.
+
+    unfold Mem.flat_inj in H.
+    unfold Mem.flat_inj in H2.
+
+    destruct (plt b2 (Mem.nextblock ma)); try congruence.
+    destruct (plt b1 (Mem.nextblock ma)); try congruence.
+    inversion H2. inversion H. subst.
+    replace (Ptrofs.add (Ptrofs.add ofs1 (Ptrofs.repr 0)) (Ptrofs.repr 0)) with ofs1.
+    eapply Val.inject_ptr.
+    unfold Mem.flat_inj.
+    destruct (plt b3 (Mem.nextblock ma)); try congruence.
+    auto.
+
+    simpl.
+    symmetry.
+    apply Ptrofs.add_zero.
+    symmetry.
+    rewrite Ptrofs.add_zero.
+    rewrite Ptrofs.add_zero.
+    auto.
+  Qed.
+    
+End VAL_INJECT.
+
     
     
 
@@ -168,6 +213,7 @@ Section MEMVAL_INJECT.
   Lemma memval_inject_trans:
     forall (ofs: Z) (rb: block) (m1 m2 m3: mem),
       mem_no_pointers m1 ->
+      mem_no_undef m1 ->
       memval_inject injf (ZMap.get ofs (Mem.mem_contents m1) # rb)
                     (ZMap.get ofs (Mem.mem_contents m2) # rb) ->
       memval_inject injf (ZMap.get ofs (Mem.mem_contents m2) # rb)
@@ -177,13 +223,14 @@ Section MEMVAL_INJECT.
   Proof.
     intros until m3.
     intros NOPOINTERS.
+    intros NOUNDEF.
     intros INJ_M1_M2.
     intros INJ_M2_M3.
     remember (ZMap.get ofs (Mem.mem_contents m1) # rb) as M1_AT_RB.
 
     induction M1_AT_RB.
+    - unfold mem_no_undef in NOUNDEF. congruence.
 
-    - apply memval_inject_undef.
     - inversion INJ_M1_M2; subst;
         inversion INJ_M2_M3; subst; try congruence.
     - inversion INJ_M1_M2; subst;
@@ -194,16 +241,9 @@ Section MEMVAL_INJECT.
       reflexivity.
 
       inv FRAG_EQ.
-
-      assert (v = v1) as V_EQ_V1.
-      inversion H0; try auto; try congruence.
-      unfold Mem.flat_inj in H4.
-      destruct (plt b1 (Mem.nextblock ma)); try congruence.
+      apply memval_inject_frag.
       
-      inversion H4.
-      subst.
-      replace (Ptrofs.add ofs1 (Ptrofs.repr 0)) with ofs1.
-      auto.
+      
   Abort.
     
 End MEMVAL_INJECT.
@@ -355,9 +395,12 @@ Section STMTSEQ.
   Variable ma: mem.
   Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock ma).
 
-    
+   
+  Variable arrblock : block.
+  Variable GENV_AT_ARR: Genv.find_symbol ge arrname = Some arrblock.
 
   
+  (* 
   Variable wb1 wb2: block.
   Variable wofs1 wofs2: ptrofs.
   (* the array offset has a concrete value,
@@ -369,18 +412,20 @@ Section STMTSEQ.
   (* Variable WB2VAL: eval_expr ge sp e1 m1
                              (arrofs_expr arrname wix2)
                              (Vptr wb2 wofs2). *)
+   *)
 
   Lemma memval_inject_store_no_alias_for_sseq:
     forall rb ofs,
-      rb <> wb1 ->
-      rb <> wb2 ->
+      rb <> arrblock ->
       memval_inject injf
                     (ZMap.get (Ptrofs.unsigned ofs) (Mem.mem_contents m) # rb)
                     (ZMap.get (Ptrofs.unsigned ofs) (Mem.mem_contents m') # rb).
   Proof.
     intros until ofs.
-    intros NOALIAS_WB1.
+    intros NOALIAS_RB_ARRBLOCK.
+    (* intros NOALIAS_WB1.
     intros NOALIAS_WB2.
+     *)
     inversion EXECSSEQ; subst; try congruence.
 
 
@@ -405,6 +450,7 @@ Section STMTSEQ.
         (arrname := arrname)
         (wix := wix1)
         (wval := wval1); try eassumption; try auto.
+    eapply eval_expr_arrofs. eassumption.
 
     
     assert (memval_inject (Mem.flat_inj (Mem.nextblock ma))
@@ -421,7 +467,7 @@ Section STMTSEQ.
     eapply mem_no_pointers_forward_on_mem_inj with (m := m) (m' := m1).
     eassumption.
     exact H14.
-    apply eval_expr_arrofs.
+    eapply eval_expr_arrofs. eassumption.
     
 
 
