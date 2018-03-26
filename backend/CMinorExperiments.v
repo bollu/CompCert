@@ -652,6 +652,79 @@ Section STMTSEQ.
     auto.
   Qed.
 
+  
+  Lemma memval_inject_store_no_alias_for_sseq_same_block:
+    forall ofs,
+      ofs <> Ptrofs.unsigned (nat_to_ptrofs wix1) ->
+      ofs <> Ptrofs.unsigned (nat_to_ptrofs wix2) ->
+      memval_inject injf
+                    (ZMap.get ofs (Mem.mem_contents m) # arrblock)
+                    (ZMap.get ofs (Mem.mem_contents m') # arrblock).
+  Proof.
+    intros until ofs.
+    intros NOALIAS_WIX1 NOALIAS_WIX2.
+
+    inversion EXECSSEQ; subst; try congruence.
+
+
+    assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
+    apply destruct_trace_app_eq_E0. assumption.
+
+    destruct t1_t2_E0 as [t1E0 t2E0].
+    subst.
+
+    rename H6 into Sseq_EQUIV.
+    inversion Sseq_EQUIV.
+    subst.
+
+    rename H into EXECS1.
+    rename H0 into EXECS2.
+
+    assert (memval_inject (Mem.flat_inj (Mem.nextblock ma))
+                          (ZMap.get ofs (Mem.mem_contents m) # arrblock)
+                          (ZMap.get ofs (Mem.mem_contents m1) # arrblock))
+      as INJ_M_M1.
+    eapply memval_inject_store_no_alias_for_sstore_same_block with
+        (arrname := arrname)
+        (wix := wix1)
+        (wval := wval1).
+    eassumption. auto. eassumption. auto. 
+    eapply eval_expr_arrofs; eassumption.
+    eassumption.
+
+    
+    assert (memval_inject (Mem.flat_inj (Mem.nextblock ma))
+                          (ZMap.get ofs (Mem.mem_contents m1) # arrblock)
+                          (ZMap.get ofs (Mem.mem_contents m') # arrblock))
+      as INJ_M1_M'.
+    eapply memval_inject_store_no_alias_for_sstore_same_block with
+        (arrname := arrname)
+        (wix := wix2)
+        (wval := wval2); try eassumption; try auto.
+
+    inversion EXECS2. subst.
+    inversion EXECS1. subst.
+    eapply mem_no_pointers_forward_on_mem_inj with (m := m) (m' := m1) (v := v0).
+
+    assert (val_no_pointer v0) as V0_NO_PTR.
+    unfold val_no_pointer.
+    intros.
+    rename H10 into eval_v0.
+    inversion eval_v0. subst.
+    rename H0 into eval_v0_const.
+    simpl in eval_v0_const.
+    inversion eval_v0_const.
+    congruence.
+
+    apply V0_NO_PTR.
+    eassumption.
+    exact H14.
+    eapply eval_expr_arrofs. eassumption.
+
+    eapply memval_inject_trans; try eassumption.
+    auto.
+  Qed.
+
 
 End STMTSEQ.
 
@@ -1027,8 +1100,16 @@ Section STMTINTERCHANGE.
         assert (ofs = Z.of_nat wix1 \/ ofs = Z.of_nat wix2 \/
                 (ofs <> Z.of_nat wix1 \/ ofs <> Z.of_nat wix2)) as OFS_CASES.
         omega.
-        
-        admit.
+
+        destruct OFS_CASES as [OFS_EQ_WIX1 | [OFS_EQ_WIX2 | OFS_NEQ_BOTH]].
+
+        ** (* arrblock, wix1 access *)
+          admit.
+
+        ** (* arrblock, wix2 access *)
+          admit.
+        ** (* arrblock, neither wix access *)
+          
       + (* we're not accessing ARRBLOCK *)
         assert (memval_inject (Mem.flat_inj (Mem.nextblock m))
                               (ZMap.get ofs (Mem.mem_contents m) # b2)
