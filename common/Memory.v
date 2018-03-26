@@ -504,40 +504,16 @@ Proof.
   reflexivity.
 Qed.
 
-(* NOTE: this theorem can be generalised to talk about what happens
-when you get into a setN in the range of ptrbase <= i <= ptrbase + encode_size (v)
- *)
-Remark get_setN_at_base_chunk_Mint8unisnged:
-  forall (v: val) (ptr: Z) (c: ZMap.t memval) (mvbase: memval)
-    (encmv: list memval),
-    ZMap.get ptr (setN (encode_val Mint8unsigned v) ptr c) = mvbase ->
-    shape_encoding Mint8unsigned v encmv ->
-    Some mvbase =  List.hd_error encmv.
+Remark getN_1_get_2:
+  forall (p: Z) (c: ZMap.t memval),
+    hd_error (getN 1 p c) = Some (ZMap.get p c).
 Proof.
-  intros until encmv.
-  intros MVBASE.
-  intros ENCODING.
-
-  induction v.
-  - simpl in MVBASE.
-    rewrite ZMap.gss in MVBASE.
-    subst.
-    inversion ENCODING.
-    destruct H as [contra1 | [contra2 | [contra3 | contra4]]];
-      congruence.
-    contradiction.
-    simpl. auto.
+  intros.
+  rewrite getN_1_get.
+  simpl.
+  auto.
+Qed.
     
-  - simpl in MVBASE.
-    inversion ENCODING.
-    destruct H as [contra1 | [contra2 | [contra3 | contra4]]];
-      congruence.
-    simpl.
-
-    
-Proof.
-  intros until mv.
-  induction v.
   
   
 
@@ -550,6 +526,35 @@ Proof.
   decEq.
   rewrite setN_outside. apply ZMap.gss. omega.
   apply IHvl.
+Qed.
+
+  
+
+(* NOTE: this theorem can be generalised to talk about what happens
+when you get into a setN in the range of ptrbase <= i <= ptrbase + encode_size (v)
+ *)
+Remark get_setN_at_base_chunk_Mint8unisnged:
+  forall (v: val) (ptr: Z) (c: ZMap.t memval) (mvbase: memval),
+    ZMap.get ptr (setN (encode_val Mint8unsigned v) ptr c) = mvbase ->
+    Some mvbase =  List.hd_error (encode_val Mint8unsigned v).
+Proof.
+  intros until mvbase.
+  intros MVBASE.
+  assert (MVBASE':
+            hd_error
+              (getN 1 ptr  (setN (encode_val Mint8unsigned v) ptr c)) =
+            Some mvbase).
+    rewrite getN_1_get.
+    simpl.
+    rewrite MVBASE.
+    auto.
+
+    assert (length (encode_val Mint8unsigned v) = 1%nat) as LEN_ENCODE_V.
+    destruct v; simpl; auto.
+
+    rewrite <- LEN_ENCODE_V in MVBASE'.
+    rewrite getN_setN_same in MVBASE'.
+    auto.
 Qed.
 
 Remark getN_exten:
