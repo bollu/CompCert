@@ -242,9 +242,9 @@ Section MEMVAL_INJECT.
 
       inv FRAG_EQ.
       apply memval_inject_frag.
-      
-      
-  Abort.
+      eapply val_inject_trans; try eassumption.
+      auto.
+  Qed.
     
 End MEMVAL_INJECT.
 
