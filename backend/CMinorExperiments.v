@@ -1342,7 +1342,7 @@ Section STMTINTERCHANGE.
           rename m2 into S21_ma.
 
 
-          (* ======Analyze S1 =======*)
+          (* ======Analyze S12 =======*)
 
           assert (M12_CONTENTS: (Mem.mem_contents m12) # arrblock =
                                 (Mem.setN
@@ -1427,7 +1427,7 @@ Section STMTINTERCHANGE.
             
 
             
-            (* ======Analyze S2 =======*)
+            (* ======WIX1, Analyze S21 =======*)
             
           assert (M21_CONTENTS: (Mem.mem_contents m21) # arrblock =
                                 (Mem.setN
@@ -1471,10 +1471,41 @@ Section STMTINTERCHANGE.
             (* NOTE NOTE: We should have this return a byte!! *)
             apply memval_inject_byte.
 
+      
 
-          (* Note that we have offset alias with wix1 (the access is at wix1) *)
-          (* So, s12_ma can be injected into the final *)
+        ** (* arrblock, wix2 access *)
 
+          inversion exec_s12; try contradiction; subst.
+          inversion exec_s21; try contradiction; subst.
+          
+          assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
+          apply destruct_trace_app_eq_E0. assumption.
+          destruct t1_t2_E0. subst.
+
+          
+          assert (t0_t3_E0: t0 = E0 /\ t3 = E0).
+          apply destruct_trace_app_eq_E0. assumption.
+          destruct t0_t3_E0. subst.
+
+          (* clear stuff that doesn't matter *)
+          (* S12 := e, m ---> S12_1 ---S12_ea, S12_ma---> S12_2 -- e', m12--| *)
+          (* S21:= e, m ---> S21_2 -S21_ea, S21_ma --> S21_1 *)
+          rename H11 into TRACE. clear TRACE.
+          rename H14 into TRACE. clear TRACE.
+
+          rename H1 into EXEC_S12_S1.
+          rename H6 into EXEC_S12_S2.
+
+          rename H2 into EXEC_S21_S2.
+          rename H8 into EXEC_S21_S1.
+
+          rename e1 into S12_ea.
+          rename m1 into S12_ma.
+          
+          rename e2 into S21_ea.
+          rename m2 into S21_ma.
+
+          
           assert (S12_ma_NO_POINTERS: mem_no_pointers S12_ma).
           eapply mem_no_pointers_forward_on_sstore;
             try eassumption;
@@ -1491,52 +1522,93 @@ Section STMTINTERCHANGE.
           exact EXEC_S21_S2.
           eapply eval_expr_arrofs; try eassumption.
 
-          assert (MEM_INJECT_S12_ma_m12:
-                    memval_inject (Mem.flat_inj (Mem.nextblock m))
-                                (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
-                                          ((Mem.mem_contents S12_ma) # arrblock))
-                                (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
-                                          ((Mem.mem_contents m12) # arrblock))).
-          eapply memval_inject_store_no_alias_for_sstore_same_block with
-              (arrname := arrname)
-              (wval := wval2)
-              (wix := wix2).
-            try eassumption;
-              try eauto.
+          (* ======WIX2, Analyze S12 =======*)
+
+          assert (M12_CONTENTS: (Mem.mem_contents m12) # arrblock =
+                                (Mem.setN
+                                   (encode_val
+                                      STORE_CHUNK_SIZE
+                                      (Vint (nat_to_int32 wval2)))
+                                   (Ptrofs.unsigned (nat_to_ptrofs wix2))
+                                   S12_ma.(Mem.mem_contents)#arrblock)).
+            assert (M12_CONTENTS_RAW: Mem.mem_contents m12 =
+                    PMap.set arrblock
+                             (Mem.setN
+                                (encode_val
+                                   STORE_CHUNK_SIZE
+                                   (Vint (nat_to_int32 wval2)))
+                                (Ptrofs.unsigned (nat_to_ptrofs wix2))
+                                S12_ma.(Mem.mem_contents)#arrblock)
+                             S12_ma.(Mem.mem_contents)
+                   ).
+            eapply mem_contents_sstore.
             auto.
-            exact EXEC_S12_S2.
-            auto.
-            eapply eval_expr_arrofs; try eassumption.
+            eassumption.
+            eapply eval_expr_arrofs; eassumption.
+            rewrite M12_CONTENTS_RAW.
+            erewrite PMap.gss.
             auto.
 
-            assert (MEM_INJECT_m_S21_ma:
-                    memval_inject (Mem.flat_inj (Mem.nextblock m))
-                                (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
-                                          ((Mem.mem_contents m) # arrblock))
-                                (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
-                                          ((Mem.mem_contents S21_ma) # arrblock))).
-          eapply memval_inject_store_no_alias_for_sstore_same_block with
-              (arrname := arrname)
-              (wval := wval2)
-              (wix := wix2).
-            try eassumption;
-              try eauto.
+            assert (M12_AT_WIX2: Some (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix2))
+                                                ((Mem.mem_contents m12) # arrblock)) = 
+                                 List.hd_error (encode_val
+                                                  STORE_CHUNK_SIZE
+                                                  (Vint (nat_to_int32 wval2)))).
+            rewrite M12_CONTENTS.
+            erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
             auto.
-            exact EXEC_S21_S2.
-            auto.
-            eapply eval_expr_arrofs; try eassumption.
-            auto.
+            
 
+            
+            (* ======WIX2, Analyze S21 =======*)
+            
+            assert (M21_CONTENTS: (Mem.mem_contents m21) # arrblock =
+                                (Mem.setN
+                                   (encode_val
+                                      STORE_CHUNK_SIZE
+                                      (Vint (nat_to_int32 wval1)))
+                                   (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                   S21_ma.(Mem.mem_contents)#arrblock)).
+            assert (M21_CONTENTS_RAW: Mem.mem_contents m21 =
+                    PMap.set arrblock
+                             (Mem.setN
+                                (encode_val
+                                   STORE_CHUNK_SIZE
+                                   (Vint (nat_to_int32 wval1)))
+                                (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                S21_ma.(Mem.mem_contents)#arrblock)
+                             S21_ma.(Mem.mem_contents)
+                   ).
+            eapply mem_contents_sstore.
+            auto.
+            eassumption.
+            eapply eval_expr_arrofs; eassumption.
+            
+            rewrite M21_CONTENTS_RAW.
+            erewrite PMap.gss.
+            reflexivity.
 
-            inversion EXEC_S12_S2. subst.
+            (* TODO: Check why this is Undef! *)
+            assert (S21_AT_WIX1: Some (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                                (Mem.mem_contents m21) # arrblock) =
+                                 List.hd_error (encode_val
+                                                  STORE_CHUNK_SIZE
+                                                  (Vint (nat_to_int32 wval1)))).
+            rewrite M21_CONTENTS.
+            erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
+            auto.
+            rewrite encode_int32_hd_error in S21_AT_WIX1.
+            inversion S12_AT_WIX1 as [check]. clear check.
+
+            inversion S21_AT_WIX1 as [inner]. rewrite inner.
+
+            (* NOTE NOTE: We should have this return a byte!! *)
+            apply memval_inject_byte.
 
                               
 
           
           admit.
-      
-
-        ** (* arrblock, wix2 access *)
           admit.
         ** (* arrblock, neither wix access *)
           destruct OFS_NEQ_BOTH as [OFS_NEQ_WIX1 OFS_NEQ_WIX2].
