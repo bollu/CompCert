@@ -1895,7 +1895,30 @@ Section STMTINTERCHANGE.
       (* TODO: READ THIS PROOF! *)
       apply Mem.flat_inj_no_overlap.
 
-    destruct (plt b (Mem.nextblock m)); try contradiction; auto.
+    - intros until ofs.
+      intros INJF_AT_B.
+      intros PERM.
+
+      rewrite injfVAL in INJF_AT_B.
+      unfold Mem.flat_inj in INJF_AT_B.
+
+      
+      destruct (plt b (Mem.nextblock m)); try congruence; auto.
+      inversion INJF_AT_B.
+      subst.
+
+        rewrite Z.add_0_r.
+
+        assert (UNSIGNED_RANGE: 0 <= Ptrofs.unsigned ofs < Ptrofs.modulus).
+        apply Ptrofs.unsigned_range.
+        assert (Ptrofs.modulus <= Ptrofs.max_unsigned + 1).
+        unfold Ptrofs.max_unsigned.
+        omega.
+        omega.
+    -  
+        
+                
+      
 
     - 
 
