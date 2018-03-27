@@ -1400,6 +1400,51 @@ Section STMTINTERCHANGE.
             rewrite inner.
             clear inner.
 
+            
+            (* ======Analyze S2 =======*)
+            
+          assert (M21_CONTENTS: (Mem.mem_contents m21) # arrblock =
+                                (Mem.setN
+                                   (encode_val
+                                      STORE_CHUNK_SIZE
+                                      (Vlong (nat_to_int64 wval1)))
+                                   (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                   S21_ma.(Mem.mem_contents)#arrblock)).
+            assert (M21_CONTENTS_RAW: Mem.mem_contents m21 =
+                    PMap.set arrblock
+                             (Mem.setN
+                                (encode_val
+                                   STORE_CHUNK_SIZE
+                                   (Vlong (nat_to_int64 wval1)))
+                                (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                S21_ma.(Mem.mem_contents)#arrblock)
+                             S21_ma.(Mem.mem_contents)
+                   ).
+            eapply mem_contents_sstore.
+            auto.
+            eassumption.
+            eapply eval_expr_arrofs; eassumption.
+            rewrite M21_CONTENTS_RAW.
+            erewrite PMap.gss.
+            auto.
+
+            (* TODO: Check why this is Undef! *)
+            assert (S21_AT_WIX1: Some (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                                (Mem.mem_contents m21) # arrblock) =
+                                 List.hd_error (encode_val
+                                                  STORE_CHUNK_SIZE
+                                                  (Vlong (nat_to_int64 wval1)))).
+            rewrite M21_CONTENTS.
+            erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
+            auto.
+
+            inversion S21_AT_WIX1 as [inner]. rewrite inner.
+
+            (* NOTE NOTE: We should have this return a byte!! *)
+            apply memval_inject_undef.
+
+            
+
 
 
 
