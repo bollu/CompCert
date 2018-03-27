@@ -1289,6 +1289,16 @@ Section STMTINTERCHANGE.
             try auto.
           eapply eval_expr_arrofs; try eassumption.
 
+          assert (S21_ma_NO_POINTERS: mem_no_pointers S21_ma).
+          eapply mem_no_pointers_forward_on_sstore with
+              (arrname := arrname)
+              (wix := wix2)
+              (wval := wval2).
+          eapply NOPOINTERSM.
+          auto.
+          exact EXEC_S21_S2.
+          eapply eval_expr_arrofs; try eassumption.
+
           assert (MEM_INJECT_S12_ma_m12:
                     memval_inject (Mem.flat_inj (Mem.nextblock m))
                                 (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
@@ -1303,6 +1313,24 @@ Section STMTINTERCHANGE.
               try eauto.
             auto.
             exact EXEC_S12_S2.
+            auto.
+            eapply eval_expr_arrofs; try eassumption.
+            auto.
+
+            assert (MEM_INJECT_m_S21_ma:
+                    memval_inject (Mem.flat_inj (Mem.nextblock m))
+                                (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                          ((Mem.mem_contents m) # arrblock))
+                                (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                          ((Mem.mem_contents S21_ma) # arrblock))).
+          eapply memval_inject_store_no_alias_for_sstore_same_block with
+              (arrname := arrname)
+              (wval := wval2)
+              (wix := wix2).
+            try eassumption;
+              try eauto.
+            auto.
+            exact EXEC_S21_S2.
             auto.
             eapply eval_expr_arrofs; try eassumption.
             auto.
