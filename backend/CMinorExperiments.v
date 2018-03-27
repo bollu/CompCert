@@ -500,6 +500,43 @@ Section STMT.
    which is the pointer wb with offset wofs *)
   Variable WBVAL: eval_expr ge sp e m (arrofs_expr arrname wix) (Vptr wb wofs).
 
+  (* Hypothesis STORE: store chunk       m1 b  ofs v = Some m2. *)
+  (* STOREV : Mem.store STORE_CHUNK_SIZE m wb (Ptrofs.unsigned wofs) v = Some m' *)
+  Lemma mem_contents_sstore:
+    Mem.mem_contents m' = 
+    PMap.set wb
+             (Mem.setN
+                (encode_val
+                   STORE_CHUNK_SIZE
+                   (Vlong (nat_to_int64 wval)))
+                (Ptrofs.unsigned wofs)
+                m.(Mem.mem_contents)#wb)
+             m.(Mem.mem_contents).
+  Proof.
+    rewrite sVAL in EXECS.
+    inversion EXECS. subst.
+
+    rename H10 into STOREV.
+    unfold Mem.storev in STOREV.
+
+    assert (VADDR: vaddr = Vptr wb wofs).
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+    rename H7 into VAL.
+    inversion VAL. subst.
+
+    rename H0 into VAL_CONSTANT.
+    simpl in VAL_CONSTANT.
+    inversion VAL_CONSTANT.
+    subst.
+
+    apply Mem.store_mem_contents.
+    auto.
+  Qed.
+    
+
+
   Lemma memval_inject_store_no_alias_for_sstore:
     forall rb ofs,
       rb <> wb ->
@@ -1334,6 +1371,11 @@ Section STMTINTERCHANGE.
             auto.
             eapply eval_expr_arrofs; try eassumption.
             auto.
+
+            assert (M12_at_wix1: exists k, (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                                (Mem.mem_contents m12) # arrblock) = Byte k).
+            inversion EXEC_S12_S2. subst.
+
                               
 
           
