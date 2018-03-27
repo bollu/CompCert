@@ -1882,11 +1882,14 @@ Section STMTINTERCHANGE.
 
       destruct (plt b (Mem.nextblock m)); try contradiction; auto.
 
-    admit.
+    - intros b b' delta INJF_AT_B.
+      rewrite injfVAL in INJF_AT_B.
+      unfold Mem.flat_inj in INJF_AT_B.
+      destruct (plt b (Mem.nextblock m)); try congruence.
+      inversion INJF_AT_B.
+      subst.
 
-    rewrite injfVAL.
-    unfold Mem.flat_inj.
-    unfold Mem.valid_block in B_INVALID_IN_M.
+      eapply sseq_valid_block; try eassumption; try auto.
 
     destruct (plt b (Mem.nextblock m)); try contradiction; auto.
 
