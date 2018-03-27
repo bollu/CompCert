@@ -220,13 +220,68 @@ Qed.
 (* Note that this proof was the EXACT SAME AS THAT OF
 mem_no_pointer. TODO: CLEAN THIS UP! *)
 Lemma mem_no_undef_forward_on_storev:
-  forall (m m': mem) (addr v : val),
-    val_no_undef v ->
-    mem_no_pointers m ->
-    Mem.storev STORE_CHUNK_SIZE m addr v = Some m' ->
+  forall (m m': mem) (b: block) (ofs: ptrofs) (n: nat),
+    mem_no_undef m ->
+    Mem.storev STORE_CHUNK_SIZE m (Vptr b ofs) (Vint (nat_to_int32 n)) = Some m' ->
     mem_no_undef m'.
 Proof.
-Admitted.
+  intros until n.
+  intros NOUNDEF M'_AS_STORE_M.
+  unfold Mem.storev in M'_AS_STORE_M.
+
+  unfold mem_no_undef.
+  intros bread ofsread.
+
+  assert (M'CONTENTS: Mem.mem_contents m' =
+                      PMap.set b (Mem.setN (encode_val STORE_CHUNK_SIZE (Vint (nat_to_int32 n)))
+                                       (Ptrofs.unsigned ofs)
+                                       m.(Mem.mem_contents)#b)
+                               m.(Mem.mem_contents)).
+  apply Mem.store_mem_contents; assumption.
+
+  rewrite M'CONTENTS.
+
+  assert ({b = bread} + {b <> bread}) as BCASES.
+  apply Pos.eq_dec.
+
+  destruct BCASES as [BEQ | BNEQ].
+  subst.
+  - rewrite PMap.gss.
+    assert (OFSCASES: {ofsread = (Ptrofs.unsigned ofs)}  + {ofsread <> (Ptrofs.unsigned ofs)}).
+    apply Z.eq_dec.
+
+    destruct OFSCASES as [OFSEQ | OFSNEQ].
+    + subst.
+
+    assert (ENCODEV: Some (ZMap.get (Ptrofs.unsigned ofs)
+    (Mem.setN (encode_val STORE_CHUNK_SIZE (Vint (nat_to_int32 n))) (Ptrofs.unsigned ofs)
+       (Mem.mem_contents m) # bread)) = List.hd_error (encode_val Mint8unsigned (Vint (nat_to_int32 n)))).
+    erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
+    reflexivity.
+
+    rewrite encode_int32_hd_error in ENCODEV.
+    inversion ENCODEV. congruence.
+
+    + intros.
+      rewrite Mem.setN_outside.
+      unfold mem_no_undef in NOUNDEF.
+      apply NOUNDEF.
+
+      rewrite encode_val_length.
+      simpl.
+
+      assert (GENERAL_THEOREM_WHY_DO_I_NEED_TO_DO_THIS: forall n m, n <> m -> n < m \/ n >= m + 1).
+      intros. omega.
+
+      apply GENERAL_THEOREM_WHY_DO_I_NEED_TO_DO_THIS.
+      eassumption.
+
+  - rewrite PMap.gso.
+    apply NOUNDEF.
+    auto.
+Qed.
+
+    
 
 Section VAL_INJECT.
   
