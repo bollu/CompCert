@@ -552,6 +552,7 @@ End MEMSTORE.
 Section STMT.
   Variable m m': mem.
   Variable NOPOINTERS : mem_no_pointers m.
+  Variable NOUNDEF : mem_no_undef m.
   
   
   Variable arrname: ident.
@@ -704,8 +705,20 @@ Section STMT.
     unfold val_no_pointer.
     intros. congruence.
 
-    eapply mem_no_undef_forward_on_storev; eassumption.
-    Qed.
+    rename H7 into EVAL_V.
+    inversion EVAL_V.
+    subst.
+    rename H0 into EVAL_V_CONST.
+    simpl in EVAL_V_CONST.
+    inversion EVAL_V_CONST.
+
+    
+    assert (VADDR: Vptr wb wofs = vaddr).
+    eapply eval_expr_is_function; try eassumption.
+    subst.
+
+    eapply mem_no_undef_forward_on_storev; try eassumption; try auto.
+  Qed.
   
 End STMT.
 
