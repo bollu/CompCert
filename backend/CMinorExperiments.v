@@ -545,6 +545,8 @@ Section MEMSTORE.
     congruence.
     auto.
   Qed.
+
+
   
 
 End MEMSTORE.
@@ -718,6 +720,25 @@ Section STMT.
     subst.
 
     eapply mem_no_undef_forward_on_storev; try eassumption; try auto.
+  Qed.
+
+  Lemma sstore_valid_block:
+    forall (b: block), Mem.valid_block m b -> Mem.valid_block m' b.
+  Proof.
+    intros b.
+    intros B_VALID_IN_M.
+
+    rewrite sVAL in EXECS. inversion EXECS. subst.
+
+    assert (VADDR: vaddr = Vptr wb wofs).
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+
+    rename H10 into STOREV.
+    unfold Mem.storev in STOREV.
+
+    eapply Mem.store_valid_block_1; eassumption.
   Qed.
   
 End STMT.
@@ -994,6 +1015,26 @@ Section STMTSEQ.
   Qed.
 
 
+  Lemma sseq_valid_block:
+    forall (b: block), Mem.valid_block m b -> Mem.valid_block m' b.
+  Proof.
+    intros b VALIDBLOCK.
+
+    rewrite s12DEFN in EXECSSEQ.
+    inversion EXECSSEQ; try congruence; subst.
+
+    assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
+    apply destruct_trace_app_eq_E0. assumption.
+    destruct t1_t2_E0. subst.
+
+    assert (VALIDM1: Mem.valid_block m1 b).
+    eapply sstore_valid_block; try eassumption; try auto;
+      apply eval_expr_arrofs; try eassumption.
+
+    
+    eapply sstore_valid_block; try eassumption; try auto;
+      apply eval_expr_arrofs; try eassumption.
+  Qed.
 
 
 End STMTSEQ.
@@ -1771,6 +1812,14 @@ Section STMTINTERCHANGE.
   Lemma meminject_ma'_mb': Mem.inject injf m12 m21.
   Proof.
     constructor.
+    apply meminj_ma'_mb'.
+
+    intros.
+    assert (B_INVALID_IN_M: ~Mem.valid_block m b).
+    admit.
+
+    
+    
 
     assert (Mem.inject injf m12 m21) as INJECT_M12_M21.
     admit.
