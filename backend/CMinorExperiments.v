@@ -769,6 +769,50 @@ Section STMT.
     eapply Mem.store_valid_block_1; try eassumption.
     contradiction.
   Qed.
+
+  
+  Lemma sstore_perm_1:
+    forall (b': block) (ofs':Z) (k: perm_kind) (p: permission),
+      Mem.perm m b' ofs' k p -> Mem.perm m' b' ofs' k p.
+  Proof.
+    intros until p.
+    intros PERM.
+
+    
+    rewrite sVAL in EXECS. inversion EXECS. subst.
+
+    assert (VADDR: vaddr = Vptr wb wofs).
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+
+    rename H10 into STOREV.
+    unfold Mem.storev in STOREV.
+
+    eapply Mem.perm_store_1; eassumption.
+  Qed.
+
+  
+  Lemma sstore_perm_2:
+    forall (b': block) (ofs':Z) (k: perm_kind) (p: permission),
+      Mem.perm m' b' ofs' k p -> Mem.perm m b' ofs' k p.
+  Proof.
+    intros until p.
+    intros PERM.
+
+    
+    rewrite sVAL in EXECS. inversion EXECS. subst.
+
+    assert (VADDR: vaddr = Vptr wb wofs).
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+
+    rename H10 into STOREV.
+    unfold Mem.storev in STOREV.
+
+    eapply Mem.perm_store_2; eassumption.
+  Qed.
   
   
 End STMT.
@@ -1915,7 +1959,18 @@ Section STMTINTERCHANGE.
         unfold Ptrofs.max_unsigned.
         omega.
         omega.
-    -  
+    -  intros until p.
+       intros INJF_AT_B1.
+       intros PERM_m21.
+       rewrite injfVAL in INJF_AT_B1.
+       unfold Mem.flat_inj in INJF_AT_B1.
+       destruct (plt b1 (Mem.nextblock m)); try congruence.
+       inversion INJF_AT_B1.
+       subst.
+       replace (ofs + 0) with ofs in PERM_m21.
+       left.
+
+       (* transmit permissions like m21 -> m -> m12 *)
         
                 
       
