@@ -1521,7 +1521,7 @@ Section STMTINTERCHANGE.
   Qed.
 
   
-  Lemma meminj_ma'_mb': Mem.mem_inj injf m12 m21.
+  Lemma meminj_m12_m21: Mem.mem_inj injf m12 m21.
   Proof.
     assert (mem_structure_eq injf m12 m21) as structureeq.
     apply mem_structure_eq_m12_m21.
@@ -1953,10 +1953,10 @@ Section STMTINTERCHANGE.
       + congruence. (* contradiction, some = None *)
   Qed.
   
-  Lemma meminject_ma'_mb': Mem.inject injf m12 m21.
+  Lemma meminject_m12_m21: Mem.inject injf m12 m21.
   Proof.
     constructor.
-    - apply meminj_ma'_mb'.
+    - apply meminj_m12_m21.
 
     - intros.
 
@@ -2025,6 +2025,6 @@ Section STMTINTERCHANGE.
        eapply sseq_perm_1; try eassumption; try auto.
 
        omega.
-  Qed.
+       Qed.
 
 End STMTINTERCHANGE.
