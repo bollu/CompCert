@@ -740,6 +740,36 @@ Section STMT.
 
     eapply Mem.store_valid_block_1; eassumption.
   Qed.
+
+  
+  Lemma sstore_invalid_block_2:
+    forall (b: block), ~ Mem.valid_block m' b -> ~ Mem.valid_block m b.
+  Proof.
+    intros b.
+    intros B_INVALID_IN_M.
+
+    rewrite sVAL in EXECS. inversion EXECS. subst.
+
+    assert (VADDR: vaddr = Vptr wb wofs).
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+
+    rename H10 into STOREV.
+    unfold Mem.storev in STOREV.
+
+    assert (MCASES: Mem.valid_block m b \/ ~Mem.valid_block m b).
+    unfold Mem.valid_block. unfold Plt. 
+    zify.
+    omega.
+
+    destruct MCASES as [MVALID | MINVALID]; try auto.
+
+    assert (CONTRA: Mem.valid_block m' b).
+    eapply Mem.store_valid_block_1; try eassumption.
+    contradiction.
+  Qed.
+  
   
 End STMT.
 
@@ -1033,6 +1063,27 @@ Section STMTSEQ.
 
     
     eapply sstore_valid_block; try eassumption; try auto;
+      apply eval_expr_arrofs; try eassumption.
+  Qed.
+
+  Lemma sseq_invalid_block_2:
+    forall (b: block), ~ Mem.valid_block m' b -> ~ Mem.valid_block m b.
+  Proof.
+    intros b INVALIDBLOCK.
+
+    rewrite s12DEFN in EXECSSEQ.
+    inversion EXECSSEQ; try congruence; subst.
+
+    assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
+    apply destruct_trace_app_eq_E0. assumption.
+    destruct t1_t2_E0. subst.
+
+    assert (VALIDM1: ~ Mem.valid_block m1 b).
+    eapply sstore_invalid_block_2; try eassumption; try auto;
+      apply eval_expr_arrofs; try eassumption.
+
+    
+    eapply sstore_invalid_block_2; try eassumption; try auto;
       apply eval_expr_arrofs; try eassumption.
   Qed.
 
@@ -1812,11 +1863,34 @@ Section STMTINTERCHANGE.
   Lemma meminject_ma'_mb': Mem.inject injf m12 m21.
   Proof.
     constructor.
-    apply meminj_ma'_mb'.
+    - apply meminj_ma'_mb'.
 
-    intros.
-    assert (B_INVALID_IN_M: ~Mem.valid_block m b).
+    - intros.
+
+      assert (B_INVALID_IN_M: ~Mem.valid_block m b).
+      eapply sseq_invalid_block_2.
+      exact s1VAL.
+      exact s2VAL.
+      auto.
+      rewrite s12val in exec_s12.
+      exact exec_s12.
+      eassumption.
+      eassumption.
+
+      rewrite injfVAL.
+      unfold Mem.flat_inj.
+
+      destruct (plt b (Mem.nextblock m)); try contradiction; auto.
+
     admit.
+
+    rewrite injfVAL.
+    unfold Mem.flat_inj.
+    unfold Mem.valid_block in B_INVALID_IN_M.
+
+    destruct (plt b (Mem.nextblock m)); try contradiction; auto.
+
+    - 
 
     
     
