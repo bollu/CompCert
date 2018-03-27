@@ -355,7 +355,6 @@ End MEMVAL_INJECT.
 Section MEMSTORE.
 
   Variable m m': mem.
-  Variable NOPOINTERS: mem_no_pointers m.
 
   Variable wb: block.
   Variable rb: block.
@@ -372,11 +371,13 @@ Section MEMSTORE.
 
 
   Lemma memval_inject_store_no_alias:
+   (mem_no_pointers m) ->
     forall ofs,
       wb <> rb -> 
       memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # rb)
                     (ZMap.get ofs (Mem.mem_contents m') # rb).
   Proof.
+    intros NOPOINTERS.
     intros until ofs.
     intros NOALIAS.
 
@@ -412,11 +413,13 @@ Section MEMSTORE.
 
   
   Lemma memval_inject_store_no_alias_same_block:
+     mem_no_pointers m ->
         forall ofs,
           ofs <> wofs ->
       memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # wb)
                     (ZMap.get ofs (Mem.mem_contents m') # wb).
   Proof.
+    intros NOPOINTERS.
     intros until ofs.
     intros NOALIASOFS.
 
@@ -477,7 +480,7 @@ Section STMT.
   Variable wval: nat.
 
   Variable s: Cminor.stmt.
-  Variable sVAL: s= SstoreValAt arrname wval wix.
+  Variable sVAL: s = SstoreValAt arrname wval wix.
 
   
   Variable ge: genv.
@@ -567,6 +570,26 @@ Section STMT.
   Qed.
 
 
+  
+  Lemma mem_no_undef_forward_on_sstore:
+    mem_no_undef m'.
+  Proof.
+    rewrite sVAL in EXECS.
+    inversion EXECS. subst.
+
+    
+    
+    assert (VNUNDEF: val_no_undef v).
+    rename H7 into EVALV.
+    inversion EVALV. subst.
+    rename H0 into EVAL_CONSTANT_V.
+    simpl in EVAL_CONSTANT_V.
+    inversion EVAL_CONSTANT_V.
+    unfold val_no_pointer.
+    intros. congruence.
+
+    eapply mem_no_undef_forward_on_storev; eassumption.
+    Qed.
   
 End STMT.
 
@@ -794,6 +817,48 @@ Section STMTSEQ.
     assert (M'_NO_POINTERS: mem_no_pointers m').
     inversion  EXECS2. subst.
     eapply mem_no_pointers_forward_on_sstore; try eassumption; try auto.
+    apply eval_expr_arrofs. eassumption.
+
+    assumption.
+  Qed.
+
+  
+  Lemma mem_no_undef_forward_on_sseq:
+    mem_no_undef m'.
+  Proof.
+    
+    rewrite s12DEFN in EXECSSEQ.
+    rewrite s1DEFN in EXECSSEQ.
+    rewrite s2DEFN in EXECSSEQ.
+
+    inversion EXECSSEQ; try contradiction. subst.
+
+    rename H1 into EXECS1.
+    rename H6 into EXECS2.
+
+    assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
+    apply destruct_trace_app_eq_E0. assumption.
+
+    destruct t1_t2_E0 as [t1E0 t2E0].
+    subst.
+
+    assert (M1_NO_UNDEF: mem_no_undef m1).
+    inversion EXECS1. subst.
+    eapply mem_no_undef_forward_on_sstore; try eassumption; try auto.
+    apply eval_expr_arrofs. eassumption.
+
+
+    (* need for mem_no_undef *)
+    assert (M1_NO_POINTER: mem_no_pointers m1).
+    inversion EXECS1. subst.
+    eapply mem_no_pointers_forward_on_sstore; try eassumption; try auto.
+    apply eval_expr_arrofs. eassumption.
+
+    assert (M'_NO_UNDEF: mem_no_undef m').
+    eapply mem_no_undef_forward_on_sstore with
+        (wval := wval2)
+        (wix := wix2)
+        (arrname := arrname); try eassumption; try auto.
     apply eval_expr_arrofs. eassumption.
 
     assumption.
@@ -1183,7 +1248,17 @@ Section STMTINTERCHANGE.
         destruct OFS_CASES as [OFS_EQ_WIX1 | [OFS_EQ_WIX2 | OFS_NEQ_BOTH]].
 
         ** (* arrblock, wix1 access *)
-          admit.
+          inversion exec_s12; subst.
+          inversion exec_s21. subst.
+          
+          assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
+          apply destruct_trace_app_eq_E0. assumption.
+          destruct t1_t2_E0. subst.
+
+          
+          assert (t0_t3_E0: t0 = E0 /\ t3 = E0).
+          apply destruct_trace_app_eq_E0. assumption.
+          destruct t0_t3_E0. subst.
 
         ** (* arrblock, wix2 access *)
           admit.
