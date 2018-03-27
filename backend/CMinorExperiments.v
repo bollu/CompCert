@@ -753,7 +753,10 @@ Section STMTSEQ.
     rewrite s1DEFN in EXECSSEQ.
     rewrite s2DEFN in EXECSSEQ.
 
-    inversion EXECSSEQ. subst.
+    inversion EXECSSEQ; try contradiction. subst.
+
+    rename H1 into EXECS1.
+    rename H6 into EXECS2.
 
     assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
     apply destruct_trace_app_eq_E0. assumption.
@@ -761,7 +764,20 @@ Section STMTSEQ.
     destruct t1_t2_E0 as [t1E0 t2E0].
     subst.
 
+    assert (M1_NO_POINTERS: mem_no_pointers m1).
+    inversion EXECS1. subst.
+    eapply mem_no_pointers_forward_on_sstore; try eassumption; try auto.
+    apply eval_expr_arrofs. eassumption.
+
+    assert (M'_NO_POINTERS: mem_no_pointers m').
+    inversion  EXECS2. subst.
+    eapply mem_no_pointers_forward_on_sstore; try eassumption; try auto.
+    apply eval_expr_arrofs. eassumption.
+
+    assumption.
   Qed.
+
+
 
 
 End STMTSEQ.
