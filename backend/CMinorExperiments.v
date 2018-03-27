@@ -13,13 +13,37 @@ Require Import ExtensionalityFacts.
 Require Import Equivalence EquivDec.
 Require Import Coqlib.
 Require Import Floats.
+Require Import Archi.
 
+Definition nat_to_int32 (n: nat): int := (Int.repr (Z.of_nat n)).
 Definition nat_to_int64 (n: nat): int64 := (Int64.repr (Z.of_nat n)).
 Definition nat_to_ptrofs (n: nat): ptrofs := (Ptrofs.repr (Z.of_nat n)).
-Definition nat_to_expr(n: nat): expr := Econst (Olongconst (nat_to_int64 n)).
+Definition nat_to_long_expr(n: nat): expr := Econst (Olongconst (nat_to_int64 n)).
+Definition nat_to_int_expr(n: nat): expr := Econst (Ointconst (nat_to_int32 n)).
 
-Check (nat_to_ptrofs).
 Definition STORE_CHUNK_SIZE: memory_chunk := Mint8unsigned.
+
+Lemma encode_int32_hd_error:
+  forall n,
+    hd_error
+      (encode_val STORE_CHUNK_SIZE (Vint (nat_to_int32 n))) = 
+      Some ((Byte (Byte.repr (Int.unsigned (nat_to_int32 n))))).
+Proof.
+  intros.
+  simpl.
+  unfold encode_int.
+  unfold inj_bytes.
+  unfold bytes_of_int.
+  simpl.
+  unfold hd_error.
+  unfold rev_if_be.
+  assert (Archi.big_endian = false).
+  auto.
+  rewrite H.
+  simpl.
+  auto.
+Qed.
+
 
 Definition arrofs_expr (arrname: ident) (ofs: nat) : expr :=
   Econst (Oaddrsymbol arrname (nat_to_ptrofs ofs)).
@@ -27,7 +51,7 @@ Definition arrofs_expr (arrname: ident) (ofs: nat) : expr :=
 (* a handy alias for storing 1 byte value *)
 Definition SstoreValAt (arrname: ident) (v: nat) (ix: nat) :=
   Cminor.Sstore STORE_CHUNK_SIZE (arrofs_expr arrname ix)
-                (nat_to_expr v).
+                (nat_to_int_expr v).
 Lemma eval_expr_arrofs: forall (arrname: ident) (ofs: nat),
     forall (ge: genv) (sp: val) (e: env) (m: mem),
     forall (arrblock: block),
@@ -508,7 +532,7 @@ Section STMT.
              (Mem.setN
                 (encode_val
                    STORE_CHUNK_SIZE
-                   (Vlong (nat_to_int64 wval)))
+                   (Vint (nat_to_int32 wval)))
                 (Ptrofs.unsigned wofs)
                 m.(Mem.mem_contents)#wb)
              m.(Mem.mem_contents).
@@ -1324,7 +1348,7 @@ Section STMTINTERCHANGE.
                                 (Mem.setN
                                    (encode_val
                                       STORE_CHUNK_SIZE
-                                      (Vlong (nat_to_int64 wval2)))
+                                      (Vint (nat_to_int32 wval2)))
                                    (Ptrofs.unsigned (nat_to_ptrofs wix2))
                                    S12_ma.(Mem.mem_contents)#arrblock)).
             assert (M12_CONTENTS_RAW: Mem.mem_contents m12 =
@@ -1332,7 +1356,7 @@ Section STMTINTERCHANGE.
                              (Mem.setN
                                 (encode_val
                                    STORE_CHUNK_SIZE
-                                   (Vlong (nat_to_int64 wval2)))
+                                   (Vint (nat_to_int32 wval2)))
                                 (Ptrofs.unsigned (nat_to_ptrofs wix2))
                                 S12_ma.(Mem.mem_contents)#arrblock)
                              S12_ma.(Mem.mem_contents)
@@ -1351,7 +1375,9 @@ Section STMTINTERCHANGE.
                                           S12_ma.(Mem.mem_contents)#arrblock).
             rewrite M12_CONTENTS.
             apply Mem.setN_outside.
-            simpl. omega.
+            rewrite Memdata.encode_val_length.
+            simpl.
+            omega.
 
             rewrite M12_AT_WIX1 in *.
 
@@ -1362,7 +1388,7 @@ Section STMTINTERCHANGE.
             assert (S12_ma_CONTENTS:
                       (Mem.mem_contents S12_ma) # arrblock =
                       Mem.setN
-                        (encode_val STORE_CHUNK_SIZE (Vlong (nat_to_int64 wval1)))
+                        (encode_val STORE_CHUNK_SIZE (Vint (nat_to_int32 wval1)))
                         (Ptrofs.unsigned (nat_to_ptrofs wix1))
                         (Mem.mem_contents m) # arrblock).
             
@@ -1371,7 +1397,7 @@ Section STMTINTERCHANGE.
                              (Mem.setN
                                 (encode_val
                                    STORE_CHUNK_SIZE
-                                   (Vlong (nat_to_int64 wval1)))
+                                   (Vint (nat_to_int32 wval1)))
                                 (Ptrofs.unsigned (nat_to_ptrofs wix1))
                                 m.(Mem.mem_contents)#arrblock)
                              m.(Mem.mem_contents)
@@ -1390,15 +1416,15 @@ Section STMTINTERCHANGE.
                                                 (Mem.mem_contents S12_ma) # arrblock) =
                                  List.hd_error (encode_val
                                                   STORE_CHUNK_SIZE
-                                                  (Vlong (nat_to_int64 wval1)))).
+                                                  (Vint (nat_to_int32 wval1)))).
             rewrite S12_ma_CONTENTS.
             erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
             auto.
 
-            simpl in S12_AT_WIX1.
-            inversion S12_AT_WIX1 as [inner].
-            rewrite inner.
-            clear inner.
+            rewrite encode_int32_hd_error in S12_AT_WIX1.
+            inversion S12_AT_WIX1 as [check]. rewrite check in *. clear check.
+
+            
 
             
             (* ======Analyze S2 =======*)
@@ -1407,7 +1433,7 @@ Section STMTINTERCHANGE.
                                 (Mem.setN
                                    (encode_val
                                       STORE_CHUNK_SIZE
-                                      (Vlong (nat_to_int64 wval1)))
+                                      (Vint (nat_to_int32 wval1)))
                                    (Ptrofs.unsigned (nat_to_ptrofs wix1))
                                    S21_ma.(Mem.mem_contents)#arrblock)).
             assert (M21_CONTENTS_RAW: Mem.mem_contents m21 =
@@ -1415,7 +1441,7 @@ Section STMTINTERCHANGE.
                              (Mem.setN
                                 (encode_val
                                    STORE_CHUNK_SIZE
-                                   (Vlong (nat_to_int64 wval1)))
+                                   (Vint (nat_to_int32 wval1)))
                                 (Ptrofs.unsigned (nat_to_ptrofs wix1))
                                 S21_ma.(Mem.mem_contents)#arrblock)
                              S21_ma.(Mem.mem_contents)
@@ -1433,21 +1459,17 @@ Section STMTINTERCHANGE.
                                                 (Mem.mem_contents m21) # arrblock) =
                                  List.hd_error (encode_val
                                                   STORE_CHUNK_SIZE
-                                                  (Vlong (nat_to_int64 wval1)))).
+                                                  (Vint (nat_to_int32 wval1)))).
             rewrite M21_CONTENTS.
             erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
             auto.
+            rewrite encode_int32_hd_error in S21_AT_WIX1.
+            inversion S12_AT_WIX1 as [check]. clear check.
 
             inversion S21_AT_WIX1 as [inner]. rewrite inner.
 
             (* NOTE NOTE: We should have this return a byte!! *)
-            apply memval_inject_undef.
-
-            
-
-
-
-
+            apply memval_inject_byte.
 
 
           (* Note that we have offset alias with wix1 (the access is at wix1) *)
