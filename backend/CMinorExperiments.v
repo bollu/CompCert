@@ -1188,6 +1188,7 @@ Section STMTINTERCHANGE.
 
         
         eapply memval_inject_trans; try eassumption; try auto.
+        eapply mem_no_pointers_forward_on_sseq; try eassumption; try auto.
         admit. admit.
           
       + (* we're not accessing ARRBLOCK *)
