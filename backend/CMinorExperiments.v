@@ -1891,6 +1891,10 @@ Section STMTINTERCHANGE.
 
       eapply sseq_valid_block; try eassumption; try auto.
 
+    - rewrite injfVAL.
+      (* TODO: READ THIS PROOF! *)
+      apply Mem.flat_inj_no_overlap.
+
     destruct (plt b (Mem.nextblock m)); try contradiction; auto.
 
     - 
