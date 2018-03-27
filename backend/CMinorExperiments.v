@@ -1038,7 +1038,9 @@ Section STMTINTERCHANGE.
 
   Variable wval1 wval2: nat.
   Variable wix1 wix2: nat.
-  Variable WIX_NOALIAS: wix1 <> wix2.
+  Variable WIX_NOALIAS:
+    Ptrofs.unsigned (nat_to_ptrofs wix1) <> Ptrofs.unsigned (nat_to_ptrofs wix2).
+
 
   Variable s1 s2 s12 s21: Cminor.stmt.
   
@@ -1259,6 +1261,54 @@ Section STMTINTERCHANGE.
           assert (t0_t3_E0: t0 = E0 /\ t3 = E0).
           apply destruct_trace_app_eq_E0. assumption.
           destruct t0_t3_E0. subst.
+
+          (* clear stuff that doesn't matter *)
+          (* S12 := e, m ---> S12_1 ---S12_ea, S12_ma---> S12_2 -- e', m12--| *)
+          (* S21:= e, m ---> S21_2 -S21_ea, S21_ma --> S21_1 *)
+          rename H11 into TRACE. clear TRACE.
+          rename H14 into TRACE. clear TRACE.
+
+          rename H1 into EXEC_S12_S1.
+          rename H6 into EXEC_S12_S2.
+
+          rename H2 into EXEC_S21_S2.
+          rename H8 into EXEC_S21_S1.
+
+          rename e1 into S12_ea.
+          rename m1 into S12_ma.
+          
+          rename e2 into S21_ea.
+          rename m2 into S21_ma.
+
+          (* Note that we have offset alias with wix1 (the access is at wix1) *)
+          (* So, s12_ma can be injected into the final *)
+
+          assert (S12_ma_NO_POINTERS: mem_no_pointers S12_ma).
+          eapply mem_no_pointers_forward_on_sstore;
+            try eassumption;
+            try auto.
+          eapply eval_expr_arrofs; try eassumption.
+
+          assert (MEM_INJECT_S12_ma_m12:
+                    memval_inject (Mem.flat_inj (Mem.nextblock m))
+                                (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                          ((Mem.mem_contents S12_ma) # arrblock))
+                                (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                          ((Mem.mem_contents m12) # arrblock))).
+          eapply memval_inject_store_no_alias_for_sstore_same_block with
+              (arrname := arrname)
+              (wval := wval2)
+              (wix := wix2).
+            try eassumption;
+              try eauto.
+            auto.
+            exact EXEC_S12_S2.
+            auto.
+            eapply eval_expr_arrofs; try eassumption.
+            auto.
+                              
+
+          
           admit.
       
 
