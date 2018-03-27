@@ -2019,27 +2019,12 @@ Section STMTINTERCHANGE.
        replace (ofs + 0) with ofs in PERM_m21.
        left.
 
-       (* transmit permissions like m21 -> m -> m12 *)
-        
-                
-      
+    (* transmit permissions like m21 -> m -> m12 *)
+       assert (MPERM: Mem.perm m b2 ofs k p).
+       eapply sseq_perm_2; try eassumption; try auto.
+       eapply sseq_perm_1; try eassumption; try auto.
 
-    - 
-
-    
-    
-
-    assert (Mem.inject injf m12 m21) as INJECT_M12_M21.
-    admit.
-    
-    - apply INJECT_M12_M21.
-    - intros b bINVALID_M12.
-      rewrite injfVAL.
-      admit.
-    - admit.
-    - admit.
-    - admit.
-    - admit.
-  Admitted.
+       omega.
+  Qed.
 
 End STMTINTERCHANGE.
