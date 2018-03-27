@@ -200,78 +200,9 @@ Lemma mem_no_undef_forward_on_storev:
     val_no_undef v ->
     mem_no_pointers m ->
     Mem.storev STORE_CHUNK_SIZE m addr v = Some m' ->
-    mem_no_pointers m'.
+    mem_no_undef m'.
 Proof.
-  intros until v.
-  intros V_NO_POINTER.
-  intros M_NO_POINTERS.
-  intros M'_AS_STORE_M.
-  unfold mem_no_pointers in *.
-  intros until ofs.
-  unfold Mem.storev in M'_AS_STORE_M.
-
-  induction addr; try congruence.
-
-  erewrite Mem.store_mem_contents with (m1 := m)
-                                       (chunk := STORE_CHUNK_SIZE)
-                                       (ofs := (Ptrofs.unsigned i0))
-                                       (b := b0)
-                                       (v := v).
-  assert ({b = b0} + {b <> b0}) as BCASES.
-  apply Pos.eq_dec.
-
- 
- destruct BCASES as [BEQ | BNEQ].
-  + subst.
-    rewrite PMap.gss.
-    assert ({ofs = Ptrofs.unsigned i0} +  {ofs <> Ptrofs.unsigned i0}) as
-        ofs_cases.
-    apply Z.eq_dec.
-
-    destruct ofs_cases as [OFSEQ | OFSNEQ].
-    * subst.
-      remember (Ptrofs.unsigned i0) as i0ofs.
-
-      (* we are reading and writing from the same block at the same offset.
-         Convince the damn proof system that we cannot have a fragment by
-       analysing such a load.
-
-       We cannot have a fragment ptr since we same V_NO_PTR*)
-      remember (ZMap.get i0ofs (Mem.setN (encode_val STORE_CHUNK_SIZE v)
-                               i0ofs (Mem.mem_contents m) # b0)) as MNEW.
-
-      assert (ENCODEV: Some MNEW = List.hd_error (encode_val Mint8unsigned v)).
-      rewrite HeqMNEW.
-      erewrite Mem.get_setN_at_base_chunk_Mint8unsigned;
-        try auto;
-        try eassumption.
-
-      induction v;
-        simpl in *;
-        inversion ENCODEV;
-        simpl in *;
-        try congruence.
-
-         unfold inj_bytes.
-         unfold encode_int.
-         unfold rev_if_be.
-         simpl in *.
-         destruct (Archi.big_endian); simpl; congruence.
-      
-    * rewrite Mem.setN_outside.
-      apply M_NO_POINTERS.
-      rewrite encode_val_length.
-      simpl.
-      apply integer_split_number_line.
-      eassumption.
-      
-    
-  + rewrite PMap.gso.
-    apply M_NO_POINTERS.
-    auto.
-
-  + auto.
- Qed.
+Admitted.
 
 Section VAL_INJECT.
   
@@ -638,6 +569,9 @@ Section STMT.
 
   
 End STMT.
+
+  
+
 
 Section STMTSEQ.
   Variable m m': mem.
