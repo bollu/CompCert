@@ -1131,6 +1131,55 @@ Section STMTSEQ.
       apply eval_expr_arrofs; try eassumption.
   Qed.
 
+  
+  Lemma sseq_perm_1:
+    forall (b': block) (ofs':Z) (k: perm_kind) (p: permission),
+      Mem.perm m b' ofs' k p -> Mem.perm m' b' ofs' k p.
+  Proof.
+    intros until p.
+    intros PERM.
+
+    
+    rewrite s12DEFN in EXECSSEQ.
+    inversion EXECSSEQ; try congruence; subst.
+
+    assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
+    apply destruct_trace_app_eq_E0. assumption.
+    destruct t1_t2_E0. subst.
+
+    assert (m1PERM: Mem.perm m1 b' ofs' k p).
+    eapply sstore_perm_1; try eassumption; try auto.
+      apply eval_expr_arrofs; eassumption.
+
+    eapply sstore_perm_1; try eassumption; try auto.
+      apply eval_expr_arrofs; eassumption.
+    
+  Qed.
+  
+  Lemma sseq_perm_2:
+    forall (b': block) (ofs':Z) (k: perm_kind) (p: permission),
+      Mem.perm m' b' ofs' k p -> Mem.perm m b' ofs' k p.
+  Proof.
+    intros until p.
+    intros PERM.
+
+    
+    rewrite s12DEFN in EXECSSEQ.
+    inversion EXECSSEQ; try congruence; subst.
+
+    assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
+    apply destruct_trace_app_eq_E0. assumption.
+    destruct t1_t2_E0. subst.
+
+    assert (m1PERM: Mem.perm m1 b' ofs' k p).
+    eapply sstore_perm_2; try eassumption; try auto.
+      apply eval_expr_arrofs; eassumption.
+
+    eapply sstore_perm_2; try eassumption; try auto.
+      apply eval_expr_arrofs; eassumption.
+    
+  Qed.
+
 
 End STMTSEQ.
 
