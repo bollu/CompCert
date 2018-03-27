@@ -107,7 +107,7 @@ Definition val_no_pointer (v: val) : Prop :=
 contain pointers *)
 (* This was so fucking painful, to reason about the case of Get (SetN (encode...)).
 I will probably need to extract that case out *)
-Lemma mem_no_pointers_forward_on_mem_inj:
+Lemma mem_no_pointers_forward_on_storev:
   forall (m m': mem) (addr v : val),
     val_no_pointer v ->
     mem_no_pointers m ->
@@ -528,6 +528,26 @@ Section STMT.
       try eassumption.
   Qed.
 
+  Lemma mem_no_pointers_forward_on_sstore:
+    mem_no_pointers m'.
+  Proof.
+    rewrite sVAL in EXECS.
+    inversion EXECS. subst.
+
+    
+    assert (VNOPTR: val_no_pointer v).
+    rename H7 into EVALV.
+    inversion EVALV. subst.
+    rename H0 into EVAL_CONSTANT_V.
+    simpl in EVAL_CONSTANT_V.
+    inversion EVAL_CONSTANT_V.
+    unfold val_no_pointer.
+    intros. congruence.
+
+    eapply mem_no_pointers_forward_on_storev; eassumption.
+  Qed.
+
+
   
 End STMT.
 
@@ -631,7 +651,7 @@ Section STMTSEQ.
 
     inversion EXECS2. subst.
     inversion EXECS1. subst.
-    eapply mem_no_pointers_forward_on_mem_inj with (m := m) (m' := m1) (v := v0).
+    eapply mem_no_pointers_forward_on_storev with (m := m) (m' := m1) (v := v0).
 
     assert (val_no_pointer v0) as V0_NO_PTR.
     unfold val_no_pointer.
@@ -704,7 +724,7 @@ Section STMTSEQ.
 
     inversion EXECS2. subst.
     inversion EXECS1. subst.
-    eapply mem_no_pointers_forward_on_mem_inj with (m := m) (m' := m1) (v := v0).
+    eapply mem_no_pointers_forward_on_storev with (m := m) (m' := m1) (v := v0).
 
     assert (val_no_pointer v0) as V0_NO_PTR.
     unfold val_no_pointer.
@@ -723,6 +743,24 @@ Section STMTSEQ.
 
     eapply memval_inject_trans; try eassumption.
     auto.
+  Qed.
+
+  
+  Lemma mem_no_pointers_forward_on_sseq:
+    mem_no_pointers m'.
+  Proof.
+    rewrite s12DEFN in EXECSSEQ.
+    rewrite s1DEFN in EXECSSEQ.
+    rewrite s2DEFN in EXECSSEQ.
+
+    inversion EXECSSEQ. subst.
+
+    assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
+    apply destruct_trace_app_eq_E0. assumption.
+
+    destruct t1_t2_E0 as [t1E0 t2E0].
+    subst.
+
   Qed.
 
 
@@ -891,6 +929,7 @@ Section STMTINTERCHANGE.
   Variable m m12 m21: mem.
   Variable NOPOINTERSM: mem_no_pointers m.
   Variable NOUNDEFM: mem_no_undef m.
+  Variable NOUNDEFFRAGMENT: mem_no_undef_fragment m.
   
   Variable arrname: ident.
 
@@ -1097,8 +1136,10 @@ Section STMTINTERCHANGE.
       destruct b2CASES as  [b2_EQ_ARRBLOCK | b2_NEQ_ARRBLOCK].
       + (* we're accessing arrblock *)
         subst.
-        assert (ofs = Z.of_nat wix1 \/ ofs = Z.of_nat wix2 \/
-                (ofs <> Z.of_nat wix1 \/ ofs <> Z.of_nat wix2)) as OFS_CASES.
+        assert (ofs = Ptrofs.unsigned (nat_to_ptrofs wix1) \/
+                ofs =  Ptrofs.unsigned (nat_to_ptrofs wix2) \/
+                (ofs <>  Ptrofs.unsigned (nat_to_ptrofs wix1) /\
+                 ofs <>  Ptrofs.unsigned (nat_to_ptrofs wix2))) as OFS_CASES.
         omega.
 
         destruct OFS_CASES as [OFS_EQ_WIX1 | [OFS_EQ_WIX2 | OFS_NEQ_BOTH]].
@@ -1109,6 +1150,29 @@ Section STMTINTERCHANGE.
         ** (* arrblock, wix2 access *)
           admit.
         ** (* arrblock, neither wix access *)
+          destruct OFS_NEQ_BOTH as [OFS_NEQ_WIX1 OFS_NEQ_WIX2].
+        assert (memval_inject (Mem.flat_inj (Mem.nextblock m))
+                              (ZMap.get ofs (Mem.mem_contents m) # arrblock)
+                              (ZMap.get ofs (Mem.mem_contents m12) # arrblock))
+          as MEMVALINJ_m_m12.
+        eapply memval_inject_store_no_alias_for_sseq_same_block; try auto; try eassumption.
+
+        
+        assert (memval_inject (Mem.flat_inj (Mem.nextblock m))
+                              (ZMap.get ofs (Mem.mem_contents m) # arrblock)
+                              (ZMap.get ofs (Mem.mem_contents m21) # arrblock))
+          as MEMVALINJ_m_m21.
+        eapply memval_inject_store_no_alias_for_sseq_same_block; try auto; try eassumption.
+
+        assert (memval_inject (Mem.flat_inj (Mem.nextblock m))
+                              (ZMap.get ofs (Mem.mem_contents m12) # arrblock)
+                              (ZMap.get ofs (Mem.mem_contents m) # arrblock))
+          as MEMVALINJ_m12_m.
+        eapply memval_inject_sym; try eassumption; try auto.
+
+        
+        eapply memval_inject_trans; try eassumption; try auto.
+        admit. admit.
           
       + (* we're not accessing ARRBLOCK *)
         assert (memval_inject (Mem.flat_inj (Mem.nextblock m))
