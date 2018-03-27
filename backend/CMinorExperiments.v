@@ -1317,6 +1317,94 @@ Section STMTINTERCHANGE.
           rename e2 into S21_ea.
           rename m2 into S21_ma.
 
+
+          (* ======Analyze S1 =======*)
+
+          assert (M12_CONTENTS: (Mem.mem_contents m12) # arrblock =
+                                (Mem.setN
+                                   (encode_val
+                                      STORE_CHUNK_SIZE
+                                      (Vlong (nat_to_int64 wval2)))
+                                   (Ptrofs.unsigned (nat_to_ptrofs wix2))
+                                   S12_ma.(Mem.mem_contents)#arrblock)).
+            assert (M12_CONTENTS_RAW: Mem.mem_contents m12 =
+                    PMap.set arrblock
+                             (Mem.setN
+                                (encode_val
+                                   STORE_CHUNK_SIZE
+                                   (Vlong (nat_to_int64 wval2)))
+                                (Ptrofs.unsigned (nat_to_ptrofs wix2))
+                                S12_ma.(Mem.mem_contents)#arrblock)
+                             S12_ma.(Mem.mem_contents)
+                   ).
+            eapply mem_contents_sstore.
+            auto.
+            eassumption.
+            eapply eval_expr_arrofs; eassumption.
+            rewrite M12_CONTENTS_RAW.
+            erewrite PMap.gss.
+            auto.
+
+            assert (M12_AT_WIX1: ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                          ((Mem.mem_contents m12) # arrblock) =
+                                 ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                          S12_ma.(Mem.mem_contents)#arrblock).
+            rewrite M12_CONTENTS.
+            apply Mem.setN_outside.
+            simpl. omega.
+
+            rewrite M12_AT_WIX1 in *.
+
+            (* Now, analyze S12_ma and note that this will allow us to show that
+              its value will be whatever was written by s1 *)
+
+
+            assert (S12_ma_CONTENTS:
+                      (Mem.mem_contents S12_ma) # arrblock =
+                      Mem.setN
+                        (encode_val STORE_CHUNK_SIZE (Vlong (nat_to_int64 wval1)))
+                        (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                        (Mem.mem_contents m) # arrblock).
+            
+            assert (RAW: Mem.mem_contents S12_ma =
+                    PMap.set arrblock
+                             (Mem.setN
+                                (encode_val
+                                   STORE_CHUNK_SIZE
+                                   (Vlong (nat_to_int64 wval1)))
+                                (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                m.(Mem.mem_contents)#arrblock)
+                             m.(Mem.mem_contents)
+                   ).
+            eapply mem_contents_sstore.
+            auto.
+            eassumption.
+            eapply eval_expr_arrofs; eassumption.
+            rewrite RAW.
+            erewrite PMap.gss.
+            auto.
+
+
+            (* TODO: Check why this is Undef! *)
+            assert (S12_AT_WIX1: Some (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+                                                (Mem.mem_contents S12_ma) # arrblock) =
+                                 List.hd_error (encode_val
+                                                  STORE_CHUNK_SIZE
+                                                  (Vlong (nat_to_int64 wval1)))).
+            rewrite S12_ma_CONTENTS.
+            erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
+            auto.
+
+            simpl in S12_AT_WIX1.
+            inversion S12_AT_WIX1 as [inner].
+            rewrite inner.
+            clear inner.
+
+
+
+
+
+
           (* Note that we have offset alias with wix1 (the access is at wix1) *)
           (* So, s12_ma can be injected into the final *)
 
@@ -1372,8 +1460,7 @@ Section STMTINTERCHANGE.
             eapply eval_expr_arrofs; try eassumption.
             auto.
 
-            assert (M12_at_wix1: exists k, (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
-                                                (Mem.mem_contents m12) # arrblock) = Byte k).
+
             inversion EXEC_S12_S2. subst.
 
                               
