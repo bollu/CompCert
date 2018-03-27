@@ -1248,8 +1248,8 @@ Section STMTINTERCHANGE.
         destruct OFS_CASES as [OFS_EQ_WIX1 | [OFS_EQ_WIX2 | OFS_NEQ_BOTH]].
 
         ** (* arrblock, wix1 access *)
-          inversion exec_s12; subst.
-          inversion exec_s21. subst.
+          inversion exec_s12; try contradiction; subst.
+          inversion exec_s21; try contradiction; subst.
           
           assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
           apply destruct_trace_app_eq_E0. assumption.
@@ -1259,6 +1259,8 @@ Section STMTINTERCHANGE.
           assert (t0_t3_E0: t0 = E0 /\ t3 = E0).
           apply destruct_trace_app_eq_E0. assumption.
           destruct t0_t3_E0. subst.
+          admit.
+      
 
         ** (* arrblock, wix2 access *)
           admit.
@@ -1286,7 +1288,7 @@ Section STMTINTERCHANGE.
         
         eapply memval_inject_trans; try eassumption; try auto.
         eapply mem_no_pointers_forward_on_sseq; try eassumption; try auto.
-        admit.
+        eapply mem_no_undef_forward_on_sseq; try eassumption; try auto.
           
       + (* we're not accessing ARRBLOCK *)
         assert (memval_inject (Mem.flat_inj (Mem.nextblock m))
@@ -1313,7 +1315,10 @@ Section STMTINTERCHANGE.
         
         eapply memval_inject_trans; try eassumption; try auto.
         eapply mem_no_pointers_forward_on_sseq; try eassumption; try auto.
-        admit.
+        eapply mem_no_undef_forward_on_sseq; try eassumption; try auto.
+
+      +  omega.
+      + congruence. (* contradiction, some = None *)
   Admitted.
   
   Lemma meminject_ma'_mb': Mem.inject injf m12 m21.
