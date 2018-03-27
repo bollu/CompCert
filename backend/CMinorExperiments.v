@@ -1412,7 +1412,7 @@ Section STMTINTERCHANGE.
 
 
             (* TODO: Check why this is Undef! *)
-            assert (S12_AT_WIX1: Some (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+            assert (S12_MA_AT_WIX1: Some (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
                                                 (Mem.mem_contents S12_ma) # arrblock) =
                                  List.hd_error (encode_val
                                                   STORE_CHUNK_SIZE
@@ -1421,8 +1421,8 @@ Section STMTINTERCHANGE.
             erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
             auto.
 
-            rewrite encode_int32_hd_error in S12_AT_WIX1.
-            inversion S12_AT_WIX1 as [check]. rewrite check in *. clear check.
+            rewrite encode_int32_hd_error in S12_MA_AT_WIX1.
+            inversion S12_MA_AT_WIX1 as [check]. rewrite check in *. clear check.
 
             
 
@@ -1464,7 +1464,7 @@ Section STMTINTERCHANGE.
             erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
             auto.
             rewrite encode_int32_hd_error in S21_AT_WIX1.
-            inversion S12_AT_WIX1 as [check]. clear check.
+            inversion S12_MA_AT_WIX1 as [check]. clear check.
 
             inversion S21_AT_WIX1 as [inner]. rewrite inner.
 
@@ -1588,28 +1588,61 @@ Section STMTINTERCHANGE.
             erewrite PMap.gss.
             reflexivity.
 
-            (* TODO: Check why this is Undef! *)
-            assert (S21_AT_WIX1: Some (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
-                                                (Mem.mem_contents m21) # arrblock) =
+            assert (M21_AT_WIX2: ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix2))
+                                          ((Mem.mem_contents m21) # arrblock) =
+                                 ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix2))
+                                          S21_ma.(Mem.mem_contents)#arrblock).
+            rewrite M21_CONTENTS.
+            apply Mem.setN_outside.
+            rewrite Memdata.encode_val_length.
+            simpl. omega.
+
+            rewrite M21_AT_WIX2.
+
+            
+            assert (S21_MA_CONTENTS: (Mem.mem_contents S21_ma) # arrblock =
+                                (Mem.setN
+                                   (encode_val
+                                      STORE_CHUNK_SIZE
+                                      (Vint (nat_to_int32 wval2)))
+                                   (Ptrofs.unsigned (nat_to_ptrofs wix2))
+                                   m.(Mem.mem_contents)#arrblock)).
+            assert (RAW: Mem.mem_contents S21_ma =
+                    PMap.set arrblock
+                             (Mem.setN
+                                (encode_val
+                                   STORE_CHUNK_SIZE
+                                   (Vint (nat_to_int32 wval2)))
+                                (Ptrofs.unsigned (nat_to_ptrofs wix2))
+                                m.(Mem.mem_contents)#arrblock)
+                             m.(Mem.mem_contents)
+                   ).
+            eapply mem_contents_sstore.
+            auto.
+            eassumption.
+            eapply eval_expr_arrofs; eassumption.
+            
+            rewrite RAW.
+            erewrite PMap.gss.
+            reflexivity.
+
+            
+            assert (S21_ma_AT_WIX2: Some (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix2))
+                                                ((Mem.mem_contents S21_ma) # arrblock)) = 
                                  List.hd_error (encode_val
                                                   STORE_CHUNK_SIZE
-                                                  (Vint (nat_to_int32 wval1)))).
-            rewrite M21_CONTENTS.
+                                                  (Vint (nat_to_int32 wval2)))).
+            rewrite S21_MA_CONTENTS.
             erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
             auto.
-            rewrite encode_int32_hd_error in S21_AT_WIX1.
-            inversion S12_AT_WIX1 as [check]. clear check.
 
-            inversion S21_AT_WIX1 as [inner]. rewrite inner.
+            rewrite encode_int32_hd_error in S21_ma_AT_WIX2.
+            rewrite encode_int32_hd_error in M12_AT_WIX2.
 
-            (* NOTE NOTE: We should have this return a byte!! *)
+            inversion S21_ma_AT_WIX2 as [inner]. rewrite inner. clear inner.
+            inversion M12_AT_WIX2 as [inner]. rewrite inner. clear inner.
+
             apply memval_inject_byte.
-
-                              
-
-          
-          admit.
-          admit.
         ** (* arrblock, neither wix access *)
           destruct OFS_NEQ_BOTH as [OFS_NEQ_WIX1 OFS_NEQ_WIX2].
         assert (memval_inject (Mem.flat_inj (Mem.nextblock m))
@@ -1665,7 +1698,7 @@ Section STMTINTERCHANGE.
 
       +  omega.
       + congruence. (* contradiction, some = None *)
-  Admitted.
+  Qed.
   
   Lemma meminject_ma'_mb': Mem.inject injf m12 m21.
   Proof.
