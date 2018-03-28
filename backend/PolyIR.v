@@ -523,9 +523,21 @@ Section EVAL_AFFINEEXPR.
       eval_affineexpr (Econstoffset ofs)
                       (Genv.symbol_address ge
                                            (looparrname l)
-                                           ofs)
-  .
+                                           ofs). 
 End EVAL_AFFINEEXPR.
+
+
+Theorem eval_affineexpr_is_function:
+  forall (ge: genv) (le: loopenv) (l: loop) (ae: affineexpr) (a a': val),
+    eval_affineexpr ge le l ae a ->
+    eval_affineexpr ge le l ae a' ->
+    a = a'.
+Proof.
+  intros until a'.
+  intros eval_a.
+  intros eval_a'.
+  induction ae; inversion eval_a; inversion eval_a'; subst; try auto.
+Qed.
 
 Section EXEC_STMT.
   Inductive exec_stmt: genv -> loopenv -> loop -> mem -> stmt -> mem -> Prop := 
@@ -541,89 +553,6 @@ Section EXEC_STMT.
                  vaddr
                  (Vint i) = Some m' ->
       exec_stmt ge le l m (Sstore eaddr i) m'.
-
-  Lemma exec_stmt_is_useless:
-    forall ge le l m s m',
-      exec_stmt ge le l m s m' -> m = m'.
-  Proof.
-    intros until m'.
-    intros execs.
-    inversion execs. subst.
-
-    - rename H0 into eval_expr.
-      rename H1 into memstore.
-
-      unfold Mem.storev in memstore.
-  Abort.
-      
-End EXEC_STMT.
-
-Section EXEC_LOOP.
-
-  Inductive exec_loop: genv -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
-  | eval_loop_stop: forall ge le m l,
-      (viv le >= loopub l)%nat ->
-      exec_loop ge le m l m le
-  | eval_loop_loop: forall ge le le' m m' m'' l,
-      (viv le < loopub l)%nat ->
-      (viv le < viv le')%nat -> 
-      exec_stmt ge le l m (loopstmt l) m' ->
-      exec_loop ge (loopenv_bump_vindvar le) m' l m'' le' ->
-      exec_loop ge le m l m'' le'.
-End EXEC_LOOP.
-
-Section EXEC_LOOP_REV.
-  Inductive exec_loop_rev: genv -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
-  | eval_looprev_stop: forall ge le m l,
-      (viv le >= loopub l)%nat ->
-      exec_loop_rev ge le m l m le
-  | eval_looprev_start: forall ge le m l,
-      (viv le < loopub l)%nat ->
-      exec_loop_rev  ge le m l m le
-  | eval_looprev_loop: forall ge le le' m m' m'' l,
-      (viv le < loopub l)%nat ->
-      (viv le < viv le')%nat -> 
-      exec_loop ge (loopenv_bump_vindvar le) m l m' le' ->
-      exec_stmt ge le' l m' (loopstmt l) m'' ->
-      exec_loop_rev ge le m l m'' (loopenv_bump_vindvar le').
-End EXEC_LOOP_REV.
-
-Lemma exec_loop_viv_nondecreasing:
-  forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
-    exec_loop ge le m l m' le' ->
-    (viv le' >= viv le)%nat.
-Proof.
-  intros until l.
-  intros execl.
-  induction execl.
-  - auto.
-  - unfold loopenv_bump_vindvar in *. simpl in *. omega.
-Qed.
-
-Lemma exec_loop_env_equal_implies_memory_equal:
-  forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
-    exec_loop ge le m l m' le' ->
-    le = le' -> m = m'.
-Proof.
-  intros.
-  subst.
-  inversion H; subst; try auto.
-  omega.
-Qed.
-  
-
-Theorem eval_affineexpr_is_function:
-  forall (ge: genv) (le: loopenv) (l: loop) (ae: affineexpr) (a a': val),
-    eval_affineexpr ge le l ae a ->
-    eval_affineexpr ge le l ae a' ->
-    a = a'.
-Proof.
-  intros until a'.
-  intros eval_a.
-  intros eval_a'.
-  induction ae; inversion eval_a; inversion eval_a'; subst; try auto.
-Qed.
-
 
 Theorem exec_stmt_is_function:
   forall (ge: genv)
@@ -652,6 +581,122 @@ Proof.
   inversion meq. subst.
   auto.
 Qed.
+      
+End EXEC_STMT.
+
+Section EXEC_LOOP.
+
+  Inductive exec_loop: genv -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
+  | exec_loop_stop: forall ge le m l,
+      (viv le >= loopub l)%nat ->
+      exec_loop ge le m l m le
+  | exec_loop_loop: forall ge le le' m m' m'' l,
+      (viv le < loopub l)%nat ->
+      (viv le < viv le')%nat -> 
+      exec_stmt ge le l m (loopstmt l) m' ->
+      exec_loop ge (loopenv_bump_vindvar le) m' l m'' le' ->
+      exec_loop ge le m l m'' le'.
+End EXEC_LOOP.
+
+Section EXEC_LOOP_REV.
+  Inductive exec_loop_rev: genv -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
+  | exec_looprev_stop: forall ge le m l,
+      (viv le >= loopub l)%nat ->
+      exec_loop_rev ge le m l m le
+  | exec_looprev_start: forall ge le m  m' l,
+      (viv le < loopub l)%nat ->
+      (viv le = 0)%nat -> 
+      exec_stmt ge le l m (loopstmt l) m' ->
+      exec_loop_rev ge le m l m (loopenv_bump_vindvar le)
+  | exec_looprev_loop: forall ge le le' m m' m'' l,
+      (viv le < loopub l)%nat ->
+      (viv le > 0)%nat ->
+      exec_loop_rev ge le m l m' le' ->
+      exec_stmt ge le' l m' (loopstmt l) m'' ->
+      exec_loop_rev ge le m l m'' (loopenv_bump_vindvar le').
+
+
+
+  Variable ge: genv.
+  Variable le : loopenv.
+  Variable m: mem.
+  Variable l: loop.
+
+  Lemma exec_loop_rev_is_function:
+    forall (m1: mem) (le1: loopenv),
+      exec_loop_rev ge le m l m1 le1 ->
+      forall (m2: mem) (le2: loopenv),
+        exec_loop_rev ge le m l m2 le2 ->
+        m1 = m2 /\ le1 = le2.
+  Proof.
+    intros until le1.
+    intros EXEC1.
+    induction EXEC1;
+    intros until le2;
+    intros EXEC2.
+
+    - (* exec_looprev_stop *)
+      inversion EXEC2; subst; try omega. auto.
+    - (* exec_looprev_start *)
+      inversion EXEC2; subst; try omega; auto.
+    - (* exec_looprev_loop *)
+      inversion EXEC2; subst; try omega; auto.
+      rename m'0 into m1.
+      rename le'0 into le1.
+
+      (* m, le -> m1, le1 -> m2 *)
+      rename H1 into EXECSTMT_M'_M''.
+      rename H5 into EXECSTMT_M1_M2.
+      rename H4 into EXECLOOP_M_M1.
+
+      assert (AGREE_TILL_LOOPREV: m' = m1 /\ le' = le1).
+      apply IHEXEC1; eassumption.
+
+      destruct AGREE_TILL_LOOPREV.
+      subst.
+
+      assert(STMTAGREE: m'' = m2).
+      eapply exec_stmt_is_function; eassumption.
+      subst.
+
+      auto.
+  Qed.
+      
+      
+End EXEC_LOOP_REV.
+
+
+Section LOOP_LOOPREV_EQUAL.
+  Variable ge: genv.
+  Variable le le': loopenv.
+  Variable m m': mem.
+  Variable l: loop.
+  
+End LOOP_LOOPREV_EQUAL.
+
+Lemma exec_loop_viv_nondecreasing:
+  forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
+    exec_loop ge le m l m' le' ->
+    (viv le' >= viv le)%nat.
+Proof.
+  intros until l.
+  intros execl.
+  induction execl.
+  - auto.
+  - unfold loopenv_bump_vindvar in *. simpl in *. omega.
+Qed.
+
+Lemma exec_loop_loopenv_equal_implies_memory_equal:
+  forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
+    exec_loop ge le m l m' le' ->
+    le = le' -> m = m'.
+Proof.
+  intros.
+  subst.
+  inversion H; subst; try auto.
+  omega.
+Qed.
+  
 
 Theorem exec_loop_is_function:
   forall (ge: genv) (le' le'': loopenv) (viv: vindvar) (l: loop) (m m' m'': mem),
@@ -802,7 +847,8 @@ Proof.
     split.
     omega.
 
-    assert (Z.of_nat (loopschedule l (viv le)) < Z.of_nat (loopub l)) as iv_in_range.
+    assert (Z.of_nat (loopschedule l (viv le)) <
+            Z.of_nat (loopub l)) as iv_in_range.
     apply Znat.inj_lt.
     eapply inrange_forward.
     exact (loopschedulewitness l).
