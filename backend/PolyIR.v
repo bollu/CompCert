@@ -599,21 +599,27 @@ Section EXEC_LOOP.
 End EXEC_LOOP.
 
 Section EXEC_LOOP_REV.
-  Inductive exec_loop_rev: genv -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
-  | exec_looprev_stop: forall ge le m l,
-      (viv le >= loopub l)%nat ->
-      exec_loop_rev ge le m l m le
-  | exec_looprev_start: forall ge le m  m' l,
-      (viv le < loopub l)%nat ->
-      (viv le = 0)%nat -> 
-      exec_stmt ge le l m (loopstmt l) m' ->
-      exec_loop_rev ge le m l m (loopenv_bump_vindvar le)
-  | exec_looprev_loop: forall ge le le' m m' m'' l,
+  Inductive looprev_state :=
+  | lrs_ongoing
+  | lrs_stopped.
+
+  Definition curub := nat.
+  Inductive exec_loop_rev: curub ->
+                           genv ->
+                           loopenv ->
+                           mem ->
+                           loop ->
+                           mem ->
+                           loopenv -> Prop :=
+  | exec_looprev_stop: forall curub ge le m l,
+      (curub = 0)%nat ->
+      exec_loop_rev curub ge le m l m le
+  | exec_looprev_loop: forall ge le le' m m' m'' l curub,
       (viv le < loopub l)%nat ->
       (viv le > 0)%nat ->
-      exec_loop_rev ge le m l m' le' ->
-      exec_stmt ge le' l m' (loopstmt l) m'' ->
-      exec_loop_rev ge le m l m'' (loopenv_bump_vindvar le').
+      exec_loop_rev (curub - 1)%nat ge le m l m' le' ->
+      exec_stmt ge (mkLenv curub) l m' (loopstmt l) m'' ->
+      exec_loop_rev (curub) ge le m l m'' (loopenv_bump_vindvar le').
 
 
 
@@ -621,12 +627,13 @@ Section EXEC_LOOP_REV.
   Variable le : loopenv.
   Variable m: mem.
   Variable l: loop.
+  Variable lrs: looprev_state.
 
   Lemma exec_loop_rev_is_function:
     forall (m1: mem) (le1: loopenv),
-      exec_loop_rev ge le m l m1 le1 ->
+      exec_loop_rev lrs ge le m l m1 le1 ->
       forall (m2: mem) (le2: loopenv),
-        exec_loop_rev ge le m l m2 le2 ->
+        exec_loop_rev lrs ge le m l m2 le2 ->
         m1 = m2 /\ le1 = le2.
   Proof.
     intros until le1.
@@ -636,7 +643,9 @@ Section EXEC_LOOP_REV.
     intros EXEC2.
 
     - (* exec_looprev_stop *)
-      inversion EXEC2; subst; try omega. auto.
+      induction EXEC2; subst; try omega. auto.
+      apply IHEXEC2; auto.
+      
     - (* exec_looprev_start *)
       inversion EXEC2; subst; try omega; auto.
     - (* exec_looprev_loop *)
@@ -661,16 +670,31 @@ Section EXEC_LOOP_REV.
 
       auto.
   Qed.
-      
-      
 End EXEC_LOOP_REV.
 
 
 Section LOOP_LOOPREV_EQUAL.
-  Variable ge: genv.
-  Variable le le': loopenv.
-  Variable m m': mem.
-  Variable l: loop.
+  Lemma execloop_execlooprev_agree:
+    forall (ge: genv) (le: loopenv) (l: loop) (m: mem),
+    forall (leloop: loopenv) (mloop: mem),
+      exec_loop ge le m l mloop leloop ->
+      forall (lerev: loopenv) (mrev: mem),
+        exec_loop_rev lrs_stopped ge le m l mrev lerev ->
+        mrev = m /\ lerev = leloop.
+  Proof.
+    intros until mloop.
+    intros EXECL.
+    induction EXECL;
+    intros until mrev;
+    intros EXECLREV.
+    
+    - inversion EXECLREV; subst; try omega; auto.
+    - (* m --S--m1---LOOP---mloop *)
+      rename m' into m1.
+      rename m'' into mloop.
+
+  
+    
   
 End LOOP_LOOPREV_EQUAL.
 
