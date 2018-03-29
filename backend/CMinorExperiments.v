@@ -619,7 +619,7 @@ Section STMT.
 
 
   
-  Lemma mem_contents_equal_no_alias_for_sstore:
+  Lemma mem_contents_equal_no_block_alias_for_sstore:
     forall rb ,
       rb <> wb ->
       (Mem.mem_contents m') # rb = (Mem.mem_contents m) # rb.
@@ -907,7 +907,7 @@ Section STMTSEQ.
                              (Vptr wb2 wofs2). *)
    *)
 
-  Lemma mem_contents_equal_no_alias_for_sseq:
+  Lemma mem_contents_equal_no_block_alias_for_sseq:
     forall rb ,
       rb <> arrblock ->
       (Mem.mem_contents m') # rb = (Mem.mem_contents m) # rb.
@@ -933,14 +933,14 @@ Section STMTSEQ.
 
     assert ((Mem.mem_contents m1) # rb =
             (Mem.mem_contents m) # rb) as M1_EQ_M.
-    eapply mem_contents_equal_no_alias_for_sstore; try eassumption; try auto.
+    eapply mem_contents_equal_no_block_alias_for_sstore; try eassumption; try auto.
     eapply eval_expr_arrofs. eassumption.
 
     
 
     assert ((Mem.mem_contents m') # rb =
             (Mem.mem_contents m1) # rb) as M1_EQ_M'.
-    eapply mem_contents_equal_no_alias_for_sstore with
+    eapply mem_contents_equal_no_block_alias_for_sstore with
         (arrname := arrname)
         (wix := wix2)
         (wval := wval2); try eassumption; try auto.
@@ -1458,24 +1458,42 @@ Section STMTINTERCHANGE.
 
       destruct b2CASES as  [b2_EQ_ARRBLOCK | b2_NEQ_ARRBLOCK].
       + (* we're accessing arrblock *)
-        admit.
-      + (*we're not accessing arrblock *)
-        assert (M12_EQ_M: (Mem.mem_contents m12) #b2 =
+
+        subst.
+        assert (ofs = Ptrofs.unsigned (nat_to_ptrofs wix1) \/
+                ofs =  Ptrofs.unsigned (nat_to_ptrofs wix2) \/
+                (ofs <>  Ptrofs.unsigned (nat_to_ptrofs wix1) /\
+                 ofs <>  Ptrofs.unsigned (nat_to_ptrofs wix2))) as OFS_CASES.
+        omega.
+
+        destruct OFS_CASES as [OFS_EQ_WIX1 | [OFS_EQ_WIX2 | OFS_NEQ_BOTH]].
+
+        ** (* ARRBLOCK, WIX1 ACCESS *)
+          admit.
+
+          
+        ** (* ARRBLOCK, WIX2 ACCESS *)
+          admit.
+
+        **  (*we're not accessing arrblock *)
+          admit.
+        + assert (M12_EQ_M: (Mem.mem_contents m12) #b2 =
                           (Mem.mem_contents m) # b2).
-        eapply mem_contents_equal_no_alias_for_sseq;
+        eapply mem_contents_equal_no_block_alias_for_sseq;
           try eauto; try eassumption.
 
         
         assert (M21_EQ_M: (Mem.mem_contents m21) #b2 =
                           (Mem.mem_contents m) # b2).
-        eapply mem_contents_equal_no_alias_for_sseq;
+        eapply mem_contents_equal_no_block_alias_for_sseq;
           try eauto; try eassumption.
 
         rewrite M12_EQ_M. rewrite M21_EQ_M.
         eapply memval_inject_refl; eauto; eassumption.
-          
 
-        admit.
+        + omega.
+        +  congruence.
+          
   Admitted.
   
   (* 
@@ -1914,15 +1932,13 @@ Section STMTINTERCHANGE.
       +  omega.
       + congruence. (* contradiction, some = None *)
   Qed.
+   *)
   
   Lemma meminject_m12_m21:
-    mem_no_undef m ->
-    mem_no_undef_fragment m ->
     Mem.inject injf m12 m21.
   Proof.
-    intros MEMNOUNDEF NOUNDEFFRAGMENT.
     constructor.
-    - apply meminj_m12_m21; eassumption.
+    - apply meminj_m12_m21_no_undef; eassumption.
 
     - intros.
 
@@ -1992,6 +2008,5 @@ Section STMTINTERCHANGE.
 
        omega.
        Qed.
-    *)
 
 End STMTINTERCHANGE.
