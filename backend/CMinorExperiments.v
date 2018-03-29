@@ -650,6 +650,46 @@ Section STMT.
     reflexivity.
   Qed.
 
+  
+  
+  Lemma mem_contents_equal_no_offset_alias_for_sstore:
+    forall (rb: block) (ofs: Z),
+      rb = wb ->
+      ofs <> (Ptrofs.unsigned wofs) ->
+      (ZMap.get ofs (Mem.mem_contents m') # rb) =
+      (ZMap.get ofs (Mem.mem_contents m) # rb).
+  Proof.
+    intros until ofs.
+    intros WBALIAS.
+    subst.
+    intros OFS_NOALIAS.
+
+    
+    inversion EXECS. subst.
+
+    
+    assert (vaddr = Vptr wb wofs) as VADDR_EQ_WBVAL.
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+    rename H10 into STOREM.
+    unfold Mem.storev in STOREM.
+
+
+
+    erewrite Mem.store_mem_contents with (m1 := m)
+                                         (chunk := STORE_CHUNK_SIZE)
+                                         (b := wb)
+                                         (v := v);
+      try eassumption.
+    erewrite PMap.gss; try eassumption.
+    try erewrite Mem.setN_outside; try auto.
+
+    rewrite Memdata.encode_val_length.
+    simpl.
+    omega.
+  Qed.
+
   Lemma memval_inject_store_no_alias_for_sstore:
     forall rb ofs,
       mem_no_undef m ->
@@ -1476,6 +1516,7 @@ Section STMTINTERCHANGE.
           admit.
 
         **  (*we're not accessing arrblock *)
+          intros.
           admit.
         + assert (M12_EQ_M: (Mem.mem_contents m12) #b2 =
                           (Mem.mem_contents m) # b2).
