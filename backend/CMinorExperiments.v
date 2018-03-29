@@ -1566,10 +1566,34 @@ Section STMTINTERCHANGE.
         ** (* ARRBLOCK, WIX2 ACCESS *)
           admit.
 
-        **  (*we're not accessing arrblock *)
+        **  (* ARRBLOCK, NO OFS ALIAS WITH WIX1 OR WIX2 *)
           intros.
-          admit.
-        + assert (M12_EQ_M: (Mem.mem_contents m12) #b2 =
+          assert ((ZMap.get ofs (Mem.mem_contents m12) # arrblock) =
+                  (ZMap.get ofs (Mem.mem_contents m) # arrblock))
+            as M12_EQ_M.
+
+          destruct OFS_NEQ_BOTH.
+          eapply mem_contents_equal_no_offset_alias_for_sseq;
+            try auto;
+            try eassumption.
+
+          
+          assert ((ZMap.get ofs (Mem.mem_contents m21) # arrblock) =
+                  (ZMap.get ofs (Mem.mem_contents m) # arrblock))
+            as M21_EQ_M.
+
+          destruct OFS_NEQ_BOTH.
+          eapply mem_contents_equal_no_offset_alias_for_sseq;
+            try auto;
+            try eassumption.
+
+          rewrite M12_EQ_M.
+          rewrite M21_EQ_M.
+
+          eapply memval_inject_refl; try eassumption; try eauto.
+          
+      + (* WE're NOT ACCESSING ARRBLOCK *)
+         assert (M12_EQ_M: (Mem.mem_contents m12) #b2 =
                           (Mem.mem_contents m) # b2).
         eapply mem_contents_equal_no_block_alias_for_sseq;
           try eauto; try eassumption.
