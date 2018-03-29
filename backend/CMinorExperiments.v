@@ -254,8 +254,10 @@ Proof.
     + subst.
 
     assert (ENCODEV: Some (ZMap.get (Ptrofs.unsigned ofs)
-    (Mem.setN (encode_val STORE_CHUNK_SIZE (Vint (nat_to_int32 n))) (Ptrofs.unsigned ofs)
-       (Mem.mem_contents m) # bread)) = List.hd_error (encode_val Mint8unsigned (Vint (nat_to_int32 n)))).
+                                    (Mem.setN
+                                       (encode_val STORE_CHUNK_SIZE (Vint (nat_to_int32 n))) (Ptrofs.unsigned ofs)
+              (Mem.mem_contents m) # bread)) =
+                     List.hd_error (encode_val Mint8unsigned (Vint (nat_to_int32 n)))).
     erewrite Mem.get_setN_at_base_chunk_Mint8unsigned.
     reflexivity.
 
@@ -695,8 +697,8 @@ Section STMT.
     forall (rb: block) (ofs: Z),
       rb = wb ->
       ofs = (Ptrofs.unsigned wofs) ->
-      Some (ZMap.get ofs (Mem.mem_contents m') # rb) =
-      hd_error (encode_val Mint8unsigned (Vint (nat_to_int32 wval))).
+      ZMap.get ofs (Mem.mem_contents m') # rb =
+      Byte (Byte.repr (Int.unsigned (nat_to_int32 wval))).
   Proof.
     intros until ofs.
     intros WBALIAS.
@@ -742,8 +744,11 @@ Section STMT.
    inversion EVALV_CONST.
    reflexivity.
 
-   rewrite ENCODEV.
-   rewrite VVAL.
+   
+   rewrite VVAL in ENCODEV.
+
+   rewrite encode_int32_hd_error in ENCODEV.
+   inversion ENCODEV.
    reflexivity.
   Qed.
 
@@ -1104,8 +1109,8 @@ Section STMTSEQ.
       rb = arrblock ->
       ofs = Ptrofs.unsigned (nat_to_ptrofs wix1) ->
       ofs <> Ptrofs.unsigned (nat_to_ptrofs wix2) ->
-      Some (ZMap.get ofs (Mem.mem_contents m') # rb) =
-      hd_error (encode_val Mint8unsigned (Vint (nat_to_int32 wval1))).
+      ZMap.get ofs (Mem.mem_contents m') # rb =
+      Byte (Byte.repr (Int.unsigned (nat_to_int32 wval1))).
   Proof.
     intros until ofs.
     intros RBALIAS OFS_ALIAS_WIX1 OFS_NOALIAS_WIX2.
@@ -1147,8 +1152,8 @@ Section STMTSEQ.
     forall (rb: block) (ofs: Z),
       rb = arrblock ->
       ofs = Ptrofs.unsigned (nat_to_ptrofs wix2) ->
-      Some (ZMap.get ofs (Mem.mem_contents m') # rb) =
-      hd_error (encode_val Mint8unsigned (Vint (nat_to_int32 wval2))).
+      ZMap.get ofs (Mem.mem_contents m') # rb =
+      Byte (Byte.repr (Int.unsigned (nat_to_int32 wval2))).
   Proof.
     intros until ofs.
     intros RBALIAS OFS_ALIAS_WIX2.
@@ -1697,7 +1702,30 @@ Section STMTINTERCHANGE.
         destruct OFS_CASES as [OFS_EQ_WIX1 | [OFS_EQ_WIX2 | OFS_NEQ_BOTH]].
 
         ** (* ARRBLOCK, WIX1 ACCESS *)
-          admit.
+          
+          
+          assert (M12: (ZMap.get
+                          ofs
+                          (Mem.mem_contents m12) # arrblock) =
+                       Byte (Byte.repr (Int.unsigned (nat_to_int32 wval1)))).
+          eapply mem_contents_offset_alias_for_sseq_1;
+            try eauto; try eassumption.
+          omega.
+
+          
+          assert (M21: (ZMap.get ofs (Mem.mem_contents m21) # arrblock) =
+                       Byte (Byte.repr (Int.unsigned (nat_to_int32 wval1)))).
+          eapply mem_contents_offset_alias_for_sseq_2
+            with (wval2 := wval1) (wix2 := wix1)
+                 (wval1 := wval2) (wix1 := wix2);
+            try eauto; try eassumption.
+
+          rewrite M12. rewrite M21.
+
+          eapply memval_inject_refl;
+            try eassumption; try auto.
+          intros.
+          congruence.
 
           
         ** (* ARRBLOCK, WIX2 ACCESS *)
