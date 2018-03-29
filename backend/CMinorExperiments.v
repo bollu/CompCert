@@ -220,7 +220,6 @@ End MEMSTORE.
 
 Section STMT.
   Variable m m': mem.
-  (* Variable NOPOINTERS : mem_no_pointers m. *)
   
   
   Variable arrname: ident.
@@ -520,8 +519,6 @@ End STMT.
 
 Section STMTSEQ.
   Variable m m': mem.
-  (* Variable NOPOINTERS: mem_no_pointers m. *)
-  (* Variable NOUNDEF: mem_no_undef m. *)
   Variable arrname: ident.
 
   Variable wix1 wix2 : nat.
@@ -1001,11 +998,6 @@ Section STMTINTERCHANGE.
   Variable m m12 m21: mem.
   Variable NOPOINTERSM: mem_no_pointers m.
 
-  (*  No undef
-  Variable NOUNDEFM: mem_no_undef m.
-  Variable NOUNDEFFRAGMENT: mem_no_undef_fragment m.
-  *)
-  
   Variable arrname: ident.
 
   Variable wval1 wval2: nat.
