@@ -1729,7 +1729,29 @@ Section STMTINTERCHANGE.
 
           
         ** (* ARRBLOCK, WIX2 ACCESS *)
-          admit.
+
+          assert (M12: (ZMap.get
+                          ofs
+                          (Mem.mem_contents m12) # arrblock) =
+                       Byte (Byte.repr (Int.unsigned (nat_to_int32 wval2)))).
+          eapply mem_contents_offset_alias_for_sseq_2;
+            try eauto; try eassumption.
+
+          
+          assert (M21: (ZMap.get ofs (Mem.mem_contents m21) # arrblock) =
+                       Byte (Byte.repr (Int.unsigned (nat_to_int32 wval2)))).
+          eapply mem_contents_offset_alias_for_sseq_1
+            with (wval2 := wval1) (wix2 := wix1)
+                 (wval1 := wval2) (wix1 := wix2);
+            try eauto; try eassumption.
+          omega.
+
+          rewrite M12. rewrite M21.
+
+          eapply memval_inject_refl;
+            try eassumption; try auto.
+          intros.
+          congruence.
 
         **  (* ARRBLOCK, NO OFS ALIAS WITH WIX1 OR WIX2 *)
           intros.
