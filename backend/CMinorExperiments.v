@@ -1345,8 +1345,11 @@ End MEMSTRUCTURE.
 Section STMTINTERCHANGE.
   Variable m m12 m21: mem.
   Variable NOPOINTERSM: mem_no_pointers m.
+
+  (*  No undef
   Variable NOUNDEFM: mem_no_undef m.
   Variable NOUNDEFFRAGMENT: mem_no_undef_fragment m.
+  *)
   
   Variable arrname: ident.
 
@@ -1508,9 +1511,11 @@ Section STMTINTERCHANGE.
       exists 0. omega.
   Qed.
 
+  
+
   Lemma mem_structure_eq_m12_m21:
     mem_structure_eq injf m12 m21.
-  Proof. 
+  Proof.
     assert (mem_structure_eq injf m m) as MEMSTRUCTURE_EQ_MA_MB.
     eapply mem_inj_mem_structure_eq. inversion begininj. eassumption.
 
@@ -1521,8 +1526,16 @@ Section STMTINTERCHANGE.
   Qed.
 
   
-  Lemma meminj_m12_m21: Mem.mem_inj injf m12 m21.
+
+  Lemma meminj_m12_m21_no_undef: Mem.mem_inj injf m12 m21.
+    Abort.
+  
+  Lemma meminj_m12_m21:
+    mem_no_undef m ->
+    mem_no_undef_fragment m ->
+    Mem.mem_inj injf m12 m21.
   Proof.
+    intros NOUNDEFM NOUNDEFFRAGMENT.
     assert (mem_structure_eq injf m12 m21) as structureeq.
     apply mem_structure_eq_m12_m21.
     constructor.
@@ -1953,10 +1966,14 @@ Section STMTINTERCHANGE.
       + congruence. (* contradiction, some = None *)
   Qed.
   
-  Lemma meminject_m12_m21: Mem.inject injf m12 m21.
+  Lemma meminject_m12_m21:
+    mem_no_undef m ->
+    mem_no_undef_fragment m ->
+    Mem.inject injf m12 m21.
   Proof.
+    intros MEMNOUNDEF NOUNDEFFRAGMENT.
     constructor.
-    - apply meminj_m12_m21.
+    - apply meminj_m12_m21; eassumption.
 
     - intros.
 
