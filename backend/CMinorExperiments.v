@@ -554,7 +554,6 @@ End MEMSTORE.
 Section STMT.
   Variable m m': mem.
   Variable NOPOINTERS : mem_no_pointers m.
-  Variable NOUNDEF : mem_no_undef m.
   
   
   Variable arrname: ident.
@@ -653,12 +652,14 @@ Section STMT.
 
   Lemma memval_inject_store_no_alias_for_sstore:
     forall rb ofs,
+      mem_no_undef m ->
       rb <> wb ->
       memval_inject injf
                     (ZMap.get ofs (Mem.mem_contents m) # rb)
                     (ZMap.get ofs (Mem.mem_contents m') # rb).
   Proof.
     intros until ofs.
+    intros NOUNDEF.
     intros NOALIAS.
 
     rewrite sVAL in EXECS.
@@ -679,12 +680,14 @@ Section STMT.
   
   Lemma memval_inject_store_no_alias_for_sstore_same_block:
     forall ofs,
+      mem_no_undef m ->
       ofs <> Ptrofs.unsigned wofs ->
       memval_inject injf
                     (ZMap.get ofs (Mem.mem_contents m) # wb)
                     (ZMap.get ofs (Mem.mem_contents m') # wb).
   Proof.
     intros until ofs.
+    intros NOUNDEF.
     intros NOALIASWIX.
 
     rewrite sVAL in EXECS.
@@ -723,8 +726,10 @@ Section STMT.
 
   
   Lemma mem_no_undef_forward_on_sstore:
+    mem_no_undef m ->
     mem_no_undef m'.
   Proof.
+    intros MNOUNDEF.
     rewrite sVAL in EXECS.
     inversion EXECS. subst.
 
@@ -945,154 +950,6 @@ Section STMTSEQ.
     rewrite M1_EQ_M'.
     reflexivity.
   Qed.
-    
-  Lemma memval_inject_store_no_alias_for_sseq:
-    forall rb ofs,
-      mem_no_undef m ->
-      rb <> arrblock ->
-      memval_inject injf
-                    (ZMap.get ofs (Mem.mem_contents m) # rb)
-                    (ZMap.get ofs (Mem.mem_contents m') # rb).
-  Proof.
-    intros until ofs.
-    intros NOUNDEF.
-    intros NOALIAS_RB_ARRBLOCK.
-    (* intros NOALIAS_WB1.
-    intros NOALIAS_WB2.
-     *)
-    inversion EXECSSEQ; subst; try congruence.
-
-
-    assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
-    apply destruct_trace_app_eq_E0. assumption.
-
-    destruct t1_t2_E0 as [t1E0 t2E0].
-    subst.
-
-    rename H6 into Sseq_EQUIV.
-    inversion Sseq_EQUIV.
-    subst.
-
-    rename H into EXECS1.
-    rename H0 into EXECS2.
-
-    assert (memval_inject (Mem.flat_inj (Mem.nextblock ma))
-                          (ZMap.get ofs (Mem.mem_contents m) # rb)
-                          (ZMap.get ofs (Mem.mem_contents m1) # rb))
-      as INJ_M_M1.
-    eapply memval_inject_store_no_alias_for_sstore with
-        (arrname := arrname)
-        (wix := wix1)
-        (wval := wval1); try eassumption; try auto.
-    eapply eval_expr_arrofs. eassumption.
-
-    
-    assert (memval_inject (Mem.flat_inj (Mem.nextblock ma))
-                          (ZMap.get ofs (Mem.mem_contents m1) # rb)
-                          (ZMap.get ofs (Mem.mem_contents m') # rb))
-      as INJ_M1_M'.
-    eapply memval_inject_store_no_alias_for_sstore with
-        (arrname := arrname)
-        (wix := wix2)
-        (wval := wval2); try eassumption; try auto.
-
-    inversion EXECS2. subst.
-    inversion EXECS1. subst.
-    eapply mem_no_pointers_forward_on_storev with (m := m) (m' := m1) (v := v0).
-
-    assert (val_no_pointer v0) as V0_NO_PTR.
-    unfold val_no_pointer.
-    intros.
-    rename H10 into eval_v0.
-    inversion eval_v0. subst.
-    rename H0 into eval_v0_const.
-    simpl in eval_v0_const.
-    inversion eval_v0_const.
-    congruence.
-
-    apply V0_NO_PTR.
-    eassumption.
-    exact H14.
-    eapply eval_expr_arrofs. eassumption.
-
-    eapply memval_inject_trans; try eassumption.
-    auto.
-  Qed.
-    
-  
-  Lemma memval_inject_store_no_alias_for_sseq_same_block:
-    forall ofs,
-      mem_no_undef m ->
-      ofs <> Ptrofs.unsigned (nat_to_ptrofs wix1) ->
-      ofs <> Ptrofs.unsigned (nat_to_ptrofs wix2) ->
-      memval_inject injf
-                    (ZMap.get ofs (Mem.mem_contents m) # arrblock)
-                    (ZMap.get ofs (Mem.mem_contents m') # arrblock).
-  Proof.
-    intros until ofs.
-    intros NOUNDEF.
-    intros NOALIAS_WIX1 NOALIAS_WIX2.
-
-    inversion EXECSSEQ; subst; try congruence.
-
-
-    assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
-    apply destruct_trace_app_eq_E0. assumption.
-
-    destruct t1_t2_E0 as [t1E0 t2E0].
-    subst.
-
-    rename H6 into Sseq_EQUIV.
-    inversion Sseq_EQUIV.
-    subst.
-
-    rename H into EXECS1.
-    rename H0 into EXECS2.
-
-    assert (memval_inject (Mem.flat_inj (Mem.nextblock ma))
-                          (ZMap.get ofs (Mem.mem_contents m) # arrblock)
-                          (ZMap.get ofs (Mem.mem_contents m1) # arrblock))
-      as INJ_M_M1.
-    eapply memval_inject_store_no_alias_for_sstore_same_block with
-        (arrname := arrname)
-        (wix := wix1)
-        (wval := wval1).
-    eassumption. auto. eassumption. auto. 
-    eapply eval_expr_arrofs; eassumption.
-    eassumption.
-
-    
-    assert (memval_inject (Mem.flat_inj (Mem.nextblock ma))
-                          (ZMap.get ofs (Mem.mem_contents m1) # arrblock)
-                          (ZMap.get ofs (Mem.mem_contents m') # arrblock))
-      as INJ_M1_M'.
-    eapply memval_inject_store_no_alias_for_sstore_same_block with
-        (arrname := arrname)
-        (wix := wix2)
-        (wval := wval2); try eassumption; try auto.
-
-    inversion EXECS2. subst.
-    inversion EXECS1. subst.
-    eapply mem_no_pointers_forward_on_storev with (m := m) (m' := m1) (v := v0).
-
-    assert (val_no_pointer v0) as V0_NO_PTR.
-    unfold val_no_pointer.
-    intros.
-    rename H10 into eval_v0.
-    inversion eval_v0. subst.
-    rename H0 into eval_v0_const.
-    simpl in eval_v0_const.
-    inversion eval_v0_const.
-    congruence.
-
-    apply V0_NO_PTR.
-    eassumption.
-    exact H14.
-    eapply eval_expr_arrofs. eassumption.
-
-    eapply memval_inject_trans; try eassumption.
-    auto.
-  Qed.
 
   
   Lemma mem_no_pointers_forward_on_sseq:
@@ -1127,49 +984,6 @@ Section STMTSEQ.
   Qed.
 
   
-  Lemma mem_no_undef_forward_on_sseq:
-    mem_no_undef m ->
-    mem_no_undef m'.
-  Proof.
-    intros NOUNDEF.
-    
-    rewrite s12DEFN in EXECSSEQ.
-    rewrite s1DEFN in EXECSSEQ.
-    rewrite s2DEFN in EXECSSEQ.
-
-    inversion EXECSSEQ; try contradiction. subst.
-
-    rename H1 into EXECS1.
-    rename H6 into EXECS2.
-
-    assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
-    apply destruct_trace_app_eq_E0. assumption.
-
-    destruct t1_t2_E0 as [t1E0 t2E0].
-    subst.
-
-    assert (M1_NO_UNDEF: mem_no_undef m1).
-    inversion EXECS1. subst.
-    eapply mem_no_undef_forward_on_sstore; try eassumption; try auto.
-    apply eval_expr_arrofs. eassumption.
-
-
-    (* need for mem_no_undef *)
-    assert (M1_NO_POINTER: mem_no_pointers m1).
-    inversion EXECS1. subst.
-    eapply mem_no_pointers_forward_on_sstore; try eassumption; try auto.
-    apply eval_expr_arrofs. eassumption.
-
-    assert (M'_NO_UNDEF: mem_no_undef m').
-    eapply mem_no_undef_forward_on_sstore with
-        (wval := wval2)
-        (wix := wix2)
-        (arrname := arrname); try eassumption; try auto.
-    apply eval_expr_arrofs. eassumption.
-
-    assumption.
-  Qed.
-
 
   Lemma sseq_valid_block:
     forall (b: block), Mem.valid_block m b -> Mem.valid_block m' b.
@@ -1649,6 +1463,7 @@ Section STMTINTERCHANGE.
         admit.
   Admitted.
   
+  (* 
   Lemma meminj_m12_m21:
     mem_no_undef m ->
     mem_no_undef_fragment m ->
@@ -2162,5 +1977,6 @@ Section STMTINTERCHANGE.
 
        omega.
        Qed.
+    *)
 
 End STMTINTERCHANGE.
