@@ -991,6 +991,57 @@ Section STMTSEQ.
     reflexivity.
   Qed.
 
+  Lemma mem_contents_equal_no_offset_alias_for_sseq:
+    forall (rb: block) (ofs: Z),
+      rb = arrblock ->
+      ofs <> Ptrofs.unsigned (nat_to_ptrofs wix1) ->
+      ofs <> Ptrofs.unsigned (nat_to_ptrofs wix2) ->
+
+      (ZMap.get ofs (Mem.mem_contents m') # rb) =
+      (ZMap.get ofs (Mem.mem_contents m) # rb).
+  Proof.
+    intros until ofs.
+    intros RB_ALIAS. subst.
+    intros OFS_NO_ALIAS_WIX1 OFS_NO_ALIAS_WIX2.
+    
+    inversion EXECSSEQ; subst; try congruence.
+
+
+    assert (t1 = E0 /\ t2 = E0) as t1_t2_E0.
+    apply destruct_trace_app_eq_E0. assumption.
+
+    destruct t1_t2_E0 as [t1E0 t2E0].
+    subst.
+
+
+    rename H1 into EXECS1.
+    rename H6 into EXECS2.
+
+    assert (ZMap.get ofs (Mem.mem_contents m1) # arrblock =
+            (ZMap.get ofs (Mem.mem_contents m) # arrblock)) as M1_EQ_M.
+    
+    eapply mem_contents_equal_no_offset_alias_for_sstore with
+        (wval := wval1) (wix := wix1); try auto.
+    exact EXECS1.
+    eapply eval_expr_arrofs; try eassumption; try auto.
+    eassumption.
+
+    
+    assert (ZMap.get ofs (Mem.mem_contents m') # arrblock =
+            (ZMap.get ofs (Mem.mem_contents m1) # arrblock)) as M1_EQ_M'.
+    
+    eapply mem_contents_equal_no_offset_alias_for_sstore with
+        (wval := wval2) (wix := wix2); try auto.
+    exact EXECS2.
+    eapply eval_expr_arrofs; try eassumption; try auto.
+    eassumption.
+
+    rewrite  M1_EQ_M'.
+    rewrite  M1_EQ_M.
+    reflexivity.
+  Qed.
+      
+
   
   Lemma mem_no_pointers_forward_on_sseq:
     mem_no_pointers m'.
