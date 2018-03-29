@@ -297,111 +297,12 @@ Section MEMSTORE.
   Variable INJF_FLAT_INJ: injf =  Mem.flat_inj (Mem.nextblock ma).
 
 
-  Lemma memval_inject_store_no_alias:
-   (mem_no_pointers m) ->
-    forall ofs,
-      wb <> rb -> 
-      memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # rb)
-                    (ZMap.get ofs (Mem.mem_contents m') # rb).
-  Proof.
-    intros NOPOINTERS.
-    intros until ofs.
-    intros NOALIAS.
-
-    assert (M'CONTENTS: Mem.mem_contents m' =
-                        PMap.set wb
-                                 (Mem.setN (encode_val STORE_CHUNK_SIZE wv) wofs
-                                           m.(Mem.mem_contents)# wb)
-                                 m.(Mem.mem_contents)).
-    apply Mem.store_mem_contents. assumption.
-
-
-    assert (M'CONTENTSEQ: (Mem.mem_contents m') # rb = (Mem.mem_contents m)# rb).
-    rewrite M'CONTENTS.
-    apply PMap.gso.
-    auto.
-
-    rewrite M'CONTENTSEQ.
-
-    apply memval_inject_refl.
-    intros.
-
-    assert (M_AT_RB_CASES: {ZMap.get ofs (Mem.mem_contents m) # rb = Fragment (Vptr b ptrofs) q n} +
-            {ZMap.get ofs (Mem.mem_contents m) # rb <> Fragment (Vptr b ptrofs) q n}).
-    apply memval_eq_dec.
-    destruct M_AT_RB_CASES as [M_AT_RB_FRAG | M_AT_RB_NOT_FRAG].
-    unfold mem_no_pointers in NOPOINTERS.
-    (* M at frag *)
-    specialize (NOPOINTERS b ptrofs q n rb ofs).
-    congruence.
-    auto.
-
-  Qed.
-
-  
-  Lemma memval_inject_store_no_alias_same_block:
-     mem_no_pointers m ->
-        forall ofs,
-          ofs <> wofs ->
-      memval_inject injf (ZMap.get ofs (Mem.mem_contents m) # wb)
-                    (ZMap.get ofs (Mem.mem_contents m') # wb).
-  Proof.
-    intros NOPOINTERS.
-    intros until ofs.
-    intros NOALIASOFS.
-
-    assert (M'CONTENTS: Mem.mem_contents m' =
-                        PMap.set wb
-                                 (Mem.setN (encode_val STORE_CHUNK_SIZE wv) wofs
-                                           m.(Mem.mem_contents)# wb)
-                                 m.(Mem.mem_contents)).
-    apply Mem.store_mem_contents. assumption.
-
-
-
-    assert (M'CONTENTSEQ: (Mem.mem_contents m') # wb =
-            Mem.setN (encode_val STORE_CHUNK_SIZE wv) wofs m.(Mem.mem_contents) # wb).
-    rewrite M'CONTENTS.
-    apply PMap.gss.
-
-    rewrite M'CONTENTSEQ.
-
-    (* memval_inject *)
-    remember (ZMap.get ofs (Mem.mem_contents m') # wb) as mval.
-    remember (encode_val STORE_CHUNK_SIZE wv) as WVENC.
-    
-    assert (M'_AT_OFS: ZMap.get ofs (Mem.setN WVENC wofs (Mem.mem_contents m) # wb) =
-            ZMap.get ofs (Mem.mem_contents m) # wb).
-    apply Mem.setN_outside.
-    rewrite HeqWVENC.
-    rewrite Memdata.encode_val_length.
-    simpl.
-    omega.
-
-    rewrite M'_AT_OFS.
-
-    
-    apply memval_inject_refl.
-    intros.
-    assert (M_AT_RB_CASES: {ZMap.get ofs (Mem.mem_contents m) # rb = Fragment (Vptr b ptrofs) q n} +
-            {ZMap.get ofs (Mem.mem_contents m) # rb <> Fragment (Vptr b ptrofs) q n}).
-    apply memval_eq_dec.
-    destruct M_AT_RB_CASES as [M_AT_RB_FRAG | M_AT_RB_NOT_FRAG].
-    unfold mem_no_pointers in NOPOINTERS.
-    (* M at frag *)
-    specialize (NOPOINTERS b ptrofs q n rb ofs).
-    congruence.
-    auto.
-  Qed.
-
-
-  
 
 End MEMSTORE.
 
 Section STMT.
   Variable m m': mem.
-  Variable NOPOINTERS : mem_no_pointers m.
+  (* Variable NOPOINTERS : mem_no_pointers m. *)
   
   
   Variable arrname: ident.
@@ -600,8 +501,10 @@ Section STMT.
 
 
   Lemma mem_no_pointers_forward_on_sstore:
+    mem_no_pointers m ->
     mem_no_pointers m'.
   Proof.
+    intros MNOPOINTERS.
     rewrite sVAL in EXECS.
     inversion EXECS. subst.
 
@@ -721,7 +624,7 @@ End STMT.
 
 Section STMTSEQ.
   Variable m m': mem.
-  Variable NOPOINTERS: mem_no_pointers m.
+  (* Variable NOPOINTERS: mem_no_pointers m. *)
   (* Variable NOUNDEF: mem_no_undef m. *)
   Variable arrname: ident.
 
@@ -946,8 +849,10 @@ Section STMTSEQ.
 
   
   Lemma mem_no_pointers_forward_on_sseq:
+    mem_no_pointers m ->
     mem_no_pointers m'.
   Proof.
+    intros MNOPOINTERS.
     rewrite s12DEFN in EXECSSEQ.
     rewrite s1DEFN in EXECSSEQ.
     rewrite s2DEFN in EXECSSEQ.
