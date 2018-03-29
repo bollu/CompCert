@@ -690,6 +690,63 @@ Section STMT.
     omega.
   Qed.
 
+  
+  Lemma mem_contents_for_offset_alias:
+    forall (rb: block) (ofs: Z),
+      rb = wb ->
+      ofs = (Ptrofs.unsigned wofs) ->
+      Some (ZMap.get ofs (Mem.mem_contents m') # rb) =
+      hd_error (encode_val Mint8unsigned (Vint (nat_to_int32 wval))).
+  Proof.
+    intros until ofs.
+    intros WBALIAS.
+    subst.
+    intros OFS_NOALIAS.
+
+    
+    inversion EXECS. subst.
+
+    
+    assert (vaddr = Vptr wb wofs) as VADDR_EQ_WBVAL.
+    eapply eval_expr_is_function; eassumption.
+    subst.
+
+    rename H10 into STOREM.
+    unfold Mem.storev in STOREM.
+
+
+    erewrite Mem.store_mem_contents with (m1 := m)
+                                         (chunk := STORE_CHUNK_SIZE)
+                                         (b := wb)
+                                         (v := v);
+      try eassumption.
+    erewrite PMap.gss; try eassumption.
+
+    
+   remember (ZMap.get (Ptrofs.unsigned wofs)
+    (Mem.setN (encode_val STORE_CHUNK_SIZE v) (Ptrofs.unsigned wofs)
+       (Mem.mem_contents m) # wb)) as M'_AT_OFFSET.
+
+   assert (ENCODEV: Some (M'_AT_OFFSET) =
+                    List.hd_error (encode_val Mint8unsigned v)).
+   rewrite HeqM'_AT_OFFSET.
+   erewrite Mem.get_setN_at_base_chunk_Mint8unsigned;
+     try eauto;
+     try eassumption.
+
+   assert (VVAL: v = Vint (nat_to_int32 wval)).
+   rename H7 into EVALV.
+   inversion EVALV. subst.
+   rename H0 into EVALV_CONST.
+   simpl in EVALV_CONST.
+   inversion EVALV_CONST.
+   reflexivity.
+
+   rewrite ENCODEV.
+   rewrite VVAL.
+   reflexivity.
+  Qed.
+
   Lemma memval_inject_store_no_alias_for_sstore:
     forall rb ofs,
       mem_no_undef m ->
