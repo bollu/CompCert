@@ -1426,6 +1426,7 @@ Section STMTINTERCHANGE.
   Lemma meminj_m12_m21_no_undef: Mem.mem_inj injf m12 m21.
     
     assert (mem_structure_eq injf m12 m21) as structureeq.
+
     apply mem_structure_eq_m12_m21.
     constructor.
 
@@ -1459,6 +1460,20 @@ Section STMTINTERCHANGE.
       + (* we're accessing arrblock *)
         admit.
       + (*we're not accessing arrblock *)
+        assert (M12_EQ_M: (Mem.mem_contents m12) #b2 =
+                          (Mem.mem_contents m) # b2).
+        eapply mem_contents_equal_no_alias_for_sseq;
+          try eauto; try eassumption.
+
+        
+        assert (M21_EQ_M: (Mem.mem_contents m21) #b2 =
+                          (Mem.mem_contents m) # b2).
+        eapply mem_contents_equal_no_alias_for_sseq;
+          try eauto; try eassumption.
+
+        rewrite M12_EQ_M. rewrite M21_EQ_M.
+        eapply memval_inject_refl; eauto; eassumption.
+          
 
         admit.
   Admitted.
