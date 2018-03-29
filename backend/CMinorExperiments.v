@@ -691,7 +691,7 @@ Section STMT.
   Qed.
 
   
-  Lemma mem_contents_for_offset_alias:
+  Lemma mem_contents_offset_alias_for_sstore:
     forall (rb: block) (ofs: Z),
       rb = wb ->
       ofs = (Ptrofs.unsigned wofs) ->
@@ -1097,6 +1097,86 @@ Section STMTSEQ.
     rewrite  M1_EQ_M.
     reflexivity.
   Qed.
+
+  
+  Lemma mem_contents_offset_alias_for_sseq_1:
+    forall (rb: block) (ofs: Z),
+      rb = arrblock ->
+      ofs = Ptrofs.unsigned (nat_to_ptrofs wix1) ->
+      ofs <> Ptrofs.unsigned (nat_to_ptrofs wix2) ->
+      Some (ZMap.get ofs (Mem.mem_contents m') # rb) =
+      hd_error (encode_val Mint8unsigned (Vint (nat_to_int32 wval1))).
+  Proof.
+    intros until ofs.
+    intros RBALIAS OFS_ALIAS_WIX1 OFS_NOALIAS_WIX2.
+
+    
+    rewrite s12DEFN in EXECSSEQ.
+    rewrite s1DEFN in EXECSSEQ.
+    rewrite s2DEFN in EXECSSEQ.
+
+    inversion EXECSSEQ; try contradiction. subst.
+
+    rename H1 into EXECS1.
+    rename H6 into EXECS2.
+
+    assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
+    apply destruct_trace_app_eq_E0. assumption.
+
+    destruct t1_t2_E0 as [t1E0 t2E0].
+    subst.
+
+    assert (M'_EQ_M_AT_BLOCK_OFS:
+    (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+              (Mem.mem_contents m') # arrblock) =
+    (ZMap.get (Ptrofs.unsigned (nat_to_ptrofs wix1))
+              (Mem.mem_contents m1) # arrblock)).
+    eapply mem_contents_equal_no_offset_alias_for_sstore;
+      try eauto; try eassumption.
+    eapply eval_expr_arrofs; try eassumption; try auto.
+
+    rewrite M'_EQ_M_AT_BLOCK_OFS.
+
+    eapply mem_contents_offset_alias_for_sstore;
+      try eassumption; try eauto.
+    eapply eval_expr_arrofs; try eassumption; try auto.
+  Qed.
+
+  
+  Lemma mem_contents_offset_alias_for_sseq_2:
+    forall (rb: block) (ofs: Z),
+      rb = arrblock ->
+      ofs = Ptrofs.unsigned (nat_to_ptrofs wix2) ->
+      Some (ZMap.get ofs (Mem.mem_contents m') # rb) =
+      hd_error (encode_val Mint8unsigned (Vint (nat_to_int32 wval2))).
+  Proof.
+    intros until ofs.
+    intros RBALIAS OFS_ALIAS_WIX2.
+
+    
+    rewrite s12DEFN in EXECSSEQ.
+    rewrite s1DEFN in EXECSSEQ.
+    rewrite s2DEFN in EXECSSEQ.
+
+    inversion EXECSSEQ; try contradiction. subst.
+
+    rename H1 into EXECS1.
+    rename H6 into EXECS2.
+
+    assert (t1_t2_E0: t1 = E0 /\ t2 = E0).
+    apply destruct_trace_app_eq_E0. assumption.
+
+    destruct t1_t2_E0 as [t1E0 t2E0].
+    subst.
+
+    eapply mem_contents_offset_alias_for_sstore;
+      try eassumption; try eauto.
+    eapply eval_expr_arrofs; try eassumption; try auto.
+  Qed.
+    
+             
+
+      
       
 
   
