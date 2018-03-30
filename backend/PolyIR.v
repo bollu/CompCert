@@ -603,57 +603,58 @@ Section EXEC_LOOP_REV.
   Hint Transparent lowerbound.
 
   (* genv -> loopenv -> loop -> mem -> stmt -> mem -> *)
-  Inductive exec_looprev: lowerbound ->
-                          genv -> loopenv ->  mem -> loop -> mem -> loopenv -> Prop :=
-  | exec_looprev_lb_ge_ub: forall lb ge le m l,
-      (lb >= loopub l)%nat ->
-      exec_looprev lb ge le m l m le
-  | exec_looprev_viv_ge_ub: forall lb ge le m l,
-      (lb < loopub l)%nat ->
-      (viv le >= loopub l)%nat ->
-      exec_looprev lb ge le m l  m le
-  | exec_looprev_viv_le_lb: forall lb ge le  m l,
-      (lb < loopub l)%nat ->
-      (viv le < lb)%nat ->
-      exec_looprev lb ge le m l  m le
-  | exec_looprev_viv_eq_lb: forall lb ge m m' l (le: loopenv),
-      (lb < loopub l)%nat ->
-      (viv le < loopub l)%nat ->
-      ((viv le) = lb)%nat ->
-      exec_stmt ge le l m (loopstmt l) m' ->
-      exec_looprev lb ge le m l m' (loopenv_bump_vindvar le)
-  | exec_looprev_viv_gt_lb: forall lb ge le le' m m' m'' l ,
-      (lb < loopub l)%nat ->
-      (viv le < loopub l)%nat ->
-      (viv le > lb)%nat ->
-      exec_looprev lb ge le m l m' le' ->
-      exec_stmt ge le' l m' (loopstmt l) m'' ->
-      exec_looprev lb ge le m l m' (loopenv_bump_vindvar le').
+  Inductive exec_looprev: lowerbound -> genv -> loopenv ->  mem -> loop -> mem -> loopenv -> Prop :=
+  | exec_looprev_start: forall  ge le m l,
+      (viv le <= loopub l)%nat ->
+      exec_looprev (viv le) ge le m l m le
+  | exec_looprev_loop: forall lb ge le m l m' m''  le'',
+      (viv le'' <= loopub l)%nat ->
+      (viv le'' > viv le)%nat ->
+      exec_looprev lb ge le m l m' (loopenv_reduce_vindvar le'') ->
+      exec_stmt ge (loopenv_reduce_vindvar le'') l m' (loopstmt l) m'' ->
+      exec_looprev lb ge le m l m'' le''.
 
-  Lemma exec_looprev_is_function:
-    forall lb ge le m l m' le',
-      exec_looprev lb ge le m l m' le' ->
-      forall m'' le'',
-      exec_looprev lb ge le m l m'' le'' ->
-      m' = m'' /\ le' = le''.
+  Lemma exec_looprev_viv_nondecreasing:
+    forall lb ge le1 m1 l m2 le2,
+      exec_looprev lb ge le1 m1 l m2 le2 ->
+      (viv le2 >= viv le1)%nat.
   Proof.
-    intros until le'.
-    intros EXECL1.
-    induction EXECL1; intros until le''; intros EXECL2.
-    
-    - inversion EXECL2; subst; try omega; try auto.
-    - inversion EXECL2; subst; try omega; try auto.
-    - inversion EXECL2; subst; try omega; try auto.
-    - inversion EXECL2; subst; try omega; try auto.
-      assert (m' = m'').
-      eapply exec_stmt_is_function; try auto; try eassumption.
-      subst. auto.
-    - inversion EXECL2; subst; try omega; try auto.
-      assert (M_LE_EQ: m' = m''0 /\ le' = le'0).
-      apply IHEXECL1; try auto; try eassumption.
-      destruct M_LE_EQ. subst.
-      auto.
+    intros until le2.
+    intros EXECLREV.
+    induction EXECLREV; try omega.
   Qed.
+
+  
+  Lemma exec_looprev_viv_ge_lb:
+    forall lb ge le1 m1 l m2 le2,
+      exec_looprev lb ge le1 m1 l m2 le2 ->
+      ((viv le1 >= lb) /\ (viv le2 >= lb))%nat.
+  Proof.
+    intros until le2.
+    intros EXECLREV.
+    induction EXECLREV; try omega.
+  Qed.
+      
+      
+
+  Lemma exec_looprev_is_function_backward:
+    forall lb ge le1 m1 l mfinal lefinal m2 le2,
+      exec_looprev lb ge le1 m1 l mfinal lefinal ->
+        exec_looprev lb ge le2 m2 l mfinal lefinal ->
+        m2 = m1 /\ le2 = le1.
+  Proof.
+    intros until le2.
+    intros EXEC1 EXEC2.
+
+    induction EXEC1.
+
+    - inversion EXEC2; subst; try auto; try omega.
+      assert ((viv le - 1 >= viv le))%nat.
+      cut (viv (loopen_))
+
+    - destruct le0. destruct le. destruct le'.
+      simpl in *. subst. auto.
+    - 
 End EXEC_LOOP_REV.
 
 
@@ -747,24 +748,36 @@ Lemma exec_looprev_prepend_stmt:
   forall (ge: genv) (le1 le2: loopenv) (m2 m3: mem) (l: loop),
     exec_looprev (viv (loopenv_bump_vindvar le1))
                  ge (loopenv_bump_vindvar le1)  m2 l m3 le2 ->
-    forall (m1: mem) (s: stmt),
-    exec_stmt ge le1 l m1 s m2 ->
+    forall (m1: mem),
+    exec_stmt ge le1 l m1 (loopstmt l) m2 ->
     exec_looprev (viv le1) ge le1 m1 l m3 le2.
 Proof.
   intros until l.
   intros EXECLREV.
 
-  intros until s. intros EXECS.
+  intros until m1. intros EXECS.
 
   (* WTF, why do I need to remember this? *)
   (* THIS IS MOST LIKELY A COQ BUG? REPORT THIS! *)
   remember (loopenv_bump_vindvar le1) as LE1_BUMPED.
   remember (viv LE1_BUMPED) as VIV_LE1_BUMPED.
   induction EXECLREV.
+  - assert(LE1_IN_RANGE: (viv le1 < loopub l)%nat).
+    inversion EXECS. subst. omega.
+    
+    rewrite HeqLE1_BUMPED.
+    eapply exec_looprev_viv_eq_lb; try assumption; try auto.
 
-  - inversion EXECS; subst. try omega.
-    eapply exec_looprev_viv_eq_lb.
+  - inversion EXECS; try omega.
 
+  - subst. omega.
+
+  - rename m into m2.
+    rename m' into m3.
+
+    rewrite HeqLE1_BUMPED.
+    eapply exec_looprev_viv_gt_lb; try omega.
+    
 Qed.
 
 Lemma exec_loop_implies_exec_looprev:
