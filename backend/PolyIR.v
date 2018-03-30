@@ -646,15 +646,11 @@ Section EXEC_LOOP_REV.
     intros until le2.
     intros EXEC1 EXEC2.
 
-    induction EXEC1.
+    induction EXEC1; induction EXEC2; subst; try auto; try omega.
+    Abort.
 
-    - inversion EXEC2; subst; try auto; try omega.
-      assert ((viv le - 1 >= viv le))%nat.
-      cut (viv (loopen_))
+            
 
-    - destruct le0. destruct le. destruct le'.
-      simpl in *. subst. auto.
-    - 
 End EXEC_LOOP_REV.
 
 
