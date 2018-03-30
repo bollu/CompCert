@@ -581,6 +581,7 @@ Proof.
   inversion meq. subst.
   auto.
 Qed.
+
       
 End EXEC_STMT.
 
@@ -604,9 +605,10 @@ Section EXEC_LOOP_REV.
 
   (* genv -> loopenv -> loop -> mem -> stmt -> mem -> *)
   Inductive exec_looprev: lowerbound -> genv -> loopenv ->  mem -> loop -> mem -> loopenv -> Prop :=
-  | exec_looprev_start: forall  ge le m l,
+  | exec_looprev_start: forall  lb ge le m l,
       (viv le <= loopub l)%nat ->
-      exec_looprev (viv le) ge le m l m le
+      lb = viv le ->
+      exec_looprev lb ge le m l m le
   | exec_looprev_loop: forall lb ge le m l m' m''  le'',
       (viv le'' <= loopub l)%nat ->
       (viv le'' > viv le)%nat ->
@@ -638,16 +640,52 @@ Section EXEC_LOOP_REV.
       
 
   Lemma exec_looprev_is_function_backward:
-    forall lb ge le1 m1 l mfinal lefinal m2 le2,
+    forall lb ge le1 m1 l mfinal lefinal,
       exec_looprev lb ge le1 m1 l mfinal lefinal ->
+      forall le2 m2,
         exec_looprev lb ge le2 m2 l mfinal lefinal ->
         m2 = m1 /\ le2 = le1.
   Proof.
-    intros until le2.
-    intros EXEC1 EXEC2.
+    intros until lefinal.
+    intros EXEC1.
+    induction EXEC1; intros until m2; intros EXEC2.
 
-    induction EXEC1; induction EXEC2; subst; try auto; try omega.
-    Abort.
+    - inversion EXEC2; subst; try auto; try omega.
+      assert (CONTRA: (viv (loopenv_reduce_vindvar le) >= viv le)%nat).
+      eapply exec_looprev_viv_ge_lb; eassumption.
+      simpl in CONTRA. omega.
+
+    - induction EXEC2; subst; try auto; try omega.
+
+      +  assert (CONTRA: (viv (loopenv_reduce_vindvar le0) >= viv le0)%nat).
+         eapply exec_looprev_viv_ge_lb; eassumption.
+         simpl in CONTRA. omega.
+
+      + assert (m'0 = m').
+        (* if we have this, we can prove what we want.
+        Unfortunately, this is not have-able.
+         This is equivalent to saying exec_stmt is reversible.
+         We can make this work with the stronger language
+         of memory injections, but we don't seem to need this
+         anyway, so I don't particularly care.*)
+        admit.
+        subst.
+
+        assert (m0 = m /\ le0 = le).
+        eapply IHEXEC1. eassumption.
+        destruct H5. subst.
+        auto.
+  Admitted.
+
+         
+        
+        
+
+        
+         
+
+       
+  Abort.
 
             
 
