@@ -2886,37 +2886,6 @@ Proof.
 
     
     destruct curptr_write as [curptr_write | no_curptr_write].
-    +
-      admit.
-
-    + assert (((Mem.mem_contents mid) # b) # ofs =
-              ((Mem.mem_contents m) # b) # ofs) as memid_unchanged.
-      symmetry.
-      eapply loop_write_locations_does_not_have_write;
-        subst; try eassumption.
-
-
-      
-      assert (((Mem.mem_contents mrev) # b) # ofs =
-              ((Mem.mem_contents m) # b) # ofs) as memrev_unchanged.
-
-      
-      assert (~List.In curptr lrevwritelocs) as curptr_not_in_looprev.
-      rewrite Heqlrevwritelocs.
-      rewrite looprevdef.
-      rewrite Heqcurptr.
-      apply loop_write_locations_transportable_2.
-      subst. auto.
-      
-      symmetry.
-      eapply loop_write_locations_does_not_have_write;
-        subst;  eassumption.
-
-      rewrite memid_unchanged, memrev_unchanged.
-      reflexivity.
-
-  - (* val ptr inject *)
-    intros.
 Abort.
 
 
