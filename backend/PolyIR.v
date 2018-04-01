@@ -809,7 +809,7 @@ Proof.
     exact H1.
 Qed.
 
-Lemma exec_looprev_implies_exec_loop:
+Lemma exec_loop_implies_exec_looprev:
   forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
     exec_loop ge le m l m' le' ->
     exec_looprev (viv le) ge le m l m' le'.
@@ -2693,7 +2693,7 @@ Section LOOPWRITELOCATIONSMEMORY.
     ~ List.In (Vptr b ofsp) (LoopWriteLocations ge l) ->
     ((Mem.mem_contents m) # b) # ofs = ((Mem.mem_contents m') # b) # ofs.
   Proof.
-  Admitted.
+  Abort.
 
   
   (* Obviously, this statement is retarded, I need much stronger
@@ -2704,7 +2704,7 @@ Section LOOPWRITELOCATIONSMEMORY.
     injective_stmt_b (loopstmt l) = true ->
     ((Mem.mem_contents m) # b) # ofs = ((Mem.mem_contents m') # b) # ofs.
   Proof.
-  Admitted.
+  Abort.
     
 End LOOPWRITELOCATIONSMEMORY.
 
@@ -2917,7 +2917,7 @@ Proof.
 
   - (* val ptr inject *)
     intros.
-Admitted.
+Abort.
 
 
   
