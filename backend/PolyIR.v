@@ -605,13 +605,17 @@ Section EXEC_LOOP_REV.
 
   (* genv -> loopenv -> loop -> mem -> stmt -> mem -> *)
   Inductive exec_looprev: lowerbound -> genv -> loopenv ->  mem -> loop -> mem -> loopenv -> Prop :=
+  | exec_looprev_out_of_bounds: forall lb ge le m l,
+      (viv le >= loopub l)%nat ->
+      (viv le >= lb)%nat ->
+      exec_looprev lb ge le m l m le
   | exec_looprev_start: forall  lb ge le m l,
-      (viv le <= loopub l)%nat ->
+      (viv le < loopub l)%nat ->
       lb = viv le ->
       exec_looprev lb ge le m l m le
   | exec_looprev_loop: forall lb ge le m l m' m''  le'',
-      (viv le'' <= loopub l)%nat ->
-      (viv le'' > viv le)%nat ->
+      (viv le < loopub l)%nat ->
+      (viv le'' >= viv le)%nat ->
       exec_looprev lb ge le m l m' (loopenv_reduce_vindvar le'') ->
       exec_stmt ge (loopenv_reduce_vindvar le'') l m' (loopstmt l) m'' ->
       exec_looprev lb ge le m l m'' le''.
@@ -649,43 +653,8 @@ Section EXEC_LOOP_REV.
     intros until lefinal.
     intros EXEC1.
     induction EXEC1; intros until m2; intros EXEC2.
-
-    - inversion EXEC2; subst; try auto; try omega.
-      assert (CONTRA: (viv (loopenv_reduce_vindvar le) >= viv le)%nat).
-      eapply exec_looprev_viv_ge_lb; eassumption.
-      simpl in CONTRA. omega.
-
-    - induction EXEC2; subst; try auto; try omega.
-
-      +  assert (CONTRA: (viv (loopenv_reduce_vindvar le0) >= viv le0)%nat).
-         eapply exec_looprev_viv_ge_lb; eassumption.
-         simpl in CONTRA. omega.
-
-      + assert (m'0 = m').
-        (* if we have this, we can prove what we want.
-        Unfortunately, this is not have-able.
-         This is equivalent to saying exec_stmt is reversible.
-         We can make this work with the stronger language
-         of memory injections, but we don't seem to need this
-         anyway, so I don't particularly care.*)
-        admit.
-        subst.
-
-        assert (m0 = m /\ le0 = le).
-        eapply IHEXEC1. eassumption.
-        destruct H5. subst.
-        auto.
-  Admitted.
-
-         
-        
-        
-
-        
-         
-
-       
   Abort.
+
 
             
 
@@ -702,6 +671,22 @@ Proof.
   induction execl.
   - auto.
   - unfold loopenv_bump_vindvar in *. simpl in *. omega.
+Qed.
+
+
+Lemma exec_loop_viv_upper_bounded:
+  forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
+    (viv le <= loopub l)%nat ->
+    exec_loop ge le m l m' le' ->
+    (viv le' <= loopub l)%nat.
+Proof.
+  intros until l.
+  intros VIV_LE_LOOPUB.
+  intros EXECL.
+  induction EXECL.
+  - omega.
+  - apply IHEXECL.
+    simpl. omega.
 Qed.
 
 Lemma exec_loop_loopenv_equal_implies_memory_equal:
@@ -777,9 +762,22 @@ Proof.
     eapply exec_loop_append_stmt; try eassumption.
 Qed.
 
+Lemma loopenv_reduce_bump_vindvar: forall (le: loopenv),
+    (loopenv_reduce_vindvar (loopenv_bump_vindvar le)) = le.
+Proof.
+  intros.
+  destruct le.
+  unfold loopenv_reduce_vindvar.
+  unfold loopenv_bump_vindvar.
+  simpl.
+  replace (viv0 + 1 - 1)%nat with viv0.
+  auto.
+  omega.
+Qed.
 
 Lemma exec_looprev_prepend_stmt:
   forall (ge: genv) (le1 le2: loopenv) (m2 m3: mem) (l: loop),
+    (viv (loopenv_bump_vindvar le1) < loopub l)%nat ->
     exec_looprev (viv (loopenv_bump_vindvar le1))
                  ge (loopenv_bump_vindvar le1)  m2 l m3 le2 ->
     forall (m1: mem),
@@ -787,42 +785,90 @@ Lemma exec_looprev_prepend_stmt:
     exec_looprev (viv le1) ge le1 m1 l m3 le2.
 Proof.
   intros until l.
+  intros VIV_INRANGE.
   intros EXECLREV.
 
   intros until m1. intros EXECS.
 
-  (* WTF, why do I need to remember this? *)
-  (* THIS IS MOST LIKELY A COQ BUG? REPORT THIS! *)
   remember (loopenv_bump_vindvar le1) as LE1_BUMPED.
   remember (viv LE1_BUMPED) as VIV_LE1_BUMPED.
-  induction EXECLREV.
-  - assert(LE1_IN_RANGE: (viv le1 < loopub l)%nat).
-    inversion EXECS. subst. omega.
-    
-    rewrite HeqLE1_BUMPED.
-    eapply exec_looprev_viv_eq_lb; try assumption; try auto.
+  induction EXECLREV; subst.
+  - simpl in *. omega.
 
-  - inversion EXECS; try omega.
+  - eapply exec_looprev_loop; try omega. simpl in *. omega.
+    simpl in *; omega.
+    rewrite loopenv_reduce_bump_vindvar.
+    eapply exec_looprev_start. simpl in *. omega.
+    simpl in *. omega.
+    rewrite loopenv_reduce_bump_vindvar.
+    auto.
 
-  - subst. omega.
-
-  - rename m into m2.
-    rename m' into m3.
-
-    rewrite HeqLE1_BUMPED.
-    eapply exec_looprev_viv_gt_lb; try omega.
-    
+  - simpl in *.
+    eapply exec_looprev_loop; try omega. simpl.
+    apply IHEXECLREV; simpl; try auto; try omega.
+    exact H1.
 Qed.
 
-Lemma exec_loop_implies_exec_looprev:
+Lemma exec_looprev_implies_exec_loop:
   forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
     exec_loop ge le m l m' le' ->
-    exec_looprev (viv le) ge le m l m' le.
+    exec_looprev (viv le) ge le m l m' le'.
 Proof.
-  intros until l. intros EXECL.
+  intros until l.
+  intros EXECL.
   induction EXECL.
-  - eapply exec_looprev_lb_ge_ub; auto.
-  - 
+  - constructor; omega.
+  - assert(viv le + 1 = viv le' \/ viv le + 1 < viv le')%nat as
+        VIV_CASES.
+    omega.
+    destruct VIV_CASES as [LE_PLUS_1_EQ_LE' | LE_PLUS_1_LT_LE'].
+
+    + assert (m' = m'') as MEM_EQUAL.
+    eapply exec_loop_loopenv_equal_implies_memory_equal.
+    eassumption.
+    unfold loopenv_bump_vindvar.
+    rewrite LE_PLUS_1_EQ_LE'.
+    destruct le'.
+    apply f_equal.
+    simpl.
+    auto.
+    subst.
+
+    
+    assert (LE_EQ_DEC_LE': (loopenv_reduce_vindvar le') = le).
+    unfold loopenv_reduce_vindvar.
+    destruct le. destruct le'.
+    simpl in *.
+    apply f_equal.
+    omega.
+
+
+    eapply exec_looprev_loop; try omega.
+    rewrite LE_EQ_DEC_LE'.
+    eapply exec_looprev_start.
+    omega.
+    auto.
+
+
+    rewrite LE_EQ_DEC_LE'.
+    eassumption.
+
+
+    + eapply exec_looprev_prepend_stmt.
+      simpl.
+      assert (viv le' <= loopub l)%nat.
+      eapply exec_loop_viv_upper_bounded with (le0 := (loopenv_bump_vindvar le)).
+      simpl. omega.
+      eassumption.
+      omega.
+      eassumption.
+      eassumption.
+Qed.
+
+     
+     
+  
+
 
 
 
@@ -2577,14 +2623,14 @@ Section LOOPWRITELOCATIONSLEMMAS.
     List.In (Vptr b ofs) (LoopWriteLocations ge l) ->
     stmt_writes_ix_in_loop  ge l s (Vptr b ofs).
   Proof.
-  Admitted.
+  Abort.
 
 
   Lemma loop_write_locations_complete_2:
     ~ List.In (Vptr b ofs) (LoopWriteLocations ge l) ->
     stmt_does_not_write_to_ix_in_loop ge l s (Vptr b ofs).
   Proof.
-  Admitted.
+  Abort.
 
 
 
@@ -2614,14 +2660,14 @@ Section LOOPWRITELOCATIONSTRANSPORT.
     List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
     List.In (Vptr b ofs) (LoopWriteLocations ge lrev).
   Proof.
-  Admitted.
+  Abort.
 
   
   Lemma loop_write_locations_transportable_2:
     ~ List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
     ~ List.In (Vptr b ofs) (LoopWriteLocations ge lrev).
   Proof.
-    Admitted.
+  Abort.
   
 End LOOPWRITELOCATIONSTRANSPORT.
 
