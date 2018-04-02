@@ -720,22 +720,35 @@ Proof.
      eassumption.
 Qed.
 
+Definition loop_bump_loopub (l: loop)
+           (lub_in_range_witness: Z.of_nat (loopub l) + 1 < Int64.max_unsigned )
+           (schedule_witness: inverseTillUb (loopub l + 1) (loopschedule l) (loopscheduleinv l)):
+  loop :=
+  mkLoop
+      (loopub l)
+       (loopub_in_range_witness l)
+       (loopivname l)
+       (looparrname l)
+       (loopstmt l)
+       (loopschedule l)
+       (loopscheduleinv l)
+       (loopschedulewitness l).
+
 Lemma exec_loop_append_stmt:
-  forall (ge: genv) (le1 le2: loopenv) (m1 m2: mem) (l: loop),
+  forall (ge: genv) (le1 le2: loopenv) (m1 m2: mem) (l: loop)
+    (loopub_bump_in_range: (Z.of_nat (loopub l) + 1 < Int64.max_unsigned)%Z)
+    (loopub_bump_inverse_witness: inverseTillUb (loopub l + 1) (loopschedule l) (loopscheduleinv l)),
+    (loopub l = viv le2)%nat ->
     exec_loop ge le1 m1 l m2 le2 ->
     forall (m3: mem) (s: stmt),
     exec_stmt ge le2 l m2 s m3 ->
-    exec_loop ge le1 m1 l m3 (loopenv_bump_vindvar le2).
+    exec_loop ge le1 m1
+              (loop_bump_loopub l
+                                loopub_bump_in_range
+                                loopub_bump_inverse_witness)
+              m3 (loopenv_bump_vindvar le2).
 Proof.
-  intros until l.
-  intros EXECL.
-  induction EXECL; intros until s; intros EXECS.
-  - inversion EXECS; subst; try omega.
-
-  - eapply exec_loop_loop; simpl in *; try omega.
-    eassumption.
-    eapply IHEXECL; eassumption.
-Qed.
+Abort.
   
 Lemma exec_loop_append_loop:
   forall (ge: genv) (le2 le3: loopenv) (m2 m3: mem) (l: loop),
@@ -865,6 +878,76 @@ Proof.
       eassumption.
 Qed.
 
+
+Lemma exec_looprev_implies_exec_loop:
+  forall (ge: genv) (le le': loopenv) (lb: nat) (m m': mem) (l: loop),
+    (viv le = lb) ->
+    (viv le' = loopub l) ->
+    (viv le' > viv le) % nat ->
+    exec_looprev lb ge le m l m' le' ->
+    exec_loop ge le m l m' le'.
+Proof.
+  intros until l.
+  intros LE_IS_LOOPLB.
+  intros LE'_IS_LOOPUB.
+  intros UB_GT_LB.
+  intros EXECLREV.
+
+  induction EXECLREV.
+  - constructor; eassumption.
+  - subst. simpl in *.
+    omega.
+    
+  - assert(viv le'' - 1 > lb \/ viv le''- 1 = lb)%nat as
+        VIV_le''_CASES.
+    simpl in *.
+    subst.
+    simpl.
+    omega.
+
+    destruct VIV_le''_CASES as [VIV_LE''_INCR_GT_LB | VIV_LE''_INCR_EQ_LB].
+    + remember (loopenv_reduce_vindvar le'') as le''decrement.
+
+    assert (le''_AS_BUMP: le'' = loopenv_bump_vindvar le''decrement).
+    rewrite Heqle''decrement.
+    eapply loopenv_bump_reduce_vindvar.
+    omega.
+
+    rewrite le''_AS_BUMP.
+    eapply exec_loop_append_stmt.
+    eapply IHEXECLREV.
+    auto.
+    subst.
+    simpl.
+    omega.
+    subst. auto.
+    subst.
+    eassumption.
+    + assert (MEQ: m = m'). admit.
+      eapply exec_loop_loop.
+      subst.
+      omega.
+      omega.
+      assert (LE''_AS_LE: loopenv_reduce_vindvar le'' = le).
+      destruct le''.
+      destruct le.
+      unfold loopenv_reduce_vindvar.
+      simpl in *.
+      apply f_equal.
+      omega.
+
+      rename H1 into EXECS.
+      rewrite LE''_AS_LE in EXECS.
+      rewrite MEQ.
+      exact EXECS.
+
+      
+
+
+      
+      
+
+    
      
      
   
