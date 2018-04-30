@@ -757,23 +757,7 @@ Lemma exec_loop_append_loop:
     exec_loop ge le1 m1 l m2 le2 ->
     exec_loop ge le1 m1 l m3 le3.
 Proof.
-  intros until l.
-  intros EXEC23.
-  induction EXEC23.
-  - intros le1 m1.
-    intros EXEC12.
-    auto.
-
-  - intros le1 m1. intros EXEC12.
-    rename m' into M2STMT.
-    rename m into m2.
-    rename le into le2.
-    rename m'' into m3.
-    rename le' into le3.
-
-    eapply IHEXEC23.
-    eapply exec_loop_append_stmt; try eassumption.
-Qed.
+Abort.
 
 Lemma loopenv_reduce_bump_vindvar: forall (le: loopenv),
     (loopenv_reduce_vindvar (loopenv_bump_vindvar le)) = le.
@@ -914,32 +898,7 @@ Proof.
     omega.
 
     rewrite le''_AS_BUMP.
-    eapply exec_loop_append_stmt.
-    eapply IHEXECLREV.
-    auto.
-    subst.
-    simpl.
-    omega.
-    subst. auto.
-    subst.
-    eassumption.
-    + assert (MEQ: m = m'). admit.
-      eapply exec_loop_loop.
-      subst.
-      omega.
-      omega.
-      assert (LE''_AS_LE: loopenv_reduce_vindvar le'' = le).
-      destruct le''.
-      destruct le.
-      unfold loopenv_reduce_vindvar.
-      simpl in *.
-      apply f_equal.
-      omega.
-
-      rename H1 into EXECS.
-      rewrite LE''_AS_LE in EXECS.
-      rewrite MEQ.
-      exact EXECS.
+Abort.
 
       
 
