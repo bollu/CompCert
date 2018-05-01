@@ -14,6 +14,8 @@ Require Import Equivalence EquivDec.
 Require Import Coqlib.
 
 
+
+
 (* Useful facts about functions that are inverses *)
 Theorem is_inverse_injective: forall (A B:Set) (f: A -> B) (g: B -> A) (a b: A), is_inverse f g -> f a = f b -> a = b.
 Proof.
@@ -721,33 +723,154 @@ Proof.
 Qed.
 
 Definition loop_bump_loopub (l: loop)
-           (lub_in_range_witness: Z.of_nat (loopub l) + 1 < Int64.max_unsigned )
+           (lub_in_range_witness: Z.of_nat (loopub l + 1) < Int64.max_unsigned )
            (schedule_witness: inverseTillUb (loopub l + 1) (loopschedule l) (loopscheduleinv l)):
   loop :=
   mkLoop
-      (loopub l)
-       (loopub_in_range_witness l)
+      (loopub l + 1)
+       (lub_in_range_witness)
        (loopivname l)
        (looparrname l)
        (loopstmt l)
        (loopschedule l)
        (loopscheduleinv l)
-       (loopschedulewitness l).
+       (schedule_witness).
 
+
+Lemma eval_affineexpr_loop_bump_loopub:
+  forall (ge: genv)
+    (le: loopenv)
+    (l l': loop)
+    (expr: affineexpr)
+    (v: val)
+    (lub_in_range_witness: Z.of_nat (loopub l + 1) < Int64.max_unsigned)
+    (schedule_witness: inverseTillUb (loopub l + 1) (loopschedule l) (loopscheduleinv l)),
+    l' = (loop_bump_loopub l lub_in_range_witness schedule_witness) ->
+    eval_affineexpr ge le l expr v ->
+    eval_affineexpr ge le l' expr v.
+Proof.
+  intros until schedule_witness.
+  intros L'.
+
+  assert (looparrname l = looparrname l') as LARRNAME_EQ.
+  subst. auto.
+  
+  intros EXECAE.
+  induction expr.
+  - simpl.
+    inversion EXECAE.
+    assert (loopschedule l (viv le) = loopschedule l' (viv le)) as LOOPSCHED_EQ.
+    subst. auto.
+
+    rewrite LARRNAME_EQ. rewrite LOOPSCHED_EQ.
+    constructor.
+
+  -  simpl.
+     inversion EXECAE.
+     rewrite LARRNAME_EQ.
+     constructor.
+Qed.
+
+
+Lemma exec_stmt_loop_bump_loopub:
+  forall (ge: genv)
+    (le: loopenv)
+    (l: loop)
+    (m m': mem)
+    (lub_in_range_witness: Z.of_nat (loopub l + 1) < Int64.max_unsigned)
+    (schedule_witness: inverseTillUb (loopub l + 1) (loopschedule l) (loopscheduleinv l)),
+    exec_stmt ge le l m (loopstmt l) m' ->
+    exec_stmt ge le
+              (loop_bump_loopub l lub_in_range_witness schedule_witness)
+              m
+              (loopstmt l)
+              m'.
+Proof.
+  intros until schedule_witness.
+  intros EXECS.
+  inversion EXECS; subst.
+
+  induction (loopstmt l).
+  - eapply exec_Sstore.
+    simpl. omega.
+    simpl.
+    eapply eval_affineexpr_loop_bump_loopub.
+    auto.
+    eassumption.
+    eassumption.
+Qed.
+
+Lemma exec_stmt_loop_bump_loopub:
+  forall (ge: genv)
+    (le: loopenv)
+    (l: loop)
+    (m m': mem)
+    (lub_in_range_witness: Z.of_nat (loopub l + 1) < Int64.max_unsigned)
+    (schedule_witness: inverseTillUb (loopub l + 1) (loopschedule l) (loopscheduleinv l)),
+    exec_stmt ge le l m (loopstmt l) m' ->
+    exec_stmt ge le
+              (loop_bump_loopub l lub_in_range_witness schedule_witness)
+              m
+              (loopstmt l)
+              m'.
+Proof.
+  intros until schedule_witness.
+  intros EXECS.
+  inversion EXECS; subst.
+
+  induction (loopstmt l).
+  - eapply exec_Sstore.
+    simpl. omega.
+    simpl.
+
+(* Model the effects on memory of appending a statement to a loop. Note that
+this needs us to bump up the loopub as well *)
 Lemma exec_loop_append_stmt:
-  forall (ge: genv) (le1 le2: loopenv) (m1 m2: mem) (l: loop)
-    (loopub_bump_in_range: (Z.of_nat (loopub l) + 1 < Int64.max_unsigned)%Z)
-    (loopub_bump_inverse_witness: inverseTillUb (loopub l + 1) (loopschedule l) (loopscheduleinv l)),
+  forall (ge: genv)
+    (le1 le2: loopenv)
+    (m1 m2: mem)
+    (l: loop)
+    (loopub_bump_in_range: (Z.of_nat (loopub l + 1) < Int64.max_unsigned)%Z)
+    (loopub_bump_inverse_witness: inverseTillUb
+                                    (loopub l + 1)
+                                    (loopschedule l)
+                                    (loopscheduleinv l)),
+    (viv le1 <= loopub l)%nat ->
     (loopub l = viv le2)%nat ->
     exec_loop ge le1 m1 l m2 le2 ->
-    forall (m3: mem) (s: stmt),
-    exec_stmt ge le2 l m2 s m3 ->
+    forall (m3: mem),
+    exec_stmt ge le2 l m2 (loopstmt l) m3 ->
     exec_loop ge le1 m1
               (loop_bump_loopub l
                                 loopub_bump_in_range
                                 loopub_bump_inverse_witness)
               m3 (loopenv_bump_vindvar le2).
 Proof.
+  intros until loopub_bump_inverse_witness.
+  intros LE1_IN_RANGE.
+  intros LE2_EQ_LOOPUB.
+  intros EXECL.
+
+  induction EXECL;
+  intros until m3.
+  intros EXECS.
+
+  (* original loop had no loop iterations *)
+  - eapply exec_loop_loop.
+    unfold loop_bump_loopub. simpl. omega.
+    simpl. omega.
+    simpl.
+    
+    (* destruct on the kinds of statements we have)
+    induction (loopstmt l).
+    + 
+    eapply exec_loop_stop.
+    simpl. omega.
+
+  - 
+    
+    eapply exec_Sstore.
+  induc
 Abort.
   
 Lemma exec_loop_append_loop:
