@@ -607,20 +607,16 @@ Section EXEC_LOOP_REV.
 
   (* genv -> loopenv -> loop -> mem -> stmt -> mem -> *)
   Inductive exec_looprev: lowerbound -> genv -> loopenv ->  mem -> loop -> mem -> loopenv -> Prop :=
-  | exec_looprev_out_of_bounds: forall lb ge le m l,
-      (viv le >= loopub l)%nat ->
-      (viv le >= lb)%nat ->
-      exec_looprev lb ge le m l m le
   | exec_looprev_start: forall  lb ge le m l,
       (viv le < loopub l)%nat ->
       lb = viv le ->
       exec_looprev lb ge le m l m le
-  | exec_looprev_loop: forall lb ge le m l m' m''  le'',
-      (viv le < loopub l)%nat ->
-      (viv le'' >= viv le)%nat ->
-      exec_looprev lb ge le m l m' (loopenv_reduce_vindvar le'') ->
-      exec_stmt ge (loopenv_reduce_vindvar le'') l m' (loopstmt l) m'' ->
-      exec_looprev lb ge le m l m'' le''.
+  | exec_looprev_loop: forall lb ge m  l m' m'' le le'',
+      (viv le''  < loopub l)%nat ->
+      (viv le'' > lb)%nat ->
+      exec_looprev lb ge le m l m' le'' ->
+      exec_stmt ge le'' l m' (loopstmt l) m'' ->
+      exec_looprev lb ge le m l m'' (loopenv_bump_vindvar le'').
 
   Lemma exec_looprev_viv_nondecreasing:
     forall lb ge le1 m1 l m2 le2,
@@ -630,6 +626,8 @@ Section EXEC_LOOP_REV.
     intros until le2.
     intros EXECLREV.
     induction EXECLREV; try omega.
+
+    simpl in *. omega.
   Qed.
 
   
@@ -640,23 +638,20 @@ Section EXEC_LOOP_REV.
   Proof.
     intros until le2.
     intros EXECLREV.
+    induction EXECLREV; simpl in *; try omega.
+  Qed.
+
+  Lemma exec_looprev_starts_at_lb:
+    forall lb ge le1 m1 l m2 le2,
+      exec_looprev lb ge le1 m1 l m2 le2 ->
+      viv le1 = lb.
+  Proof.
+    intros until le2.
+    intros EXECLREV.
     induction EXECLREV; try omega.
   Qed.
+    
       
-      
-
-  Lemma exec_looprev_is_function_backward:
-    forall lb ge le1 m1 l mfinal lefinal,
-      exec_looprev lb ge le1 m1 l mfinal lefinal ->
-      forall le2 m2,
-        exec_looprev lb ge le2 m2 l mfinal lefinal ->
-        m2 = m1 /\ le2 = le1.
-  Proof.
-    intros until lefinal.
-    intros EXEC1.
-    induction EXEC1; intros until m2; intros EXEC2.
-  Abort.
-
 
             
 
@@ -856,15 +851,6 @@ Proof.
     auto.
 Qed.
     
-Lemma exec_loop_append_loop:
-  forall (ge: genv) (le2 le3: loopenv) (m2 m3: mem) (l: loop),
-    exec_loop ge le2 m2 l m3 le3 ->
-    forall le1 m1,
-    exec_loop ge le1 m1 l m2 le2 ->
-    exec_loop ge le1 m1 l m3 le3.
-Proof.
-Abort.
-
 Lemma loopenv_reduce_bump_vindvar: forall (le: loopenv),
     (loopenv_reduce_vindvar (loopenv_bump_vindvar le)) = le.
 Proof.
@@ -879,13 +865,13 @@ Proof.
 Qed.
 
 Lemma exec_looprev_prepend_stmt:
-  forall (ge: genv) (le1 le2: loopenv) (m2 m3: mem) (l: loop),
-    (viv (loopenv_bump_vindvar le1) < loopub l)%nat ->
-    exec_looprev (viv (loopenv_bump_vindvar le1))
-                 ge (loopenv_bump_vindvar le1)  m2 l m3 le2 ->
-    forall (m1: mem),
+  forall (ge: genv) (lb ub: nat) (le1 le2 le3: loopenv) (m1 m2 m3: mem) (l: loop),
+    (viv le1 = lb)%nat ->
+    (viv le2 = lb + 1)%nat ->
+    (viv le2 = ub)%nat ->
     exec_stmt ge le1 l m1 (loopstmt l) m2 ->
-    exec_looprev (viv le1) ge le1 m1 l m3 le2.
+    exec_looprev (lb + 1) ge le2 m2 l m3 le3 ->
+    exec_looprev  lb ge le1 m1 l m3 le3.
 Proof.
   intros until l.
   intros VIV_INRANGE.
@@ -896,14 +882,9 @@ Proof.
   remember (loopenv_bump_vindvar le1) as LE1_BUMPED.
   remember (viv LE1_BUMPED) as VIV_LE1_BUMPED.
   induction EXECLREV; subst.
-  - simpl in *. omega.
-
-  - eapply exec_looprev_loop; try omega. simpl in *. omega.
-    simpl in *; omega.
+  - eapply exec_looprev_loop; simpl in *; try omega.
     rewrite loopenv_reduce_bump_vindvar.
-    eapply exec_looprev_start. simpl in *. omega.
-    simpl in *. omega.
-    rewrite loopenv_reduce_bump_vindvar.
+    eapply exec_looprev_start; simpl in *; omega.
     auto.
 
   - simpl in *.
@@ -969,41 +950,29 @@ Proof.
 Qed.
 
 
+(*
+The _value_ of le'' should be the LOOPUB of l, because we will let l have those
+many iterations as are dictated by le''. Note that this will ALSO FIX
+the other case of the case where le'' = le, since at that point, loopub l = le'',
+and the whole thing will go away.
+*)
 Lemma exec_looprev_implies_exec_loop:
-  forall (ge: genv) (le le': loopenv) (lb: nat) (m m': mem) (l: loop),
-    (viv le = lb) ->
-    (viv le' = loopub l) ->
-    (viv le' > viv le) % nat ->
+  forall (ge: genv) (lb ub: nat) (le le': loopenv) (m m': mem) (l: loop),
+    viv le = lb ->
+    viv le' = ub ->
+    loopub l = ub ->
     exec_looprev lb ge le m l m' le' ->
     exec_loop ge le m l m' le'.
 Proof.
   intros until l.
-  intros LE_IS_LOOPLB.
-  intros LE'_IS_LOOPUB.
-  intros UB_GT_LB.
-  intros EXECLREV.
-
+  intros LE LE' LUB EXECLREV.
   induction EXECLREV.
-  - constructor; eassumption.
-  - subst. simpl in *.
-    omega.
-    
-  - assert(viv le'' - 1 > lb \/ viv le''- 1 = lb)%nat as
-        VIV_le''_CASES.
-    simpl in *.
-    subst.
-    simpl.
-    omega.
 
-    destruct VIV_le''_CASES as [VIV_LE''_INCR_GT_LB | VIV_LE''_INCR_EQ_LB].
-    + remember (loopenv_reduce_vindvar le'') as le''decrement.
+  - subst. simpl in *. eapply exec_loop_stop. omega.
+  -  subst. eapply exec_loop_stop. omega.
+  - 
 
-    assert (le''_AS_BUMP: le'' = loopenv_bump_vindvar le''decrement).
-    rewrite Heqle''decrement.
-    eapply loopenv_bump_reduce_vindvar.
-    omega.
-
-    rewrite le''_AS_BUMP.
+    eapply exec_loop_append_stmt.
 Abort.
 
       
@@ -2857,71 +2826,6 @@ Section LOOPWRITELOCATIONSMEMORY.
 End LOOPWRITELOCATIONSMEMORY.
 
 
-Section UNDERSTANDCOMPCERTMEMORY.
-  Lemma mem_injects_on_one_stmt:
-    forall  ge le l m1 m2 s m1' m2' baseptr,
-      Genv.find_symbol ge (looparrname l) = Some baseptr ->
-      exec_stmt ge le l m1 s m1' ->
-      exec_stmt ge le l m2 s m2' ->
-      Mem.inject (id_inj m1 m2) m1 m2 ->
-      memStructureEq m1' m2' ->
-      Mem.inject (id_inj m1' m2') m1' m2'.
-  Proof.
-    intros until baseptr.
-    intros genv_at_looparrname.
-    intros execm1 execm2.
-    intros injectorig.
-    intros structureeq. 
-    eapply memStructureEq_extensional_inject; try assumption.
-
-    intros.
-    destruct s.
-
-
-    remember (Ptrofs.repr (Z.pos ofs)) as pofs.
-    remember (Vptr b pofs) as curptr.
-
-    remember (StmtWriteLocation ge l (Sstore a i) (viv le)) as swriteloc.
-
-    assert ({curptr = swriteloc} + {curptr <> swriteloc}) as curptr_cases.
-    apply Val.eq.
-
-    destruct curptr_cases as [alias | noalias].
-
-    - admit.
-
-    - admit.
-
-    - intros.
-      inversion execm1. inversion execm2. subst.
-      inversion H0. subst.
-      
-      unfold Mem.storev in H1.
-      unfold Genv.symbol_address in H1.
-      rewrite genv_at_looparrname in H1.
-      rename H1 into storem1.
-
-      inversion H9. subst.
-      unfold Genv.symbol_address in H10.
-      rewrite genv_at_looparrname in H10.
-      unfold Mem.storev in H10.
-      rename H10 into storem2.
-
-      eapply Val.inject_ptr.
-      unfold id_inj.
-      destruct (plt b (Mem.nextblock m1')).
-      auto.
-
-
-
-      
-    
-    Abort.
-
-    
-    
-  
-End UNDERSTANDCOMPCERTMEMORY.
 
       
 Lemma exec_stmt_matches_in_loop_reversal_if_ix_injective:
