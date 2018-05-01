@@ -856,18 +856,6 @@ Proof.
     auto.
 Qed.
     
-    (* destruct on the kinds of statements we have)
-    induction (loopstmt l).
-    + 
-    eapply exec_loop_stop.
-    simpl. omega.
-
-  - 
-    
-    eapply exec_Sstore.
-  induc
-Abort.
-  
 Lemma exec_loop_append_loop:
   forall (ge: genv) (le2 le3: loopenv) (m2 m3: mem) (l: loop),
     exec_loop ge le2 m2 l m3 le3 ->
