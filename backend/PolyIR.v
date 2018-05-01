@@ -800,28 +800,6 @@ Proof.
     eassumption.
 Qed.
 
-Lemma exec_stmt_loop_bump_loopub:
-  forall (ge: genv)
-    (le: loopenv)
-    (l: loop)
-    (m m': mem)
-    (lub_in_range_witness: Z.of_nat (loopub l + 1) < Int64.max_unsigned)
-    (schedule_witness: inverseTillUb (loopub l + 1) (loopschedule l) (loopscheduleinv l)),
-    exec_stmt ge le l m (loopstmt l) m' ->
-    exec_stmt ge le
-              (loop_bump_loopub l lub_in_range_witness schedule_witness)
-              m
-              (loopstmt l)
-              m'.
-Proof.
-  intros until schedule_witness.
-  intros EXECS.
-  inversion EXECS; subst.
-
-  induction (loopstmt l).
-  - eapply exec_Sstore.
-    simpl. omega.
-    simpl.
 
 (* Model the effects on memory of appending a statement to a loop. Note that
 this needs us to bump up the loopub as well *)
@@ -852,7 +830,7 @@ Proof.
   intros EXECL.
 
   induction EXECL;
-  intros until m3.
+  intros until m3;
   intros EXECS.
 
   (* original loop had no loop iterations *)
@@ -860,6 +838,23 @@ Proof.
     unfold loop_bump_loopub. simpl. omega.
     simpl. omega.
     simpl.
+    eapply exec_stmt_loop_bump_loopub.
+    eassumption.
+
+    eapply exec_loop_stop.
+    simpl. omega.
+
+  (* original loop had X loop iterations *)
+  - eapply exec_loop_loop.
+    unfold loop_bump_loopub. simpl. omega.
+    simpl. omega.
+    simpl.
+    eapply exec_stmt_loop_bump_loopub. eassumption.
+    eapply IHEXECL.
+    simpl. omega.
+    auto.
+    auto.
+Qed.
     
     (* destruct on the kinds of statements we have)
     induction (loopstmt l).
