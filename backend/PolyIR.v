@@ -690,6 +690,23 @@ Proof.
     simpl. omega.
 Qed.
 
+
+Lemma exec_loop_viv_loop_upper_bounded_2:
+  forall (execub: loopexecub) (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
+    (viv le <= execub)%nat ->
+    exec_loop execub ge le m l m' le' ->
+    (viv le' <=  execub)%nat.
+Proof.
+  intros until l.
+  intros VIV_LE_LOOPUB.
+  intros EXECL.
+  induction EXECL.
+  - omega.
+    
+  - apply IHEXECL.
+    simpl. omega.
+Qed.
+
 Lemma exec_loop_loopenv_equal_implies_memory_equal:
   forall (execub: loopexecub) (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
     exec_loop execub ge le m l m' le' ->
@@ -700,6 +717,7 @@ Proof.
   inversion H; subst; try auto.
   omega.
 Qed.
+
   
 
 Theorem exec_loop_is_function:
@@ -2946,54 +2964,45 @@ Theorem memory_matches_in_loop_reversal_if_ix_injective:
     (le: loopenv)
     (m: mem)
     (s: stmt),
-    Mem.inject (id_inj m m) m m ->
     injective_stmt_b s = true ->
     forall (l: loop)
       (mid: mem)
       (leid: loopenv),
       l = (loop_id_schedule lub lub_in_range ivname arrname s) ->
-      exec_loop lub ge le m l mid leid ->
+      exec_loop (loopub l) ge le m l mid leid ->
       forall (lrev: loop)
         (mrev: mem)
         (lerev: loopenv),
     lrev =  (loop_reversed_schedule lub lub_in_range ivname arrname s) ->
-    exec_loop lub ge le m l mrev lerev ->
-    Mem.inject (id_inj mid mrev) mid mrev.
+    exec_looprev 0 ge le m l mrev lerev ->
+    mid = mrev.
 Proof.
   intros until s.
-  intros init_inj.
   intros sinj.
   intros until leid.
-  intros loopiddef execloopid.
+  intros L EXECL.
   intros until lerev.
-  intros looprevdef execlooprev.
-  
-  eapply memStructureEq_extensional_inject.
-  
-  - assert (memStructureEq mid mrev) as structure_eq.
-    eapply memStructureEq_trans.
-    eapply memStructureEq_sym.
-    eapply memStructureEq_exec_loop.
-    eassumption.
-    eapply memStructureEq_exec_loop.
-    eassumption.
+  intros LREV EXECLREV.
 
-    auto.
-
-  - intros.
+  (* rewrite so we can use our theorem about exec loop ~ exec looprev *)
+  induction EXECLREV; simpl in *; subst; simpl in *; auto; try omega.
+  (* no iterations *)
+  - try omega.
+    subst.
+    simpl in *.
+    inversion EXECL; simpl in *; subst.
+    + auto.
+    + 
     
-    remember (LoopWriteLocations ge l) as lwritelocs.
-    remember (LoopWriteLocations ge lrev0) as lrevwritelocs.
-    remember (Ptrofs.repr (Z.pos ofs)) as pofs.
-    remember (Vptr b pofs) as curptr.
-
-    assert ({List.In curptr lwritelocs} + {~ List.In curptr lwritelocs}) as
-        curptr_write.
-    apply List.In_dec. auto.
-    apply Val.eq.
-
     
-    destruct curptr_write as [curptr_write | no_curptr_write].
+  (* have had loop iterations *)
+  - inversion EXECL; subst; try auto; simpl in *; try omega.
+
+                                 
+
+     
+  
+  
 Abort.
 
 
