@@ -611,11 +611,11 @@ Section EXEC_LOOP_REV.
   (* genv -> loopenv -> loop -> mem -> stmt -> mem -> *)
   Inductive exec_looprev: lowerbound -> genv -> loopenv ->  mem -> loop -> mem -> loopenv -> Prop :=
   | exec_looprev_start: forall  lb ge le m l,
-      (viv le < loopub l)%nat ->
+      (viv le <= loopub l)%nat ->
       lb = viv le ->
       exec_looprev lb ge le m l m le
   | exec_looprev_loop: forall lb ge m  l m' m'' le le'',
-      (viv le''  < loopub l)%nat ->
+      (viv le'' < loopub l)%nat ->
       (viv le'' + 1 > lb)%nat ->
       exec_looprev lb ge le m l m' le'' ->
       exec_stmt ge le'' l m' (loopstmt l) m'' ->
@@ -996,7 +996,7 @@ Qed.
 
 Lemma exec_loop_implies_exec_looprev:
   forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
-    (viv le' < loopub l)%nat ->
+    (viv le' <= loopub l)%nat ->
     exec_loop (viv le') ge le m l m' le' ->
     exec_looprev (viv le) ge le m l m' le'.
 Proof.
@@ -1004,7 +1004,7 @@ Proof.
   intros LE'.
   intros EXECL.
 
-  assert (viv le < loopub l)%nat as LE.
+  assert (viv le <= loopub l)%nat as LE.
   cut (viv le <= viv le')%nat.
   intros. omega.
   eapply exec_loop_viv_nondecreasing. eassumption.
@@ -1020,22 +1020,27 @@ Proof.
     eapply exec_looprev_prepend_stmt.
     eassumption.
     eassumption.
-
 Qed.
 
 
-
-      
-      
-
+Lemma exec_loop_exec_looprev_equiv:
+  forall (ge: genv)  (le le': loopenv) (m m': mem) (l: loop),
+    (viv le' <= loopub l)%nat ->
+    exec_looprev (viv le) ge le m l m' le' <->
+    exec_loop (viv le') ge le m l m' le'.
+Proof.
+  intros.
+  split.
+  - (* looprev => loop *)
+    intros.
+    apply exec_looprev_implies_exec_loop; try eassumption.
+    eapply exec_looprev_viv_nondecreasing; eassumption.
     
-     
-     
+  - (* loop => looprev *)
+    apply exec_loop_implies_exec_looprev. try assumption.
+Qed.
+    
   
-
-
-
-
 
 Section MATCHENV.
   Definition match_env (l: loop) (e: env) (le: loopenv) : Prop :=
@@ -1487,18 +1492,19 @@ Section MATCHLOOP.
                     (nat_to_int64 (loopub l))
                     (loopivname l)
                     (cm_inner_stmt))
-                 l.
+   
+              l.
 End MATCHLOOP.
 
 
 
 Theorem exec_loop_when_iv_gt_ub_has_no_effect:
-  forall (ub: nat) (iv: nat) (ge: genv),
+  forall (execub: nat) (ub: nat) (iv: nat) (ge: genv),
   forall (le le': loopenv) (l: loop) (m m': mem),
     loopub l = ub ->
     viv le = iv ->
     (iv >= ub)%nat -> 
-    exec_loop ge le  m l  m' le' ->
+    exec_loop execub ge le  m l  m' le' ->
     le = le' /\ m = m'.
 Proof.
   intros until m'.
@@ -1512,10 +1518,11 @@ Proof.
 Qed.
 
   
+(* 
 Theorem match_loop_has_same_effect:
   Archi.ptr64 = true ->
   forall ge le m l mloop le',
-    exec_loop ge le m l  mloop le' ->
+    exec_loop (viv le')  ge le m l  mloop le' ->
     forall (lub: nat)
       (iv: vindvar)
       (ivname arrname: ident)
@@ -1567,6 +1574,7 @@ Proof.
       as iv_geq_ub.
     eapply eval_iv_lt_ub_false with (viv := iv).
     omega.
+    rewrite lval. simpl.
     omega.
     rewrite <- viv_le_is_iv.
     omega.
@@ -1733,6 +1741,7 @@ Proof.
     + rename H9 into out_neq_normal.
       contradiction.
 Qed.
+*)
 
 (* =================================== *)
 (* Using proof sketch to show that loop reversal works *)
@@ -2014,9 +2023,9 @@ Qed.
 memory, if the index of access memix has *not* been written to
 by the loop, then the memory remains the same *)
 Lemma mem_unchanged_if_stmt_does_not_write_to_ix_in_loop:
-  forall (ge: genv) (l: loop) (le le': loopenv) (m m': mem)
+  forall (execub: nat)(ge: genv) (l: loop) (le le': loopenv) (m m': mem)
     (readix: val),
-    exec_loop ge le m l m' le' ->
+    exec_loop execub ge le m l m' le' ->
     (stmt_does_not_write_to_ix_in_loop ge l (loopstmt l) readix) ->
     Mem.loadv STORE_CHUNK_SIZE m readix = Mem.loadv STORE_CHUNK_SIZE m' readix.
 Proof.
@@ -2026,16 +2035,16 @@ Proof.
   induction execl.
   -  reflexivity.
   -
-    rename H into viv_inrange.
-    rename H1 into execstmt.
+    rename H1 into viv_inrange.
+    rename H2 into execstmt.
     destruct (loopstmt l) as [wchunk writeae writeix].
     specialize (IHexecl nowrite).
     assert (Mem.loadv STORE_CHUNK_SIZE m' readix = Mem.loadv STORE_CHUNK_SIZE m readix ).
 
     inversion execstmt. subst.
     rename vaddr into writeaddr.
-    rename H7 into evalwriteexpr.
-    rename H9 into m'_as_store_m.
+    rename H8 into evalwriteexpr.
+    rename H10 into m'_as_store_m.
 
     eapply loadv_storev_other; try eassumption.
     
@@ -2054,7 +2063,7 @@ Proof.
     unfold Mem.loadv.
 
     auto.
-    rewrite <- H.
+    rewrite <- H1.
     rewrite IHexecl.
     auto.
 Qed.
@@ -2457,11 +2466,12 @@ Section MEMORYINLOOP.
 
 
   Lemma memStructureEq_exec_loop:
-    forall (ge: genv)
+    forall (execub: nat)
+      (ge: genv)
       (m m': mem)
       (le le': loopenv)
       (l: loop),
-      exec_loop ge le m l m' le' ->
+      exec_loop execub ge le m l m' le' ->
       memStructureEq m m'.
   Proof.
     intros until l.
@@ -2837,6 +2847,7 @@ End LOOPWRITELOCATIONSTRANSPORT.
 
 (* Theorems about  loop write locations and their interaction with memory *)
 Section LOOPWRITELOCATIONSMEMORY.
+  Variable execub: nat.
   Variable ge: genv.
   Variable l: loop.
   
@@ -2850,7 +2861,7 @@ Section LOOPWRITELOCATIONSMEMORY.
   Variable m m': mem.
   Variable le le': loopenv.
 
-  Definition loopexec := exec_loop ge le m l m' le'.
+  Definition loopexec := exec_loop execub ge le m l m' le'.
 
   Lemma loop_write_locations_does_not_have_write:
     loopexec ->
@@ -2943,12 +2954,12 @@ Theorem memory_matches_in_loop_reversal_if_ix_injective:
       (mid: mem)
       (leid: loopenv),
       l = (loop_id_schedule lub lub_in_range ivname arrname s) ->
-      exec_loop ge le m l mid leid ->
+      exec_loop lub ge le m l mid leid ->
       forall (lrev: loop)
         (mrev: mem)
         (lerev: loopenv),
     lrev =  (loop_reversed_schedule lub lub_in_range ivname arrname s) ->
-    exec_loop ge le m l mrev lerev ->
+    exec_loop lub ge le m l mrev lerev ->
     Mem.inject (id_inj mid mrev) mid mrev.
 Proof.
   intros until s.
