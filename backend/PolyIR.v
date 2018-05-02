@@ -616,7 +616,7 @@ Section EXEC_LOOP_REV.
       exec_looprev lb ge le m l m le
   | exec_looprev_loop: forall lb ge m  l m' m'' le le'',
       (viv le''  < loopub l)%nat ->
-      (viv le'' > lb)%nat ->
+      (viv le'' + 1 > lb)%nat ->
       exec_looprev lb ge le m l m' le'' ->
       exec_stmt ge le'' l m' (loopstmt l) m'' ->
       exec_looprev lb ge le m l m'' (loopenv_bump_vindvar le'').
@@ -959,36 +959,38 @@ Qed.
       
 
 
-(* 
 Lemma exec_looprev_prepend_stmt:
-  forall (ge: genv) (lbold: nat) (le1 le2: loopenv) (m1 m2 m3: mem) (l: loop),
-    (lbold > 0)%nat
+  forall (ge: genv) (lbnew: nat) (le1 le3: loopenv) (m1 m2 m3: mem) (l: loop),
     exec_stmt ge le1 l m1 (loopstmt l) m2 ->
-    exec_looprev (lbold) %nat ge le2 m2 l m3 le3 ->
-    exec_looprev lbold ge le1 m1 l m3 le3.
+    exec_looprev (lbnew + 1)%nat ge (loopenv_bump_vindvar le1) m2 l m3 le3 ->
+    exec_looprev lbnew ge le1 m1 l m3 le3.
 Proof.
   intros until l.
-  intros LB UB LE1 LE2 LE3.
   intros EXECS.
   intros EXECLREV.
+  remember (lbnew + 1)%nat as lbold.
+  remember (loopenv_bump_vindvar le1) as le2.
+  
   induction EXECLREV.
 
-  - destruct le1. destruct le. simpl in *. subst.
-    assert ({| viv := lbnew + 1 + 1 |} = loopenv_bump_vindvar {| viv := lbnew + 1 |}) as BUMP.
-    unfold loopenv_bump_vindvar. auto.
-    rewrite BUMP.
-    eapply exec_looprev_loop. omega. omega.
+  - assert(viv le = viv le1 + 1)%nat.
+    destruct le. destruct le1.
+    unfold loopenv_bump_vindvar in *.
+    simpl in *.
+    inversion Heqle2.
+    auto.
 
-    eapply exec_looprev_start.
-    omega. omega.
-
+    rewrite Heqle2.
+    eapply exec_looprev_loop; try omega.
+    eapply exec_looprev_start; try omega.
     eassumption.
 
+    
+    
   - subst.
     simpl in *.
     eapply exec_looprev_loop; try omega. simpl.
     apply IHEXECLREV; simpl; try auto; try omega.
-    
     exact H1.
 Qed.
 
