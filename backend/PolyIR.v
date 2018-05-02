@@ -1518,11 +1518,10 @@ Proof.
 Qed.
 
   
-(* 
 Theorem match_loop_has_same_effect:
   Archi.ptr64 = true ->
   forall ge le m l mloop le',
-    exec_loop (viv le')  ge le m l  mloop le' ->
+    exec_loop (loopub l)  ge le m l  mloop le' ->
     forall (lub: nat)
       (iv: vindvar)
       (ivname arrname: ident)
@@ -1547,6 +1546,7 @@ Proof.
   intros arch64.
   intros until le'.
   intros execl.
+  remember (loopub l) as execub.
   induction execl.
   - intros until eblock.
     intros leval.
@@ -1572,24 +1572,30 @@ Proof.
                          (Evar (loopivname l))
                          (Econst (Olongconst (nat_to_int64 (loopub l))))) Vfalse)
       as iv_geq_ub.
-    eapply eval_iv_lt_ub_false with (viv := iv).
-    omega.
-    rewrite lval. simpl.
-    omega.
-    rewrite <- viv_le_is_iv.
-    omega.
-    inversion matchenv. rewrite H4.
-    inversion matchloop. rewrite H10.
+    eapply eval_iv_lt_ub_false with (viv := iv);
+      try (simpl in *; omega).
+    inversion matchenv.
+    rename H5 into LOOPIVNAME_AT_E.
+    rewrite LOOPIVNAME_AT_E.
+
+    assert (loopschedule l = id) as LSCHED_ID.
+    inversion matchloop.
+    auto.
+    
+    rewrite LSCHED_ID.
     unfold id. rewrite <- viv_le_is_iv.
-    reflexivity.
+    auto.
+    
     exact iv_geq_ub.
     exact exec_cms.
     destruct mem_env_unchanged as [meq eeq].
     subst e m.
     auto.
     
-  - rename H into viv_inbounds.
-    rename H0 into exec_stmt.
+
+    
+  -
+    rename H2 into exec_stmt.
 
     intros until eblock.
     intros leval.
@@ -1606,20 +1612,16 @@ Proof.
     
     subst.
 
-
-    
-
-    
     (* inversion from exec_loop *)
     inversion exec_cms_full_loop; subst.
 
     + (* Loop succeeds an iteration *)
-    rename H into loopsched.
-    rename H0 into loopschedinv.
-    rename H2 into match_cm_inner_stmt.
-    rename H4 into exec_cms_inner_block.
-    rename H5 into exec_cms_loop.
-    rename H10 into t1t2val.
+    rename H2 into loopsched.
+    rename H3 into loopschedinv.
+    rename H4 into match_cm_inner_stmt.
+    rename H6 into exec_cms_inner_block.
+    rename H7 into exec_cms_loop.
+    rename H12 into t1t2val.
 
     assert (t1 = E0 /\ t2 = E0) as t1_t2_e0.
     apply destruct_trace_app_eq_E0.
@@ -1636,27 +1638,32 @@ Proof.
                               (Evar (loopivname l))
                               (Econst (Olongconst (nat_to_int64 (loopub l)))))
                       Vtrue) as iv_lt_ub_true.
-    eapply eval_iv_lt_ub_true.
-    rewrite lval. simpl.
-    eassumption.
-    eassumption.
-    inversion matchenv. rewrite H0.
-    rewrite loopsched.
-    unfold id.
-    reflexivity.
+    eapply eval_iv_lt_ub_true; try (eassumption; simpl; omega).
+    rewrite lval. simpl. omega.
 
-    
-    
+
+    assert (e ! (loopivname l) = Some (nat_to_vlong (loopschedule l (viv le)))) as
+        E_AT_LOOPIVNAME.
+
+    inversion matchenv.
+    auto.
+    rewrite E_AT_LOOPIVNAME.
+    rewrite loopsched.
+    auto.
+
     eapply IHexecl with (iv := (iv+ 1)%nat).
+    auto.
     exact lub_in_range'.
 
     assert (Z.of_nat iv < Z.of_nat lub) as iv_lt_ub_over_int.
     rewrite <- Z.compare_lt_iff.
     rewrite Nat2Z.inj_compare.
     rewrite Nat.compare_lt_iff.
-    rewrite lval, leval in viv_inbounds.
-    simpl in viv_inbounds.
-    exact viv_inbounds.
+
+    rename H0 into VIV_LT_LUB.
+    rewrite lval, leval in VIV_LT_LUB.
+    simpl in VIV_LT_LUB.
+    exact VIV_LT_LUB.
 
     assert (Z.of_nat iv + 1 < Z.of_nat lub + 1) as
         iv_plus_1_lt_ub_plus_1_over_int.
@@ -1674,21 +1681,13 @@ Proof.
 
     (* this should be matched with exec_cms_loop *)
     assert (m1 = m') as meq.
-    eapply continue_sblock_incr_by_1_sseq_sif.
-    eapply iv_lt_ub_true.
-    eapply match_stmt_has_same_effect'.
-    eassumption.
-    eassumption.
-    eassumption.
-    eassumption.
-    eassumption.
-    eassumption.
-    eapply match_stmt_does_not_alias.
-    eassumption.
+    eapply continue_sblock_incr_by_1_sseq_sif; try eassumption.
+    eapply match_stmt_has_same_effect'; try eassumption.
+    eapply match_stmt_does_not_alias; try eassumption.
     (* ---- *)
 
     inversion matchenv.
-    rename H0 into e_at_ivname.
+    rename H3 into e_at_ivname.
     rewrite loopsched in e_at_ivname.
     rewrite lval in e_at_ivname.
     rewrite leval in e_at_ivname.
@@ -1738,10 +1737,9 @@ Proof.
 
 
 
-    + rename H9 into out_neq_normal.
+    + rename H11 into OUT_NEQ_NORMAL.
       contradiction.
 Qed.
-*)
 
 (* =================================== *)
 (* Using proof sketch to show that loop reversal works *)
