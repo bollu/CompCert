@@ -588,17 +588,20 @@ Qed.
 End EXEC_STMT.
 
 Section EXEC_LOOP.
+  Definition loopexecub := nat.
 
-  Inductive exec_loop: genv -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
-  | exec_loop_stop: forall ge le m l,
-      (viv le >= loopub l)%nat ->
-      exec_loop ge le m l m le
-  | exec_loop_loop: forall ge le le' m m' m'' l,
-      (viv le < loopub l)%nat ->
+  Inductive exec_loop: loopexecub -> genv -> loopenv -> mem -> loop -> mem -> loopenv -> Prop :=
+  | exec_loop_stop: forall execub ge le m l,
+      (execub <= loopub l)%nat ->
+      (viv le >= execub)%nat ->
+      exec_loop execub ge le m l m le
+  | exec_loop_loop: forall execub ge le le' m m' m'' l,
+      (execub <= loopub l)%nat ->
+      (viv le < execub)%nat ->
       (viv le < viv le')%nat -> 
       exec_stmt ge le l m (loopstmt l) m' ->
-      exec_loop ge (loopenv_bump_vindvar le) m' l m'' le' ->
-      exec_loop ge le m l m'' le'.
+      exec_loop execub ge (loopenv_bump_vindvar le) m' l m'' le' ->
+      exec_loop execub ge le m l m'' le'.
 End EXEC_LOOP.
 
 Section EXEC_LOOP_REV.
@@ -659,8 +662,8 @@ End EXEC_LOOP_REV.
 
 
 Lemma exec_loop_viv_nondecreasing:
-  forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
-    exec_loop ge le m l m' le' ->
+  forall (execub: loopexecub) (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
+    exec_loop execub ge le m l m' le' ->
     (viv le' >= viv le)%nat.
 Proof.
   intros until l.
@@ -671,10 +674,10 @@ Proof.
 Qed.
 
 
-Lemma exec_loop_viv_upper_bounded:
-  forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
+Lemma exec_loop_viv_loop_upper_bounded:
+  forall (execub: loopexecub) (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
     (viv le <= loopub l)%nat ->
-    exec_loop ge le m l m' le' ->
+    exec_loop execub ge le m l m' le' ->
     (viv le' <= loopub l)%nat.
 Proof.
   intros until l.
@@ -682,13 +685,14 @@ Proof.
   intros EXECL.
   induction EXECL.
   - omega.
+    
   - apply IHEXECL.
     simpl. omega.
 Qed.
 
 Lemma exec_loop_loopenv_equal_implies_memory_equal:
-  forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
-    exec_loop ge le m l m' le' ->
+  forall (execub: loopexecub) (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
+    exec_loop execub ge le m l m' le' ->
     le = le' -> m = m'.
 Proof.
   intros.
@@ -699,9 +703,9 @@ Qed.
   
 
 Theorem exec_loop_is_function:
-  forall (ge: genv) (le' le'': loopenv) (viv: vindvar) (l: loop) (m m' m'': mem),
-    exec_loop ge (mkLenv viv) m l m' le' ->
-    exec_loop ge (mkLenv viv) m l m'' le'' ->
+  forall (execub: loopexecub)(ge: genv) (le' le'': loopenv) (viv: vindvar) (l: loop) (m m' m'': mem),
+    exec_loop execub ge (mkLenv viv) m l m' le' ->
+    exec_loop execub ge (mkLenv viv) m l m'' le'' ->
     m' = m'' /\ le' = le''.
 Proof.
   intros until m''.
@@ -799,7 +803,8 @@ Qed.
 (* Model the effects on memory of appending a statement to a loop. Note that
 this needs us to bump up the loopub as well *)
 Lemma exec_loop_append_stmt:
-  forall (ge: genv)
+  forall (lub: nat)
+    (ge: genv)
     (le1 le2: loopenv)
     (m1 m2: mem)
     (l: loop)
@@ -808,20 +813,23 @@ Lemma exec_loop_append_stmt:
                                     (loopub l + 1)
                                     (loopschedule l)
                                     (loopscheduleinv l)),
-    (viv le1 <= loopub l)%nat ->
-    (loopub l = viv le2)%nat ->
-    exec_loop ge le1 m1 l m2 le2 ->
+    (loopub l = lub)%nat ->
+    (viv le1 <= lub)%nat ->
+    (viv le2 = lub)%nat ->
+    exec_loop lub ge le1 m1 l m2 le2 ->
     forall (m3: mem),
     exec_stmt ge le2 l m2 (loopstmt l) m3 ->
-    exec_loop ge le1 m1
+    exec_loop (lub + 1)%nat
+              ge
+              le1
+              m1
               (loop_bump_loopub l
                                 loopub_bump_in_range
                                 loopub_bump_inverse_witness)
               m3 (loopenv_bump_vindvar le2).
 Proof.
   intros until loopub_bump_inverse_witness.
-  intros LE1_IN_RANGE.
-  intros LE2_EQ_LOOPUB.
+  intros LOOPUB LE1_IN_RANGE LE2_EQ_LOOPUB.
   intros EXECL.
 
   induction EXECL;
@@ -832,16 +840,19 @@ Proof.
   - eapply exec_loop_loop.
     unfold loop_bump_loopub. simpl. omega.
     simpl. omega.
+    simpl. omega.
     simpl.
     eapply exec_stmt_loop_bump_loopub.
     eassumption.
 
     eapply exec_loop_stop.
     simpl. omega.
+    simpl. omega.
 
   (* original loop had X loop iterations *)
   - eapply exec_loop_loop.
     unfold loop_bump_loopub. simpl. omega.
+    simpl. omega.
     simpl. omega.
     simpl.
     eapply exec_stmt_loop_bump_loopub. eassumption.
@@ -849,6 +860,57 @@ Proof.
     simpl. omega.
     auto.
     auto.
+    simpl. omega.
+    omega.
+    eassumption.
+Qed.
+
+(* Model the effects on memory of appending a statement to a loop. Note that
+this needs us to bump up the loopub as well *)
+Lemma exec_loop_append_stmt':
+  forall (lub: nat)
+    (ge: genv)
+    (le1 le2: loopenv)
+    (m1 m2: mem)
+    (l: loop),
+    (loopub l > lub)%nat ->
+    (viv le1 <= lub)%nat ->
+    (viv le2 = lub)%nat ->
+    exec_loop lub ge le1 m1 l m2 le2 ->
+    forall (m3: mem),
+    exec_stmt ge le2 l m2 (loopstmt l) m3 ->
+    exec_loop (lub + 1)%nat
+              ge
+              le1
+              m1
+              l
+              m3 (loopenv_bump_vindvar le2).
+Proof.
+  intros until l.
+  intros LOOPUB LE1_IN_RANGE LE2_EQ_LOOPUB.
+  intros EXECL.
+
+  induction EXECL;
+  intros until m3;
+  intros EXECS.
+
+  (* original loop had no loop iterations *)
+  - eapply exec_loop_loop.
+    unfold loop_bump_loopub. simpl. omega.
+    simpl. omega.
+    simpl. omega.
+    simpl.
+    eassumption.
+
+    eapply exec_loop_stop.
+    simpl. omega.
+    simpl. omega.
+
+  (* original loop had X loop iterations *)
+  - eapply exec_loop_loop; try (simpl; omega).
+    eassumption.
+    eapply IHEXECL; try (simpl; omega).
+    eassumption.
 Qed.
     
 Lemma loopenv_reduce_bump_vindvar: forall (le: loopenv),
@@ -872,22 +934,27 @@ the other case of the case where le'' = le, since at that point, loopub l = le''
 and the whole thing will go away.
 *)
 Lemma exec_looprev_implies_exec_loop:
-  forall (ge: genv) (lb: nat) (le le': loopenv) (m m': mem) (l: loop),
-    viv le = lb ->
-    viv le' = loopub l ->
-    exec_looprev lb ge le m l m' le' ->
-    exec_loop ge le m l m' le'.
+  forall (ge: genv)  (le le': loopenv) (m m': mem) (l: loop),
+    (viv le <= viv le')%nat ->
+    exec_looprev (viv le) ge le m l m' le' ->
+    exec_loop (viv le') ge le m l m' le'.
 Proof.
   intros until l.
-  intros LE LE' EXECLREV.
+  intros VIV_INRANGE.
+  intros EXECLREV.
   induction EXECLREV.
 
-  - subst. simpl in *. eapply exec_loop_stop. omega.
-  - subst.
-    assert (exec_loop ge le m l m' le'').
+  - subst. simpl in *. eapply exec_loop_stop; try omega.
+  - intros.
+    simpl.
+    assert (exec_loop (viv le'') ge le m l m' le'') as EXEC_TILL_LE''.
     eapply IHEXECLREV.
-    auto.
-Abort.
+    omega.
+
+    
+    eapply exec_loop_append_stmt'; try eassumption; try omega.
+    eapply exec_loop_viv_nondecreasing. eassumption.
+Qed.
 
       
 
