@@ -996,60 +996,32 @@ Qed.
 
 Lemma exec_loop_implies_exec_looprev:
   forall (ge: genv) (le le': loopenv) (m m': mem) (l: loop),
-    exec_loop ge le m l m' le' ->
+    (viv le' < loopub l)%nat ->
+    exec_loop (viv le') ge le m l m' le' ->
     exec_looprev (viv le) ge le m l m' le'.
 Proof.
   intros until l.
+  intros LE'.
   intros EXECL.
+
+  assert (viv le < loopub l)%nat as LE.
+  cut (viv le <= viv le')%nat.
+  intros. omega.
+  eapply exec_loop_viv_nondecreasing. eassumption.
+  
   induction EXECL.
-  - constructor; omega.
-  - assert(viv le + 1 = viv le' \/ viv le + 1 < viv le')%nat as
-        VIV_CASES.
+  - constructor; try (omega; auto).
+  - assert (exec_looprev (viv (loopenv_bump_vindvar le)) ge
+                         (loopenv_bump_vindvar le) m' l m'' le') as EXEC_TILL_TOP.
+    eapply IHEXECL; try omega; try eassumption; try auto.
+    unfold loopenv_bump_vindvar in *. simpl in *.
     omega.
-    destruct VIV_CASES as [LE_PLUS_1_EQ_LE' | LE_PLUS_1_LT_LE'].
 
-    + assert (m' = m'') as MEM_EQUAL.
-    eapply exec_loop_loopenv_equal_implies_memory_equal.
+    eapply exec_looprev_prepend_stmt.
     eassumption.
-    unfold loopenv_bump_vindvar.
-    rewrite LE_PLUS_1_EQ_LE'.
-    destruct le'.
-    apply f_equal.
-    simpl.
-    auto.
-    subst.
-
-    
-    assert (LE_EQ_DEC_LE': (loopenv_reduce_vindvar le') = le).
-    unfold loopenv_reduce_vindvar.
-    destruct le. destruct le'.
-    simpl in *.
-    apply f_equal.
-    omega.
-
-
-    eapply exec_looprev_loop; try omega.
-    rewrite LE_EQ_DEC_LE'.
-    eapply exec_looprev_start.
-    omega.
-    auto.
-
-
-    rewrite LE_EQ_DEC_LE'.
     eassumption.
 
-
-    + eapply exec_looprev_prepend_stmt.
-      simpl.
-      assert (viv le' <= loopub l)%nat.
-      eapply exec_loop_viv_upper_bounded with (le0 := (loopenv_bump_vindvar le)).
-      simpl. omega.
-      eassumption.
-      omega.
-      eassumption.
-      eassumption.
 Qed.
-*)
 
 
 
