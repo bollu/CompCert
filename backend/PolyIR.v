@@ -864,32 +864,64 @@ Proof.
   omega.
 Qed.
 
-Lemma exec_looprev_prepend_stmt:
-  forall (ge: genv) (lb ub: nat) (le1 le2 le3: loopenv) (m1 m2 m3: mem) (l: loop),
-    (viv le1 = lb)%nat ->
-    (viv le2 = lb + 1)%nat ->
-    (viv le2 = ub)%nat ->
-    exec_stmt ge le1 l m1 (loopstmt l) m2 ->
-    exec_looprev (lb + 1) ge le2 m2 l m3 le3 ->
-    exec_looprev  lb ge le1 m1 l m3 le3.
+
+(*
+The _value_ of le'' should be the LOOPUB of l, because we will let l have those
+many iterations as are dictated by le''. Note that this will ALSO FIX
+the other case of the case where le'' = le, since at that point, loopub l = le'',
+and the whole thing will go away.
+*)
+Lemma exec_looprev_implies_exec_loop:
+  forall (ge: genv) (lb: nat) (le le': loopenv) (m m': mem) (l: loop),
+    viv le = lb ->
+    viv le' = loopub l ->
+    exec_looprev lb ge le m l m' le' ->
+    exec_loop ge le m l m' le'.
 Proof.
   intros until l.
-  intros VIV_INRANGE.
-  intros EXECLREV.
+  intros LE LE' EXECLREV.
+  induction EXECLREV.
 
-  intros until m1. intros EXECS.
-
-  remember (loopenv_bump_vindvar le1) as LE1_BUMPED.
-  remember (viv LE1_BUMPED) as VIV_LE1_BUMPED.
-  induction EXECLREV; subst.
-  - eapply exec_looprev_loop; simpl in *; try omega.
-    rewrite loopenv_reduce_bump_vindvar.
-    eapply exec_looprev_start; simpl in *; omega.
+  - subst. simpl in *. eapply exec_loop_stop. omega.
+  - subst.
+    assert (exec_loop ge le m l m' le'').
+    eapply IHEXECLREV.
     auto.
+Abort.
 
-  - simpl in *.
+      
+
+
+(* 
+Lemma exec_looprev_prepend_stmt:
+  forall (ge: genv) (lbold: nat) (le1 le2: loopenv) (m1 m2 m3: mem) (l: loop),
+    (lbold > 0)%nat
+    exec_stmt ge le1 l m1 (loopstmt l) m2 ->
+    exec_looprev (lbold) %nat ge le2 m2 l m3 le3 ->
+    exec_looprev lbold ge le1 m1 l m3 le3.
+Proof.
+  intros until l.
+  intros LB UB LE1 LE2 LE3.
+  intros EXECS.
+  intros EXECLREV.
+  induction EXECLREV.
+
+  - destruct le1. destruct le. simpl in *. subst.
+    assert ({| viv := lbnew + 1 + 1 |} = loopenv_bump_vindvar {| viv := lbnew + 1 |}) as BUMP.
+    unfold loopenv_bump_vindvar. auto.
+    rewrite BUMP.
+    eapply exec_looprev_loop. omega. omega.
+
+    eapply exec_looprev_start.
+    omega. omega.
+
+    eassumption.
+
+  - subst.
+    simpl in *.
     eapply exec_looprev_loop; try omega. simpl.
     apply IHEXECLREV; simpl; try auto; try omega.
+    
     exact H1.
 Qed.
 
@@ -948,34 +980,8 @@ Proof.
       eassumption.
       eassumption.
 Qed.
-
-
-(*
-The _value_ of le'' should be the LOOPUB of l, because we will let l have those
-many iterations as are dictated by le''. Note that this will ALSO FIX
-the other case of the case where le'' = le, since at that point, loopub l = le'',
-and the whole thing will go away.
 *)
-Lemma exec_looprev_implies_exec_loop:
-  forall (ge: genv) (lb ub: nat) (le le': loopenv) (m m': mem) (l: loop),
-    viv le = lb ->
-    viv le' = ub ->
-    loopub l = ub ->
-    exec_looprev lb ge le m l m' le' ->
-    exec_loop ge le m l m' le'.
-Proof.
-  intros until l.
-  intros LE LE' LUB EXECLREV.
-  induction EXECLREV.
 
-  - subst. simpl in *. eapply exec_loop_stop. omega.
-  -  subst. eapply exec_loop_stop. omega.
-  - 
-
-    eapply exec_loop_append_stmt.
-Abort.
-
-      
 
 
       
