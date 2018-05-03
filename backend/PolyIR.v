@@ -662,8 +662,7 @@ End EXEC_LOOP_REV.
 
 
 Theorem exec_looprev_is_function:
-  forall (execlb: lowerbound)
-    (ge: genv)
+  forall (ge: genv)
     (le le1 le2: loopenv)
     (l: loop)
     (m m1final m2final: mem),
@@ -3037,7 +3036,7 @@ Theorem memory_matches_in_loop_reversal_if_ix_injective:
         (lerev: loopenv),
         viv lerev = lub ->
     lrev =  (loop_reversed_schedule lub lub_in_range ivname arrname s) ->
-    exec_looprev (viv le) ge le m l mrev lerev ->
+    exec_looprev (viv le) ge le m lrev mrev lerev ->
     mid = mrev.
 Proof.
   intros until s.
@@ -3049,11 +3048,40 @@ Proof.
 
   remember (viv le) as VIVLE.
 
-  induction EXECL; induction EXECLREV;
+  inversion EXECL; inversion EXECLREV;
     subst; simpl in *; auto; try omega.
 
-  rename H4 into EXECSTMT_M'0_M''0.
-  rename H1 into EXECSTMT_M'_M''.
+  rename m' into mid'.
+  rename m'0 into mrev'.
+  rename le'' into leid'.
+  rename le''0 into lerev'.
+
+  rename mrev into mrevfinal.
+  rename mid into midfinal.
+
+
+  rename H1 into EXECLOOPREV_MID.
+  rename H2 into EXECSTMT_MID.
+
+  rename H13 into EXECSTMT_MREV.
+  rename H12 into EXECLOOPREV_MREV.
+
+  assert (leid' = lerev') as LE_LOOP_EQ.
+  destruct leid'. destruct lerev'.
+  simpl in VIV_LEREV.
+  cut (viv1 = viv0).
+  intros VIVEQ.
+  rewrite VIVEQ.
+  auto.
+  omega.
+  subst.
+
+  assert (mrev' = mid') as MLOOPEQ.
+  eapply exec_looprev_is_function; try eassumption; try auto.
+  subst.
+
+  eapply exec_stmt_is_function; eassumption.
+Qed.
 
 
 
