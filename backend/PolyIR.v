@@ -814,63 +814,10 @@ Definition loop_bump_loopub (l: loop)
        (schedule_witness).
 
 
-Lemma loop_reduce_loopub_witness_in_range (l: loop):
-  Z.of_nat (pred (loopub l)) < Int64.max_unsigned.
-Proof.
-  assert ((Z.of_nat (loopub l))  < Int64.max_unsigned) as LUB_BOUNDS.
-  apply (loopub_in_range_witness l).
-
-  assert (pred (loopub l) <= loopub l)%nat as PRED_ORDERING.
-  omega.
-
-  assert (Z.of_nat (pred (loopub l)) <= Z.of_nat (loopub l)) as
-      PRED_ORDERING_Z.
-  apply Znat.inj_le; assumption.
-
-  omega.
-Qed.
-
-Lemma loop_reduce_loopub_loopschedulewitness_for_id_loop (l: loop):
-  loopschedule l = id ->
-  loopscheduleinv l = id ->
-  inverseTillUb (pred (loopub l)) (loopschedule l) (loopscheduleinv l).
-Proof.
-  intros SCHED_ID.
-  intros SCHED_INV.
-  assert (inverseTillUb (loopub l) (loopschedule l) (loopscheduleinv l)) as
-      INVERSE_TILL_UB_L.
-  apply (loopschedulewitness l).
-  destruct INVERSE_TILL_UB_L.
-
-  constructor.
-  - intros.
-    apply inverse_forward0. omega.
-  -  intros.
-     apply inverse_backward0. omega.
-   
-  -  intros.
-     rewrite SCHED_ID.
-     auto.
-  -  intros.
-     (* This does not work, we can't prove that this will always hold
-     in the case of the x |-> n - x schedule *)
-Abort.
   
 
   
 
-
-Definition loop_reduce_loopub (l: loop)
-  loop :=
-  mkLoop
-      (pred (loopub l))
-       (loop_reduce_loopub_witness_in_range l)
-       (loopivname l)
-       (looparrname l)
-       (loopstmt l)
-       (loopschedule l)
-       (loopscheduleinv l)
-       (loopschedulewitness l).
 
 
 Lemma eval_affineexpr_loop_bump_loopub:
@@ -2898,18 +2845,18 @@ Section LOOPWRITELOCATIONS.
         
 
 (* locations that are written to by a loop *)
-  Program Fixpoint LoopWriteLocations_rec (l: loop) {struct l} : list val :=
-    match (loopub l) with
+  Program Fixpoint LoopWriteLocations_rec (l: loop) (n: nat) {struct n} : list val :=
+    match n with
     | O => List.nil
     | S count' =>
       List.cons
-             (StmtWriteLocation (loopstmt l) count')
-             (LoopWriteLocations_rec' (loop_))
+             (StmtWriteLocation l (loopstmt l) count')
+             (LoopWriteLocations_rec l count')
     end.
 
                                                                   
-Definition LoopWriteLocations : list val :=
-  LoopWriteLocations_rec (loopub l).
+Definition LoopWriteLocations (l: loop) : list val :=
+  LoopWriteLocations_rec l (loopub l).
 
 
 
@@ -2921,43 +2868,51 @@ obviously be constructed in this case *)
 Section LOOPWRITELOCATIONSLEMMAS.
 
   Lemma loop_write_locations_complete_1:
+    forall (n: nat)
+      (l: loop)
+      (ge: genv)
+      (s: stmt)
+      (b: block)
+      (ofs: ptrofs),
+    List.In (Vptr b ofs) (LoopWriteLocations_rec ge l n) ->
+    stmt_writes_ix_in_loop  ge l s (Vptr b ofs).
+  Proof.
+    intros n.
+    induction n;
+      intros until ofs;
+      intros IN_LOOPWRITELOCS.
+
+    - unfold LoopWriteLocations_rec in IN_LOOPWRITELOCS.
+      inversion IN_LOOPWRITELOCS.
+    - unfold LoopWriteLocations_rec in IN_LOOPWRITELOCS.
+      apply List.in_inv in IN_LOOPWRITELOCS.
+      destruct IN_LOOPWRITELOCS as [in_head | in_tail].
+      + admit.
+      + apply IHn.
+        exact in_tail.
+    
+  Admitted.
+
+
+  Lemma loop_write_locations_complete_2:
     forall (l: loop)
       (ge: genv)
       (s: stmt)
       (b: block)
       (ofs: ptrofs),
-    List.In (Vptr b ofs) (LoopWriteLocations ge l) ->
-    stmt_writes_ix_in_loop  ge l s (Vptr b ofs).
-  Proof.
-    intros l.
-    remember (loopub l) as lub.
-    generalize dependent l.
-    
-    induction lub;
-      intros until ofs;
-      intros LOOPWRITELOCATIONS.
-
-    
-    -  unfold LoopWriteLocations in LOOPWRITELOCATIONS.
-       unfold LoopWriteLocations_rec in LOOPWRITELOCATIONS.
-       rewrite <- Heqlub in LOOPWRITELOCATIONS.
-       inversion LOOPWRITELOCATIONS.
-
-
-    simpl in LOOPWRITELOCATIONS.
-  Abort.
-
-
-  Lemma loop_write_locations_complete_2:
     ~ List.In (Vptr b ofs) (LoopWriteLocations ge l) ->
     stmt_does_not_write_to_ix_in_loop ge l s (Vptr b ofs).
   Proof.
-  Abort.
+  Admitted.
 
 
 
   
 End LOOPWRITELOCATIONSLEMMAS.
+
+
+Hint Opaque LoopWriteLocations.
+Hint Opaque StmtWriteLocation.
 
 (* Theorem about transporting LoopWriteLocations between a loop
 and its reverse *)
@@ -2982,14 +2937,14 @@ Section LOOPWRITELOCATIONSTRANSPORT.
     List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
     List.In (Vptr b ofs) (LoopWriteLocations ge lrev).
   Proof.
-  Abort.
+  Admitted.
 
   
   Lemma loop_write_locations_transportable_2:
     ~ List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
     ~ List.In (Vptr b ofs) (LoopWriteLocations ge lrev).
   Proof.
-  Abort.
+  Admitted.
   
 End LOOPWRITELOCATIONSTRANSPORT.
 
@@ -3019,13 +2974,14 @@ Section LOOPWRITELOCATIONSMEMORY.
   Abort.
 
   
-  (* Obviously, this statement is retarded, I need much stronger
-  assumptions *)
+  (* Note that this is wrong. This should actually talk about what
+  the contents are written by stmt s*)
   Lemma loop_write_locations_has_write:
     loopexec ->
     List.In (Vptr b ofsp) (LoopWriteLocations ge l) ->
     injective_stmt_b (loopstmt l) = true ->
-    ((Mem.mem_contents m) # b) # ofs = ((Mem.mem_contents m') # b) # ofs.
+    ((Mem.mem_contents m) # b) # ofs =
+    ((Mem.mem_contents m) # b) # ofs.
   Proof.
   Abort.
     
@@ -3088,7 +3044,7 @@ Proof.
 Abort.
 
 
-Theorem memory_matches_in_loop_reversal_if_ix_injective:
+Theorem mem_contents_eq_in_loop_reversal_if_ix_injective:
   forall (lub: upperbound)
     (lub_in_range: Z.of_nat lub < Int64.max_unsigned)
     (ivname arrname: ident)
@@ -3108,7 +3064,9 @@ Theorem memory_matches_in_loop_reversal_if_ix_injective:
         viv lerev = viv leid ->
     lrev =  (loop_reversed_schedule lub lub_in_range ivname arrname s) ->
     exec_looprev (viv le) ge le m lrev mrev lerev ->
-    mid = mrev.
+    forall (b: block) (ofs: positive),
+      (Mem.mem_contents mid) # b # ofs =
+      (Mem.mem_contents mrev) # b # ofs.
 Proof.
 Abort.
  
