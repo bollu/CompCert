@@ -815,17 +815,56 @@ Definition loop_bump_loopub (l: loop)
 
 
 Lemma loop_reduce_loopub_witness_in_range (l: loop):
-  Z.of_nat (loopub l - 1) < Int64.max_unsigned.
+  Z.of_nat (pred (loopub l)) < Int64.max_unsigned.
 Proof.
-  assert ((Z.of_nat (loopub l))  < Int64.max_unsigned).
+  assert ((Z.of_nat (loopub l))  < Int64.max_unsigned) as LUB_BOUNDS.
   apply (loopub_in_range_witness l).
-  rewrite Znat.inj_sub_max.
+
+  assert (pred (loopub l) <= loopub l)%nat as PRED_ORDERING.
+  omega.
+
+  assert (Z.of_nat (pred (loopub l)) <= Z.of_nat (loopub l)) as
+      PRED_ORDERING_Z.
+  apply Znat.inj_le; assumption.
+
+  omega.
+Qed.
+
+Lemma loop_reduce_loopub_loopschedulewitness_for_id_loop (l: loop):
+  loopschedule l = id ->
+  loopscheduleinv l = id ->
+  inverseTillUb (pred (loopub l)) (loopschedule l) (loopscheduleinv l).
+Proof.
+  intros SCHED_ID.
+  intros SCHED_INV.
+  assert (inverseTillUb (loopub l) (loopschedule l) (loopscheduleinv l)) as
+      INVERSE_TILL_UB_L.
+  apply (loopschedulewitness l).
+  destruct INVERSE_TILL_UB_L.
+
+  constructor.
+  - intros.
+    apply inverse_forward0. omega.
+  -  intros.
+     apply inverse_backward0. omega.
+   
+  -  intros.
+     rewrite SCHED_ID.
+     auto.
+  -  intros.
+     (* This does not work, we can't prove that this will always hold
+     in the case of the x |-> n - x schedule *)
+Abort.
+  
+
+  
+
 
 Definition loop_reduce_loopub (l: loop)
   loop :=
   mkLoop
-      (loopub l - 1)
-       (loopub_in_range_witness l)
+      (pred (loopub l))
+       (loop_reduce_loopub_witness_in_range l)
        (loopivname l)
        (looparrname l)
        (loopstmt l)
