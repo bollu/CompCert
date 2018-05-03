@@ -814,6 +814,26 @@ Definition loop_bump_loopub (l: loop)
        (schedule_witness).
 
 
+Lemma loop_reduce_loopub_witness_in_range (l: loop):
+  Z.of_nat (loopub l - 1) < Int64.max_unsigned.
+Proof.
+  assert ((Z.of_nat (loopub l))  < Int64.max_unsigned).
+  apply (loopub_in_range_witness l).
+  rewrite Znat.inj_sub_max.
+
+Definition loop_reduce_loopub (l: loop)
+  loop :=
+  mkLoop
+      (loopub l - 1)
+       (loopub_in_range_witness l)
+       (loopivname l)
+       (looparrname l)
+       (loopstmt l)
+       (loopschedule l)
+       (loopscheduleinv l)
+       (loopschedulewitness l).
+
+
 Lemma eval_affineexpr_loop_bump_loopub:
   forall (ge: genv)
     (le: loopenv)
@@ -2820,39 +2840,37 @@ Section LOOPWRITELOCATIONS.
 
 
   Variable ge: genv.
-  Variable  l: loop.
-  Definition affineexprWriteLocation
-             (ae: affineexpr) (viv: vindvar) : val :=
+  Definition affineexprValue
+             (l: loop)
+             (ae: affineexpr)
+             (viv: vindvar) : val :=
     (Genv.symbol_address ge
                          (looparrname l)
                          (nat_to_ptrofs (loopschedule l viv))).
     
-             
-    
 
-  Definition StmtWriteLocation (s: stmt) (viv: vindvar) : val :=
+  Definition StmtWriteLocation
+             (l: loop)
+             (s: stmt)
+             (viv: vindvar) : val :=
     match s with
-      Sstore ae _ => affineexprWriteLocation ae viv
+      Sstore ae _ => affineexprValue l ae viv
     end.
         
-      
-    
 
 (* locations that are written to by a loop *)
-  Program Fixpoint LoopWriteLocations_rec (viv: vindvar) (count: nat) {struct count} : list val :=
-    match count with
+  Program Fixpoint LoopWriteLocations_rec (l: loop) {struct l} : list val :=
+    match (loopub l) with
     | O => List.nil
     | S count' =>
-      if (loopub l <=? viv)%nat
-      then List.nil
-      else List.cons
-             (StmtWriteLocation (loopstmt l) viv)
-             (LoopWriteLocations_rec (viv + 1)%nat count')
+      List.cons
+             (StmtWriteLocation (loopstmt l) count')
+             (LoopWriteLocations_rec' (loop_))
     end.
 
                                                                   
 Definition LoopWriteLocations : list val :=
-  LoopWriteLocations_rec 0%nat (loopub l).
+  LoopWriteLocations_rec (loopub l).
 
 
 
@@ -2862,17 +2880,32 @@ End LOOPWRITELOCATIONS.
 really care about is the *existence* of such a list, which can
 obviously be constructed in this case *)
 Section LOOPWRITELOCATIONSLEMMAS.
-  Variable ge: genv.
-  Variable l: loop.
-  Variable s: stmt.
-  Variable b: block.
-  Variable ofs: ptrofs.
-  
 
   Lemma loop_write_locations_complete_1:
+    forall (l: loop)
+      (ge: genv)
+      (s: stmt)
+      (b: block)
+      (ofs: ptrofs),
     List.In (Vptr b ofs) (LoopWriteLocations ge l) ->
     stmt_writes_ix_in_loop  ge l s (Vptr b ofs).
   Proof.
+    intros l.
+    remember (loopub l) as lub.
+    generalize dependent l.
+    
+    induction lub;
+      intros until ofs;
+      intros LOOPWRITELOCATIONS.
+
+    
+    -  unfold LoopWriteLocations in LOOPWRITELOCATIONS.
+       unfold LoopWriteLocations_rec in LOOPWRITELOCATIONS.
+       rewrite <- Heqlub in LOOPWRITELOCATIONS.
+       inversion LOOPWRITELOCATIONS.
+
+
+    simpl in LOOPWRITELOCATIONS.
   Abort.
 
 
@@ -3038,52 +3071,8 @@ Theorem memory_matches_in_loop_reversal_if_ix_injective:
     exec_looprev (viv le) ge le m lrev mrev lerev ->
     mid = mrev.
 Proof.
-  intros until s.
-  intros sinj.
-  intros until leid.
-  intros L EXECL.
-  remember (viv le) as VIVLE.
-  
-  induction EXECL; intros until lerev;
-    intros VIV_LEREV_LE_EQ;
-    intros LEREV EXECLREV.
-
-  - induction EXECLREV; subst; simpl in *; auto; try omega.
-
-   - inversion EXECLREV;
-      subst; simpl in *; auto; try omega.
-    
-    rename m' into mid'.
-  rename m'0 into mrev'.
-  rename le'' into leid'.
-  rename le''0 into lerev'.
-
-  rename mrev into mrevfinal.
-  rename m'' into midfinal.
-
-
-  rename H1 into EXECSTMT_MID.
-  rename EXECL into EXECLLOOP_MID.
-
-  rename H5 into EXECSTMT_MREV.
-  rename EXECLREV into EXECLOOPREV_MREV.
-
-  assert (leid' = lerev') as LE_LOOP_EQ.
-  destruct leid'. destruct lerev'.
-  simpl in VIV_LEREV_LE_EQ.
-  cut (viv1 = viv0).
-  intros VIVEQ.
-  rewrite VIVEQ.
-  auto.
-  omega.
-  subst.
-
-  assert (mid' = mrev') as MLOOPEQ.
-  eapply IHEXECL; auto.
-  subst.
-
-  
-Qed.
+Abort.
+ 
 
 
 
