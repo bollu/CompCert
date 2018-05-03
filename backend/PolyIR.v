@@ -460,7 +460,7 @@ Definition loop_id_schedule (loopub: upperbound)
          (id_vindvar_self_inverse loopub).
 
 
-Definition n_minus_x (n x: nat) := (n - x - 1)%nat.
+Definition n_minus_x (n x: nat) := (n - (x + 1))%nat.
 
 Lemma n_minus_x_self_inverse: forall n,
     inverseTillUb n (n_minus_x n) (n_minus_x n).
@@ -3018,6 +3018,81 @@ Section LOOPWRITELOCATIONSTRANSPORT.
     List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
     List.In (Vptr b ofs) (LoopWriteLocations ge lrev).
   Proof.
+    split.
+    - intros IN_WRITELOC_ID.
+      unfold LoopWriteLocations in *.
+      rewrite List.in_map_iff in IN_WRITELOC_ID.
+      destruct IN_WRITELOC_ID as [writeviv [WRITEVAL WRITEVIV_WITNESS]].
+
+      assert (0 <= writeviv < loopub lid)%nat as WRITEVIV_INRANGE.
+      rewrite List.in_seq in WRITEVIV_WITNESS.
+      omega.
+
+      assert (0 <= (loopub lid) - (writeviv + 1) < loopub lid)%nat.
+      omega.
+
+      rewrite List.in_map_iff.
+      unfold getStmtWriteLocation in *.
+      simpl in *.
+      induction s.
+
+
+      +  exists (loopub lid - (writeviv + 1))%nat.
+         unfold eval_expr_fn in *.
+         simpl in *.
+         unfold id in *.
+         unfold n_minus_x.
+
+         
+         assert (lub - ((lub - (writeviv + 1)) + 1) = writeviv)%nat as
+             REV_IX_EQ_ORIG_IX.
+         omega.
+         rewrite REV_IX_EQ_ORIG_IX.
+         split; auto.
+         
+         apply List.in_seq.
+         omega.
+    - (* backward *)
+      intros IN_WRITELOC_REV.
+      unfold LoopWriteLocations in *.
+
+      rewrite List.in_map_iff in IN_WRITELOC_REV.
+      destruct IN_WRITELOC_REV as [writeviv [WRITEVAL WRITEVIV_WITNESS]].
+      
+      simpl in *.
+      
+      assert (0 <= writeviv < lub)%nat as WRITEVIV_INRANGE.
+      rewrite List.in_seq in WRITEVIV_WITNESS.
+      omega.
+
+      assert (0 <= lub - (writeviv + 1) < lub)%nat.
+      omega.
+
+      
+      rewrite List.in_map_iff.
+      unfold getStmtWriteLocation in *.
+      simpl in *.
+      induction s.
+      exists (lub - (writeviv + 1))%nat.
+      unfold eval_expr_fn in *.
+      simpl in *.
+      unfold n_minus_x in *.
+      unfold id.
+
+      split.
+      induction a; auto.
+
+      
+      apply List.in_seq.
+      omega.
+  Qed.
+      
+
+      
+      
+
+
+         
   Admitted.
 
   
