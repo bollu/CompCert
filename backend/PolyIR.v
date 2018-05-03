@@ -2854,7 +2854,7 @@ Section LOOPWRITELOCATIONS.
   Qed.
     
 
-  Definition StmtWriteLocation
+  Definition getStmtWriteLocation
              (l: loop)
              (s: stmt)
              (viv: vindvar) : val :=
@@ -2862,30 +2862,28 @@ Section LOOPWRITELOCATIONS.
       Sstore ae _ => eval_expr_fn l ae viv
     end.
 
-  Lemma StmtWriteLocation_implies_stmt_writes_ix_in_loop:
+  Lemma getStmtWriteLocation_implies_stmt_writes_ix_in_loop:
     forall (l: loop)
       (s: stmt)
       (viv: vindvar)
-      (b: block)
-      (i: ptrofs),
+      (v: val),
       (0 <= viv < loopub l)%nat ->
-      StmtWriteLocation l s viv = Vptr b i ->
-      stmt_writes_ix_in_loop ge l s (Vptr b i).
+      getStmtWriteLocation l s viv = v ->
+      stmt_writes_ix_in_loop ge l s v.
   Proof.
-    intros until i.
+    intros until v.
     intros VIV_INRANGE.
-    intros WRITE.
-    unfold stmt_writes_ix_in_loop.
-    unfold StmtWriteLocation in WRITE.
-    unfold affineexpr_takes_value_in_loop.
-    induction s.
-    - exists viv0.
-      split.
-      assumption.
-      unfold eval_expr_fn in WRITE.
-      
-    
-      
+    - intros WRITE.
+      unfold stmt_writes_ix_in_loop.
+      unfold getStmtWriteLocation in WRITE.
+      unfold affineexpr_takes_value_in_loop.
+      induction s.
+      + exists viv0.
+        split.
+        assumption.
+        apply eval_expr_fn_eval_affineexpr_equiv.
+        assumption.
+  Qed.
 
 
 (* locations that are written to by a loop *)
@@ -2894,7 +2892,7 @@ Section LOOPWRITELOCATIONS.
     | O => List.nil
     | S count' =>
       List.cons
-             (StmtWriteLocation l (loopstmt l) count')
+             (getStmtWriteLocation l (loopstmt l) count')
              (LoopWriteLocations_rec l count')
     end.
 
@@ -2917,12 +2915,14 @@ Section LOOPWRITELOCATIONSLEMMAS.
       (ge: genv)
       (b: block)
       (ofs: ptrofs),
+      (0 <= n <= loopub l)%nat ->
     List.In (Vptr b ofs) (LoopWriteLocations_rec ge l n) ->
     stmt_writes_ix_in_loop  ge l (loopstmt l) (Vptr b ofs).
   Proof.
     intros n.
     induction n;
       intros until ofs;
+      intros N_INRANGE;
       intros IN_LOOPWRITELOCS.
 
     - unfold LoopWriteLocations_rec in IN_LOOPWRITELOCS.
@@ -2931,10 +2931,14 @@ Section LOOPWRITELOCATIONSLEMMAS.
       apply List.in_inv in IN_LOOPWRITELOCS.
       destruct IN_LOOPWRITELOCS as [in_head | in_tail].
       + unfold stmt_writes_ix_in_loop.
+        eapply getStmtWriteLocation_implies_stmt_writes_ix_in_loop with
+            (viv := n).
+        omega.
+        eassumption.
       + apply IHn.
+        omega.
         exact in_tail.
-    
-  Admitted.
+  Qed.
 
 
   Lemma loop_write_locations_complete_2:
@@ -2955,7 +2959,7 @@ End LOOPWRITELOCATIONSLEMMAS.
 
 
 Hint Opaque LoopWriteLocations.
-Hint Opaque StmtWriteLocation.
+Hint Opaque getStmtWriteLocation.
 
 (* Theorem about transporting LoopWriteLocations between a loop
 and its reverse *)
