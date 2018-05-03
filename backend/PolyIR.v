@@ -2887,15 +2887,10 @@ Section LOOPWRITELOCATIONS.
 
 
 (* locations that are written to by a loop *)
-  Program Fixpoint LoopWriteLocations_rec (l: loop) (n: nat) {struct n} : list val :=
-    match n with
-    | O => List.nil
-    | S count' =>
-      List.cons
-             (getStmtWriteLocation l (loopstmt l) count')
-             (LoopWriteLocations_rec l count')
-    end.
-
+  Definition LoopWriteLocations_rec
+          (l: loop)
+          (n: nat) : list val :=
+    map (getStmtWriteLocation l (loopstmt l)) (List.seq 0 n).
                                                                   
 Definition LoopWriteLocations (l: loop) : list val :=
   LoopWriteLocations_rec l (loopub l).
@@ -2919,37 +2914,78 @@ Section LOOPWRITELOCATIONSLEMMAS.
     List.In (Vptr b ofs) (LoopWriteLocations_rec ge l n) ->
     stmt_writes_ix_in_loop  ge l (loopstmt l) (Vptr b ofs).
   Proof.
-    intros n.
-    induction n;
+    intros n;
       intros until ofs;
       intros N_INRANGE;
       intros IN_LOOPWRITELOCS.
 
+    unfold stmt_writes_ix_in_loop.
+    remember (loopstmt l) as ls.
+    induction ls.
     - unfold LoopWriteLocations_rec in IN_LOOPWRITELOCS.
-      inversion IN_LOOPWRITELOCS.
-    - unfold LoopWriteLocations_rec in IN_LOOPWRITELOCS.
-      apply List.in_inv in IN_LOOPWRITELOCS.
-      destruct IN_LOOPWRITELOCS as [in_head | in_tail].
-      + unfold stmt_writes_ix_in_loop.
-        eapply getStmtWriteLocation_implies_stmt_writes_ix_in_loop with
-            (viv := n).
-        omega.
-        eassumption.
-      + apply IHn.
-        omega.
-        exact in_tail.
+      apply in_map_iff in IN_LOOPWRITELOCS.
+      destruct IN_LOOPWRITELOCS as [INDEX [GETSTMTWRITE INDEX_WITNESS]].
+
+      unfold getStmtWriteLocation in GETSTMTWRITE.
+      rewrite <- Heqls in *.
+
+      unfold affineexpr_takes_value_in_loop.
+      exists INDEX.
+      split.
+      + rewrite in_seq in INDEX_WITNESS.
+      omega.
+      + rewrite <- eval_expr_fn_eval_affineexpr_equiv.
+      assumption.
   Qed.
 
 
   Lemma loop_write_locations_complete_2:
     forall (l: loop)
       (ge: genv)
-      (s: stmt)
       (b: block)
       (ofs: ptrofs),
-    ~ List.In (Vptr b ofs) (LoopWriteLocations ge l) ->
-    stmt_does_not_write_to_ix_in_loop ge l s (Vptr b ofs).
+    ~ List.In (Vptr b ofs) (LoopWriteLocations_rec ge l (loopub l)) ->
+    stmt_does_not_write_to_ix_in_loop ge l (loopstmt l) (Vptr b ofs).
   Proof.
+    intros until ofs.
+    intros NOT_IN_LIST.
+
+
+    unfold stmt_does_not_write_to_ix_in_loop.
+    unfold affineexpr_does_not_take_value_in_loop.
+
+    remember (loopstmt l) as ls.
+
+    induction ls.
+    - intros until v.
+      intros H.
+      destruct H as [VIV_INRANGE EVAL_AT_A].
+
+      assert ({v = Vptr b ofs} + {v <> Vptr b ofs}) as VAL_CASES.
+      apply Val.eq.
+
+      destruct VAL_CASES as [VAL_EQ_PTR | VAL_NEQ_PTR].
+      + subst.
+
+
+        (* since we have an affine expre that writes at vivval <= loopub and
+        produces a Vptr, this index should be in LoopWriteLocations *)
+
+        remember (LoopWriteLocations_rec ge l (loopub l)) as LOOPWRITELOCS.
+        assert (List.nth_error  LOOPWRITELOCS vivval = Some (Vptr b ofs)).
+
+          unfold LoopWriteLocations_rec.
+          simpl.
+
+       assert (stmt_writes_ix_in_loop  ge l (loopstmt l) (Vptr b ofs)).
+        unfold stmt_writes_ix_in_loop.
+        rewrite <- Heqls.
+        unfold affineexpr_takes_value_in_loop.
+        exists vivval.
+        split; assumption.
+        
+      + auto.
+      
   Admitted.
 
 
