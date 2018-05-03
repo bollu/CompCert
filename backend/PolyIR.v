@@ -2826,7 +2826,7 @@ Section LOOPWRITELOCATIONS.
 
 
   Variable ge: genv.
-  Definition affineexprValue
+  Definition eval_expr_fn
              (l: loop)
              (ae: affineexpr)
              (viv: vindvar) : val :=
@@ -2839,14 +2839,14 @@ Section LOOPWRITELOCATIONS.
                                              ofs) 
     end.
 
-  Lemma affineexprValue_eval_affineexpr_equiv:
+  Lemma eval_expr_fn_eval_affineexpr_equiv:
     forall (l: loop) (ae: affineexpr) (le: loopenv) (v: val),
-      affineexprValue l ae (viv le) =  v <-> eval_affineexpr ge le l ae v.
+      eval_expr_fn l ae (viv le) =  v <-> eval_affineexpr ge le l ae v.
   Proof.
     intros until v.
     split.
     -  intros AEVALUE.
-       unfold affineexprValue in AEVALUE.
+       unfold eval_expr_fn in AEVALUE.
        rewrite <- AEVALUE.
        induction ae; constructor.
     - intros EVALAE.
@@ -2859,7 +2859,7 @@ Section LOOPWRITELOCATIONS.
              (s: stmt)
              (viv: vindvar) : val :=
     match s with
-      Sstore ae _ => affineexprValue l ae viv
+      Sstore ae _ => eval_expr_fn l ae viv
     end.
 
   Lemma StmtWriteLocation_implies_stmt_writes_ix_in_loop:
@@ -2882,7 +2882,7 @@ Section LOOPWRITELOCATIONS.
     - exists viv0.
       split.
       assumption.
-      unfold affineexprValue in WRITE.
+      unfold eval_expr_fn in WRITE.
       
     
       
