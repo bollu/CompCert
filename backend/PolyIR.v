@@ -3088,13 +3088,6 @@ Section LOOPWRITELOCATIONSTRANSPORT.
   Qed.
       
 
-      
-      
-
-
-         
-  Admitted.
-
   
   Lemma loop_write_locations_transportable_2:
     ~ List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
@@ -3147,7 +3140,63 @@ Section LOOPWRITELOCATIONSMEMORY.
     ~ List.In (Vptr b ofsp) (LoopWriteLocations ge l) ->
     ((Mem.mem_contents m) # b) # ofs = ((Mem.mem_contents m') # b) # ofs.
   Proof.
-  Abort.
+    intros LOOPEXEC.
+    intros NOT_IN_WRITES.
+    unfold loopexec in LOOPEXEC.
+    induction LOOPEXEC.
+    - reflexivity.
+    - assert (((Mem.mem_contents m') # b) # ofs =
+              ((Mem.mem_contents m'') # b) # ofs)  as UNTOUCHED_TILL_LAST.
+      apply IHLOOPEXEC; assumption.
+
+      assert ((Mem.mem_contents m) # b # ofs= (Mem.mem_contents m') # b # ofs)
+        as UNTOUCHED_BEGIN.
+      rename H2 into EXECS.
+      assert (stmt_does_not_write_to_ix_in_loop ge l (loopstmt l) (Vptr b ofsp))
+        as STMT_NO_WRITE_TO_IX.
+      apply  loop_write_locations_complete_2; eassumption.
+      
+      inversion EXECS. subst.
+      rename H4 into EVAL_VADDR.
+      rename H9 into M'_AS_STORE_M.
+      unfold Mem.storev in M'_AS_STORE_M.
+      induction vaddr; try inversion M'_AS_STORE_M.
+
+      (* Use the fact that we have stmt_does_not_write_ix_in_loop to
+      make sure that the pointer does not alias the current piece of
+      memory *)
+      assert ({Vptr b0 i0 = Vptr b ofsp} + {Vptr b0 i0 <> Vptr b ofsp}) as
+          VPTR_CASES.
+      apply Val.eq.
+      destruct VPTR_CASES as [VPTR_ALIAS | VPTR_NOALIAS].
+      + (* alias, need to create contradiction *)
+        admit.
+      + (* noalias, use this *)
+        apply vptr_neq_implications in VPTR_NOALIAS.
+
+        assert ((Mem.mem_contents m') =
+                PMap.set b0
+                (Mem.setN (encode_val STORE_CHUNK_SIZE (Vint i))
+                          (Ptrofs.unsigned i0)
+                          m.(Mem.mem_contents)#b0) m.(Mem.mem_contents)) as
+            MEM_CONTENTS_M'.
+        apply Mem.store_mem_contents. assumption.
+        rewrite MEM_CONTENTS_M'.
+        destruct VPTR_NOALIAS.
+        * rewrite PMap.gso; auto.
+        * assert ({b = b0} + {b <> b0}) as B_CASES.
+          apply Pos.eq_dec.
+          destruct B_CASES as [BEQ | BNEQ].
+          **  subst. rewrite PMap.gss.
+              admit.
+          ** rewrite PMap.gso; auto.
+        
+       
+      
+      rewrite UNTOUCHED_BEGIN.
+      rewrite UNTOUCHED_TILL_LAST.
+      reflexivity.
+  Admitted.
 
   
   (* Note that this is wrong. This should actually talk about what
