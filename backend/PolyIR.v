@@ -3028,13 +3028,12 @@ Theorem memory_matches_in_loop_reversal_if_ix_injective:
     forall (l: loop)
       (mid: mem)
       (leid: loopenv),
-      viv leid = lub ->
       l = (loop_id_schedule lub lub_in_range ivname arrname s) ->
       exec_looprev (viv le) ge le m l mid leid ->
       forall (lrev: loop)
         (mrev: mem)
         (lerev: loopenv),
-        viv lerev = lub ->
+        viv lerev = viv leid ->
     lrev =  (loop_reversed_schedule lub lub_in_range ivname arrname s) ->
     exec_looprev (viv le) ge le m lrev mrev lerev ->
     mid = mrev.
@@ -3042,33 +3041,36 @@ Proof.
   intros until s.
   intros sinj.
   intros until leid.
-  intros VIV_LEID L EXECL.
-  intros until lerev.
-  intros VIV_LEREV LREV EXECLREV.
-
+  intros L EXECL.
   remember (viv le) as VIVLE.
+  
+  induction EXECL; intros until lerev;
+    intros VIV_LEREV_LE_EQ;
+    intros LEREV EXECLREV.
 
-  inversion EXECL; inversion EXECLREV;
-    subst; simpl in *; auto; try omega.
+  - induction EXECLREV; subst; simpl in *; auto; try omega.
 
-  rename m' into mid'.
+   - inversion EXECLREV;
+      subst; simpl in *; auto; try omega.
+    
+    rename m' into mid'.
   rename m'0 into mrev'.
   rename le'' into leid'.
   rename le''0 into lerev'.
 
   rename mrev into mrevfinal.
-  rename mid into midfinal.
+  rename m'' into midfinal.
 
 
-  rename H1 into EXECLOOPREV_MID.
-  rename H2 into EXECSTMT_MID.
+  rename H1 into EXECSTMT_MID.
+  rename EXECL into EXECLLOOP_MID.
 
-  rename H13 into EXECSTMT_MREV.
-  rename H12 into EXECLOOPREV_MREV.
+  rename H5 into EXECSTMT_MREV.
+  rename EXECLREV into EXECLOOPREV_MREV.
 
   assert (leid' = lerev') as LE_LOOP_EQ.
   destruct leid'. destruct lerev'.
-  simpl in VIV_LEREV.
+  simpl in VIV_LEREV_LE_EQ.
   cut (viv1 = viv0).
   intros VIVEQ.
   rewrite VIVEQ.
@@ -3076,11 +3078,11 @@ Proof.
   omega.
   subst.
 
-  assert (mrev' = mid') as MLOOPEQ.
-  eapply exec_looprev_is_function; try eassumption; try auto.
+  assert (mid' = mrev') as MLOOPEQ.
+  eapply IHEXECL; auto.
   subst.
 
-  eapply exec_stmt_is_function; eassumption.
+  
 Qed.
 
 
