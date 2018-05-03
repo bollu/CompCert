@@ -2830,9 +2830,28 @@ Section LOOPWRITELOCATIONS.
              (l: loop)
              (ae: affineexpr)
              (viv: vindvar) : val :=
-    (Genv.symbol_address ge
-                         (looparrname l)
-                         (nat_to_ptrofs (loopschedule l viv))).
+    match ae with
+    | Eindvar => (Genv.symbol_address ge
+                                     (looparrname l)
+                                     (nat_to_ptrofs (loopschedule l viv)))
+    | Econstoffset ofs =>(Genv.symbol_address ge
+                                             (looparrname l)
+                                             ofs) 
+    end.
+
+  Lemma affineexprValue_eval_affineexpr_equiv:
+    forall (l: loop) (ae: affineexpr) (le: loopenv) (v: val),
+      affineexprValue l ae (viv le) =  v <-> eval_affineexpr ge le l ae v.
+  Proof.
+    intros until v.
+    split.
+    -  intros AEVALUE.
+       unfold affineexprValue in AEVALUE.
+       rewrite <- AEVALUE.
+       induction ae; constructor.
+    - intros EVALAE.
+      induction ae; inversion EVALAE; auto.
+  Qed.
     
 
   Definition StmtWriteLocation
@@ -2842,7 +2861,32 @@ Section LOOPWRITELOCATIONS.
     match s with
       Sstore ae _ => affineexprValue l ae viv
     end.
-        
+
+  Lemma StmtWriteLocation_implies_stmt_writes_ix_in_loop:
+    forall (l: loop)
+      (s: stmt)
+      (viv: vindvar)
+      (b: block)
+      (i: ptrofs),
+      (0 <= viv < loopub l)%nat ->
+      StmtWriteLocation l s viv = Vptr b i ->
+      stmt_writes_ix_in_loop ge l s (Vptr b i).
+  Proof.
+    intros until i.
+    intros VIV_INRANGE.
+    intros WRITE.
+    unfold stmt_writes_ix_in_loop.
+    unfold StmtWriteLocation in WRITE.
+    unfold affineexpr_takes_value_in_loop.
+    induction s.
+    - exists viv0.
+      split.
+      assumption.
+      unfold affineexprValue in WRITE.
+      
+    
+      
+
 
 (* locations that are written to by a loop *)
   Program Fixpoint LoopWriteLocations_rec (l: loop) (n: nat) {struct n} : list val :=
@@ -2871,11 +2915,10 @@ Section LOOPWRITELOCATIONSLEMMAS.
     forall (n: nat)
       (l: loop)
       (ge: genv)
-      (s: stmt)
       (b: block)
       (ofs: ptrofs),
     List.In (Vptr b ofs) (LoopWriteLocations_rec ge l n) ->
-    stmt_writes_ix_in_loop  ge l s (Vptr b ofs).
+    stmt_writes_ix_in_loop  ge l (loopstmt l) (Vptr b ofs).
   Proof.
     intros n.
     induction n;
@@ -2887,7 +2930,7 @@ Section LOOPWRITELOCATIONSLEMMAS.
     - unfold LoopWriteLocations_rec in IN_LOOPWRITELOCS.
       apply List.in_inv in IN_LOOPWRITELOCS.
       destruct IN_LOOPWRITELOCS as [in_head | in_tail].
-      + admit.
+      + unfold stmt_writes_ix_in_loop.
       + apply IHn.
         exact in_tail.
     
