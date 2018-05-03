@@ -3188,12 +3188,13 @@ Section LOOPWRITELOCATIONSMEMORY.
           apply Pos.eq_dec.
           destruct B_CASES as [BEQ | BNEQ].
           **  subst. rewrite PMap.gss.
+              symmetry.
+              
               admit.
           ** rewrite PMap.gso; auto.
-        
-       
-      
-      rewrite UNTOUCHED_BEGIN.
+
+
+      + rewrite UNTOUCHED_BEGIN.
       rewrite UNTOUCHED_TILL_LAST.
       reflexivity.
   Admitted.
