@@ -3025,7 +3025,27 @@ Section LOOPWRITELOCATIONSTRANSPORT.
     ~ List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
     ~ List.In (Vptr b ofs) (LoopWriteLocations ge lrev).
   Proof.
-  Admitted.
+    split.
+    - intros NOT_IN_ID.
+
+      assert ({In (Vptr b ofs) (LoopWriteLocations ge lrev)} + 
+              {~In (Vptr b ofs) (LoopWriteLocations ge lrev)}) as V_CASES.
+      apply List.in_dec. apply Val.eq.
+      destruct V_CASES as [V_IN_WRITELOC_REV | V_NOT_IN_WRITELOC_REV];
+        try assumption.
+      rewrite <- loop_write_locations_transportable_1 in V_IN_WRITELOC_REV.
+      contradiction.
+
+    - intros NOT_IN_REV.
+      assert ({In (Vptr b ofs) (LoopWriteLocations ge lid)} + 
+              {~In (Vptr b ofs) (LoopWriteLocations ge lid)}) as V_CASES.
+      apply List.in_dec. apply Val.eq.
+      destruct V_CASES as [V_IN_WRITELOC_ID | V_NOT_IN_WRITELOC_ID];
+        try assumption.
+
+      rewrite loop_write_locations_transportable_1.
+      assumption.
+  Qed.
   
 End LOOPWRITELOCATIONSTRANSPORT.
 
