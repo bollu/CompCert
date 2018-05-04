@@ -3168,10 +3168,11 @@ Section LOOPWRITELOCATIONSMEMORY.
   
   
   Variable b: block.
-  Variable ofs: positive.
+  Variable ofs: nat.
   (* p for pointer. I admit, this is confusing, because p for positive
   also works *)
-  Definition ofsp : ptrofs := Ptrofs.repr (Z.pos ofs).
+  Definition ofsp : ptrofs := Ptrofs.repr (Z.of_nat ofs).
+  Definition ofs_in_range: Prop := (Z.of_nat ofs <= Ptrofs.max_unsigned)%Z.
 
   Variable m m': mem.
   Variable le le': loopenv.
@@ -3220,8 +3221,7 @@ Section LOOPWRITELOCATIONSMEMORY.
       + (* alias, need to create contradiction *)
         admit.
       + (* noalias, use this *)
-        apply vptr_neq_implications in VPTR_NOALIAS.
-
+        
         assert ((Mem.mem_contents m') =
                 PMap.set b0
                 (Mem.setN (encode_val STORE_CHUNK_SIZE (Vint i))
@@ -3230,26 +3230,53 @@ Section LOOPWRITELOCATIONSMEMORY.
             MEM_CONTENTS_M'.
         apply Mem.store_mem_contents. assumption.
         rewrite MEM_CONTENTS_M'.
-        destruct VPTR_NOALIAS.
-        * rewrite PMap.gso; auto.
-        * assert ({b = b0} + {b <> b0}) as B_CASES.
-          apply Pos.eq_dec.
-          destruct B_CASES as [BEQ | BNEQ].
-          **  subst. rewrite PMap.gss.
-              symmetry.
-              rewrite Mem.setN_other.
-              reflexivity.
+
+        assert ({b0 = b} + {b0 <> b}) as B_CASES.
+        apply Pos.eq_dec.
+
+        destruct B_CASES as [BEQ | BNEQ].
+        * apply vptr_neq_implications in VPTR_NOALIAS.
+          assert (i0 <> ofsp) as OFS_NEQ.
+          destruct VPTR_NOALIAS; try contradiction; try auto.
+          
+          subst.
+          rewrite PMap.gss.
+          
+          rewrite Mem.setN_other.
+          reflexivity.
+
+          rewrite Memdata.encode_val_length.
+          simpl.
+          intros r R_LIMITS.
+
+          assert (r = Ptrofs.unsigned i0).
+          omega.
+          subst.
+          (* I need a new theorem, saying:
+          int x <> int y => unsinged x <> unsigned y *)
+          assert ({Ptrofs.unsigned i0 = Ptrofs.unsigned ofsp} +
+                  {Ptrofs.unsigned i0 <> Ptrofs.unsigned ofsp})
+                 as  PTROFS_UNSIGNED_EQ_CASES.
+          apply Z.eq_dec.
+
+          destruct PTROFS_UNSIGNED_EQ_CASES as [UNSIGNED_EQ | UNSIGNED_NEQ];
+            try auto.
+          eapply (f_equal Ptrofs.repr) in UNSIGNED_EQ .
+          rewrite Ptrofs.repr_unsigned in UNSIGNED_EQ.
+          rewrite Ptrofs.repr_unsigned in UNSIGNED_EQ.
+        (* contradiction *)
+          contradiction.
+          
               
-              intros r R_CONSTRAINTS.
-              simpl in *.
               
               
-          ** rewrite PMap.gso; auto.
+          * rewrite PMap.gso; auto.
 
 
       + rewrite UNTOUCHED_BEGIN.
       rewrite UNTOUCHED_TILL_LAST.
       reflexivity.
+      
   Admitted.
 
   
