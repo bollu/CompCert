@@ -3365,12 +3365,6 @@ Section LOOPWRITELOCATIONSMEMORY.
         (* we have now forced the aliasing. We can now inspect m'' and
          infer that which we want *)
 
-        Check (Mem.mem_contents m'').
-        Check ((Mem.mem_contents m'') # b).
-        Check (ZMap.get (Z.of_nat (Pos.to_nat ofs)) ((Mem.mem_contents m'') # b)).
-        Check (((((Mem.mem_contents m'') # b) # ofs))).
-        Check (ofs).
-
         assert (Mem.mem_contents m'' =
                 PMap.set b
                          (Mem.setN
@@ -3383,14 +3377,49 @@ Section LOOPWRITELOCATIONSMEMORY.
 
         rewrite M''_CONTENTS.
         rewrite PMap.gss.
-        simpl.
-        rewrite Mem.setN_other.
-
 
         
-               
-      
-  Abort.
+        assert (ENCODEV: Some (ZMap.get
+                                 (Ptrofs.unsigned ofsp)
+                                 (Mem.setN
+                                    (encode_val
+                                       STORE_CHUNK_SIZE
+                                       (Vint i)) 
+                                    (Ptrofs.unsigned ofsp)
+                                    (Mem.mem_contents m') # b)) =
+                         List.hd_error (encode_val STORE_CHUNK_SIZE (Vint i))).
+   erewrite Mem.get_setN_at_base_chunk_Mint8unsigned;
+     try eauto;
+     try eassumption.
+
+   assert (hd_error (encode_val STORE_CHUNK_SIZE (Vint i)) =
+           Some ((Byte (Byte.repr (Int.unsigned i))))) as
+       HD_ERROR_VAL.
+  simpl.
+  unfold encode_int.
+  unfold inj_bytes.
+  unfold bytes_of_int.
+  simpl.
+  unfold hd_error.
+  unfold rev_if_be.
+  assert (Archi.big_endian = false) as ENDIAN.
+  auto.
+  rewrite ENDIAN.
+  simpl.
+  auto.
+
+  rewrite HD_ERROR_VAL in ENCODEV.
+  inversion ENCODEV as [ENCODED_VAL].
+  simpl.
+  rewrite ENCODED_VAL.
+  auto.
+
+  + (* by the induction hypothesis, we know that m' will contain memory that
+    has the value we want. We nee to use the injective_stmt to make
+    sure that we do not alias with that, so that we can punch through
+    to m', and let the induction take care of the rest *)
+    admit.
+Admitted.
     
 End LOOPWRITELOCATIONSMEMORY.
 
