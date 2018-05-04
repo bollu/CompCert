@@ -15,6 +15,8 @@ Require Import Coqlib.
 
 
 
+Definition int_to_int32 (z: Z): int := (Int.repr z).
+Definition nat_to_int32 (n: nat): int := (Int.repr (Z.of_nat n)).
 
 (* Useful facts about functions that are inverses *)
 Theorem is_inverse_injective: forall (A B:Set) (f: A -> B) (g: B -> A) (a b: A), is_inverse f g -> f a = f b -> a = b.
@@ -78,6 +80,14 @@ Inductive affineexpr: Type :=
 Definition STORE_CHUNK_SIZE: memory_chunk := Mint8unsigned.
 Inductive stmt: Type :=
 | Sstore:  affineexpr -> int -> stmt.
+
+Definition getStoreStmtValue (s: stmt): int :=
+  match s with
+  | Sstore ae x => x
+  end.
+
+Hint Transparent getStoreStmtValue.
+                    
 
 
 Notation vindvar := nat.
@@ -2435,6 +2445,29 @@ Proof.
 Qed.
 
 Section MEMORYINLOOP.
+
+  Lemma encode_int32_hd_error:
+    forall n,
+      hd_error
+        (encode_val STORE_CHUNK_SIZE (Vint (nat_to_int32 n))) = 
+      Some ((Byte (Byte.repr (Int.unsigned (nat_to_int32 n))))).
+  Proof.
+    intros.
+    simpl.
+    unfold encode_int.
+    unfold inj_bytes.
+    unfold bytes_of_int.
+    simpl.
+    unfold hd_error.
+    unfold rev_if_be.
+    assert (Archi.big_endian = false).
+    auto.
+    rewrite H.
+    simpl.
+    auto.
+  Qed.
+
+  
   Definition memStructureEq (m m': mem) : Prop :=
     Mem.mem_access m = Mem.mem_access m' /\
     Mem.nextblock m = Mem.nextblock m'.
@@ -2826,7 +2859,7 @@ Section LOOPWRITELOCATIONS.
 
 
   Variable ge: genv.
-  Definition eval_expr_fn
+  Definition eval_affineexpr_fn
              (l: loop)
              (ae: affineexpr)
              (viv: vindvar) : val :=
@@ -2839,14 +2872,14 @@ Section LOOPWRITELOCATIONS.
                                              ofs) 
     end.
 
-  Lemma eval_expr_fn_eval_affineexpr_equiv:
+  Lemma eval_affineexpr_fn_eval_affineexpr_equiv:
     forall (l: loop) (ae: affineexpr) (le: loopenv) (v: val),
-      eval_expr_fn l ae (viv le) =  v <-> eval_affineexpr ge le l ae v.
+      eval_affineexpr_fn l ae (viv le) =  v <-> eval_affineexpr ge le l ae v.
   Proof.
     intros until v.
     split.
     -  intros AEVALUE.
-       unfold eval_expr_fn in AEVALUE.
+       unfold eval_affineexpr_fn in AEVALUE.
        rewrite <- AEVALUE.
        induction ae; constructor.
     - intros EVALAE.
@@ -2859,7 +2892,7 @@ Section LOOPWRITELOCATIONS.
              (s: stmt)
              (viv: vindvar) : val :=
     match s with
-      Sstore ae _ => eval_expr_fn l ae viv
+      Sstore ae _ => eval_affineexpr_fn l ae viv
     end.
 
   Lemma getStmtWriteLocation_implies_stmt_writes_ix_in_loop:
@@ -2881,14 +2914,20 @@ Section LOOPWRITELOCATIONS.
       + exists viv0.
         split.
         assumption.
-        apply eval_expr_fn_eval_affineexpr_equiv.
+        apply eval_affineexpr_fn_eval_affineexpr_equiv.
         assumption.
   Qed.
 
 
 (* locations that are written to by a loop *)
-  Definition LoopWriteLocations (l: loop): list val :=
-    map (getStmtWriteLocation l (loopstmt l)) (List.seq 0 (loopub l)).
+  Definition LoopWriteLocations (l: loop)
+             (begin: nat)
+             (end_excluded: nat): list val :=
+    map (getStmtWriteLocation l (loopstmt l))
+        (List.seq begin (end_excluded - begin)).
+
+  Definition AllLoopWriteLocations (l: loop) : list val :=
+    LoopWriteLocations l 0 (loopub l).
                                                                   
 
 
@@ -2904,7 +2943,7 @@ Section LOOPWRITELOCATIONSLEMMAS.
       (ge: genv)
       (b: block)
       (ofs: ptrofs),
-    List.In (Vptr b ofs) (LoopWriteLocations ge l) ->
+    List.In (Vptr b ofs) (AllLoopWriteLocations ge l) ->
     stmt_writes_ix_in_loop  ge l (loopstmt l) (Vptr b ofs).
   Proof.
     intros until ofs;
@@ -2913,7 +2952,8 @@ Section LOOPWRITELOCATIONSLEMMAS.
     unfold stmt_writes_ix_in_loop.
     remember (loopstmt l) as ls.
     induction ls.
-    - unfold LoopWriteLocations in IN_LOOPWRITELOCS.
+    - unfold AllLoopWriteLocations in IN_LOOPWRITELOCS.
+      unfold LoopWriteLocations in IN_LOOPWRITELOCS.
       apply in_map_iff in IN_LOOPWRITELOCS.
       destruct IN_LOOPWRITELOCS as [INDEX [GETSTMTWRITE INDEX_WITNESS]].
 
@@ -2925,7 +2965,7 @@ Section LOOPWRITELOCATIONSLEMMAS.
       split.
       + rewrite in_seq in INDEX_WITNESS.
         omega.
-      + rewrite <- eval_expr_fn_eval_affineexpr_equiv.
+      + rewrite <- eval_affineexpr_fn_eval_affineexpr_equiv.
         assumption.
   Qed.
 
@@ -2935,7 +2975,7 @@ Section LOOPWRITELOCATIONSLEMMAS.
       (ge: genv)
       (b: block)
       (ofs: ptrofs),
-    ~ List.In (Vptr b ofs) (LoopWriteLocations ge l) ->
+    ~ List.In (Vptr b ofs) (AllLoopWriteLocations ge l) ->
     stmt_does_not_write_to_ix_in_loop ge l (loopstmt l) (Vptr b ofs).
   Proof.
     intros until ofs.
@@ -2960,26 +3000,27 @@ Section LOOPWRITELOCATIONSLEMMAS.
 
 
         (* since we have an affine expre that writes at vivval <= loopub and
-        produces a Vptr, this index should be in LoopWriteLocations *)
+        produces a Vptr, this index should be in AllLoopWriteLocations *)
 
         assert (List.In vivval (seq 0 (loopub l))) as VIVVAL_IN_0_TO_LOOPUB.
         rewrite List.in_seq.
         omega.
 
-        assert (In (Vptr b ofs) (LoopWriteLocations ge l)) as CONTRA.
-        unfold LoopWriteLocations in *.
+        assert (In (Vptr b ofs) (AllLoopWriteLocations ge l)) as CONTRA.
+        unfold AllLoopWriteLocations in *.
         
         assert (Vptr b ofs = getStmtWriteLocation ge l (loopstmt l) vivval) as
             VPTR_IN_TERMS_OF_MAP.
         unfold getStmtWriteLocation.
         rewrite <- Heqls.
-        rewrite <- eval_expr_fn_eval_affineexpr_equiv in EVAL_AT_A.
+        rewrite <- eval_affineexpr_fn_eval_affineexpr_equiv in EVAL_AT_A.
         rewrite <- EVAL_AT_A.
         simpl.
         auto.
 
         rewrite VPTR_IN_TERMS_OF_MAP.
         apply List.in_map.
+        replace ((loopub l) - 0)%nat with (loopub l); try omega.
         assumption.
 
         contradiction.
@@ -2992,10 +3033,10 @@ Section LOOPWRITELOCATIONSLEMMAS.
 End LOOPWRITELOCATIONSLEMMAS.
 
 
-Hint Opaque LoopWriteLocations.
+Hint Opaque AllLoopWriteLocations.
 Hint Opaque getStmtWriteLocation.
 
-(* Theorem about transporting LoopWriteLocations between a loop
+(* Theorem about transporting AllLoopWriteLocations between a loop
 and its reverse *)
 Section LOOPWRITELOCATIONSTRANSPORT.
   Variable ge: genv.
@@ -3015,11 +3056,12 @@ Section LOOPWRITELOCATIONSTRANSPORT.
     (loop_reversed_schedule lub lub_in_range ivname arrname s).
 
   Lemma loop_write_locations_transportable_1:
-    List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
-    List.In (Vptr b ofs) (LoopWriteLocations ge lrev).
+    List.In (Vptr b ofs) (AllLoopWriteLocations ge lid) <->
+    List.In (Vptr b ofs) (AllLoopWriteLocations ge lrev).
   Proof.
     split.
     - intros IN_WRITELOC_ID.
+      unfold AllLoopWriteLocations in *.
       unfold LoopWriteLocations in *.
       rewrite List.in_map_iff in IN_WRITELOC_ID.
       destruct IN_WRITELOC_ID as [writeviv [WRITEVAL WRITEVIV_WITNESS]].
@@ -3038,7 +3080,7 @@ Section LOOPWRITELOCATIONSTRANSPORT.
 
 
       +  exists (loopub lid - (writeviv + 1))%nat.
-         unfold eval_expr_fn in *.
+         unfold eval_affineexpr_fn in *.
          simpl in *.
          unfold id in *.
          unfold n_minus_x.
@@ -3054,6 +3096,7 @@ Section LOOPWRITELOCATIONSTRANSPORT.
          omega.
     - (* backward *)
       intros IN_WRITELOC_REV.
+      unfold AllLoopWriteLocations in *.
       unfold LoopWriteLocations in *.
 
       rewrite List.in_map_iff in IN_WRITELOC_REV.
@@ -3074,7 +3117,7 @@ Section LOOPWRITELOCATIONSTRANSPORT.
       simpl in *.
       induction s.
       exists (lub - (writeviv + 1))%nat.
-      unfold eval_expr_fn in *.
+      unfold eval_affineexpr_fn in *.
       simpl in *.
       unfold n_minus_x in *.
       unfold id.
@@ -3090,14 +3133,14 @@ Section LOOPWRITELOCATIONSTRANSPORT.
 
   
   Lemma loop_write_locations_transportable_2:
-    ~ List.In (Vptr b ofs) (LoopWriteLocations ge lid) <->
-    ~ List.In (Vptr b ofs) (LoopWriteLocations ge lrev).
+    ~ List.In (Vptr b ofs) (AllLoopWriteLocations ge lid) <->
+    ~ List.In (Vptr b ofs) (AllLoopWriteLocations ge lrev).
   Proof.
     split.
     - intros NOT_IN_ID.
 
-      assert ({In (Vptr b ofs) (LoopWriteLocations ge lrev)} + 
-              {~In (Vptr b ofs) (LoopWriteLocations ge lrev)}) as V_CASES.
+      assert ({In (Vptr b ofs) (AllLoopWriteLocations ge lrev)} + 
+              {~In (Vptr b ofs) (AllLoopWriteLocations ge lrev)}) as V_CASES.
       apply List.in_dec. apply Val.eq.
       destruct V_CASES as [V_IN_WRITELOC_REV | V_NOT_IN_WRITELOC_REV];
         try assumption.
@@ -3105,8 +3148,8 @@ Section LOOPWRITELOCATIONSTRANSPORT.
       contradiction.
 
     - intros NOT_IN_REV.
-      assert ({In (Vptr b ofs) (LoopWriteLocations ge lid)} + 
-              {~In (Vptr b ofs) (LoopWriteLocations ge lid)}) as V_CASES.
+      assert ({In (Vptr b ofs) (AllLoopWriteLocations ge lid)} + 
+              {~In (Vptr b ofs) (AllLoopWriteLocations ge lid)}) as V_CASES.
       apply List.in_dec. apply Val.eq.
       destruct V_CASES as [V_IN_WRITELOC_ID | V_NOT_IN_WRITELOC_ID];
         try assumption.
@@ -3133,23 +3176,28 @@ Section LOOPWRITELOCATIONSMEMORY.
   Variable m m': mem.
   Variable le le': loopenv.
 
-  Definition loopexec := exec_loop execub ge le m l m' le'.
+  Definition loopexec := exec_loop (viv le') ge le m l m' le'.
 
   Lemma loop_write_locations_does_not_have_write:
     loopexec ->
-    ~ List.In (Vptr b ofsp) (LoopWriteLocations ge l) ->
-    ((Mem.mem_contents m) # b) # ofs = ((Mem.mem_contents m') # b) # ofs.
+    ~ List.In (Vptr b ofsp) (AllLoopWriteLocations ge l) ->
+    ZMap.get (Ptrofs.unsigned ofsp)
+             ((Mem.mem_contents m) # b)  =
+    ZMap.get (Ptrofs.unsigned ofsp)
+             ((Mem.mem_contents m') # b).
   Proof.
     intros LOOPEXEC.
     intros NOT_IN_WRITES.
     unfold loopexec in LOOPEXEC.
     induction LOOPEXEC.
     - reflexivity.
-    - assert (((Mem.mem_contents m') # b) # ofs =
-              ((Mem.mem_contents m'') # b) # ofs)  as UNTOUCHED_TILL_LAST.
+    - assert (ZMap.get (Ptrofs.unsigned ofsp) ((Mem.mem_contents m') # b) =
+              ZMap.get (Ptrofs.unsigned ofsp) ((Mem.mem_contents m'') # b))
+        as UNTOUCHED_TILL_LAST.
       apply IHLOOPEXEC; assumption.
 
-      assert ((Mem.mem_contents m) # b # ofs= (Mem.mem_contents m') # b # ofs)
+      assert (ZMap.get (Ptrofs.unsigned ofsp) ((Mem.mem_contents m) # b) =
+              ZMap.get (Ptrofs.unsigned ofsp) ((Mem.mem_contents m') # b))
         as UNTOUCHED_BEGIN.
       rename H2 into EXECS.
       assert (stmt_does_not_write_to_ix_in_loop ge l (loopstmt l) (Vptr b ofsp))
@@ -3189,8 +3237,13 @@ Section LOOPWRITELOCATIONSMEMORY.
           destruct B_CASES as [BEQ | BNEQ].
           **  subst. rewrite PMap.gss.
               symmetry.
+              rewrite Mem.setN_other.
+              reflexivity.
               
-              admit.
+              intros r R_CONSTRAINTS.
+              simpl in *.
+              
+              
           ** rewrite PMap.gso; auto.
 
 
@@ -3200,15 +3253,102 @@ Section LOOPWRITELOCATIONSMEMORY.
   Admitted.
 
   
+
+  
   (* Note that this is wrong. This should actually talk about what
   the contents are written by stmt s*)
   Lemma loop_write_locations_has_write:
     loopexec ->
-    List.In (Vptr b ofsp) (LoopWriteLocations ge l) ->
     injective_stmt_b (loopstmt l) = true ->
-    ((Mem.mem_contents m) # b) # ofs =
-    ((Mem.mem_contents m) # b) # ofs.
+    List.In (Vptr b ofsp) (LoopWriteLocations ge l (viv le) (viv le')) ->
+    (execub = loopub l)%nat ->
+    ZMap.get  (Ptrofs.unsigned ofsp) ((Mem.mem_contents m') # b)  =
+        Byte (Byte.repr (Int.unsigned (getStoreStmtValue (loopstmt l)))).
   Proof.
+    intros LOOPEXEC.
+    unfold loopexec in *.
+    rewrite <- exec_loop_exec_looprev_equiv in LOOPEXEC.
+    
+    induction LOOPEXEC.
+
+    - intros STMT_INJ.
+      intros PTR_IN_WRITELOCS.
+      intros EXECUB_IS_LOOPUB.
+
+      unfold LoopWriteLocations in PTR_IN_WRITELOCS.
+      subst.
+      replace (viv le - viv le)%nat with 0%nat in PTR_IN_WRITELOCS; try omega.
+      simpl in PTR_IN_WRITELOCS.
+      contradiction.
+
+    - intros STMT_INJ.
+      intros PTR_IN_WRITELOCS.
+      intros EXECUB_IS_LOOPUB.
+      unfold LoopWriteLocations in *.
+      simpl in *.
+
+      rewrite List.in_map_iff in PTR_IN_WRITELOCS.
+      destruct PTR_IN_WRITELOCS as [WRITEIX [WRITEPTR WRITEIX_WITNESS]].
+
+      assert (lb <= WRITEIX <= viv le'')%nat as WRITEIX_RANGE.
+      rewrite List.in_seq in WRITEIX_WITNESS.
+      omega.
+
+      assert (WRITEIX = viv le'' \/ lb <= WRITEIX < viv le'')%nat
+        as WRITEIX_CASES.
+      omega.
+      destruct WRITEIX_CASES as [WRITEIX_AT_END | WRITEIX_AT_MID].
+
+      + (* writeix at end *)
+        (* from the fact that getstmtWriteLocation = Vptr b ofsp,
+           and that WRITEIX = viv le'', we can conclude that their
+           current statement writes into Vptr b ofsp. To prove this,
+           invert exec_stmt, eval_affineexpr to show that we get a
+           Vptr b ofsp. Then, write m' in terms of m, and rake in
+           in the money *)
+
+        subst.
+        rename H1 into EXEC_STMT.
+        remember (loopstmt l) as ls.
+        induction ls.
+        
+        inversion EXEC_STMT; subst.
+        rename H3 into EVALAEXPR.
+        unfold getStmtWriteLocation in WRITEPTR.
+        rewrite eval_affineexpr_fn_eval_affineexpr_equiv in WRITEPTR.
+
+        assert (Vptr b ofsp = vaddr) as VADDR_VALUE.
+        eapply eval_affineexpr_is_function; eassumption.
+        subst.
+
+        (* we have now forced the aliasing. We can now inspect m'' and
+         infer that which we want *)
+
+        Check (Mem.mem_contents m'').
+        Check ((Mem.mem_contents m'') # b).
+        Check (ZMap.get (Z.of_nat (Pos.to_nat ofs)) ((Mem.mem_contents m'') # b)).
+        Check (((((Mem.mem_contents m'') # b) # ofs))).
+        Check (ofs).
+
+        assert (Mem.mem_contents m'' =
+                PMap.set b
+                         (Mem.setN
+                            (encode_val STORE_CHUNK_SIZE (Vint i))
+                            (Ptrofs.unsigned ofsp)
+                            m'.(Mem.mem_contents)#b)
+                         m'.(Mem.mem_contents)) as M''_CONTENTS.
+        apply Mem.store_mem_contents.
+        eassumption.
+
+        rewrite M''_CONTENTS.
+        rewrite PMap.gss.
+        simpl.
+        rewrite Mem.setN_other.
+
+
+        
+               
+      
   Abort.
     
 End LOOPWRITELOCATIONSMEMORY.
@@ -3258,8 +3398,8 @@ Proof.
   exact structure_eq.
   intros.
 
-  remember (LoopWriteLocations ge l) as lwritelocs.
-  remember (LoopWriteLocations ge lrev0) as lrevwritelocs.
+  remember (AllLoopWriteLocations ge l) as lwritelocs.
+  remember (AllLoopWriteLocations ge lrev0) as lrevwritelocs.
   remember (Ptrofs.repr (Z.pos ofs)) as pofs.
   remember (Vptr b pofs) as curptr.
 
