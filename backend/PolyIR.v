@@ -3160,16 +3160,81 @@ Section LOOPWRITELOCATIONSTRANSPORT.
   
 End LOOPWRITELOCATIONSTRANSPORT.
 
+(* TODO: ideally, move this into Integer, since this holds for all integers*)
+Lemma ptrofs_neq_implies_unsigned_neq:
+  forall (p q: ptrofs), p <> q -> Ptrofs.unsigned p <> Ptrofs.unsigned q.
+Proof.
+  intros until q.
+  intros NEQ.
 
-Lemma load_store_from_different_pointers:
-  forall m' m'' b0 i0 i rb  rofs,
-    Mem.store STORE_CHUNK_SIZE m' b0 
-              (Ptrofs.unsigned i0) (Vint i) = 
-    Some m'' ->
-    (Vptr b0 i0 <> Vptr  rb rofs) -> 
-    ZMap.get (Ptrofs.unsigned rofs) (Mem.mem_contents m'') # rb =
-    ZMap.get (Ptrofs.unsigned rofs) (Mem.mem_contents m') # rb.
-Abort.
+  assert ({Ptrofs.unsigned p = Ptrofs.unsigned q} +
+          {Ptrofs.unsigned p <> Ptrofs.unsigned q}) as UNSIGNED_CASES.
+  apply Z.eq_dec.
+
+  destruct (UNSIGNED_CASES) as [UNSIGNED_EQ | UNSIGNED_NEQ];
+    subst; try auto.
+
+  apply (f_equal Ptrofs.repr) in UNSIGNED_EQ.
+  rewrite Ptrofs.repr_unsigned in UNSIGNED_EQ.
+  rewrite Ptrofs.repr_unsigned in UNSIGNED_EQ.
+
+  contradiction.
+Qed.
+                                    
+
+  
+
+Lemma load_store_from_different_pointers_maintain_memory:
+  forall m m' wb wofs i rb  rofs,
+    Mem.store STORE_CHUNK_SIZE m wb 
+              (Ptrofs.unsigned wofs) (Vint i) = 
+    Some m' ->
+    (Vptr wb wofs <> Vptr  rb rofs) -> 
+    ZMap.get (Ptrofs.unsigned rofs) (Mem.mem_contents m') # rb =
+    ZMap.get (Ptrofs.unsigned rofs) (Mem.mem_contents m) # rb.
+Proof.
+  intros until rofs.
+  intros M'_AS_STORE_M.
+  intros PTR_NEQ.
+
+  assert (Mem.mem_contents m' =
+          PMap.set wb
+                   (Mem.setN
+                      (encode_val STORE_CHUNK_SIZE (Vint i))
+                      (Ptrofs.unsigned wofs)
+                      m.(Mem.mem_contents)#wb)
+                   m.(Mem.mem_contents)) as M'_CONTENTS.
+  apply Mem.store_mem_contents.
+  assumption.
+
+  assert ({wb = rb } + {wb <> rb}) as WB_RB_CASES.
+  apply Pos.eq_dec.
+
+  destruct WB_RB_CASES as [WB_EQ_RB | WB_NEQ_RB]; subst.
+  - assert ({wofs = rofs} + {wofs <> rofs}) as OFS_CASES.
+    apply Ptrofs.eq_dec.
+    destruct OFS_CASES as [OFS_EQ | OFS_NEQ].
+    +  subst.
+       contradiction.
+
+    + rewrite M'_CONTENTS.
+      rewrite PMap.gss.
+      rewrite Mem.setN_other.
+      auto.
+
+      rewrite Memdata.encode_val_length.
+      simpl.
+      intros r R_LIMITS.
+      assert (r = Ptrofs.unsigned wofs).
+      omega.
+      subst.
+
+      apply ptrofs_neq_implies_unsigned_neq; auto.
+
+  - rewrite M'_CONTENTS.
+    rewrite PMap.gso; try auto.
+Qed.
+
 
 (* Theorems about  loop write locations and their interaction with memory *)
 Section LOOPWRITELOCATIONSMEMORY.
