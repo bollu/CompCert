@@ -3184,7 +3184,7 @@ Qed.
 
   
 
-Lemma load_store_from_different_pointers_maintain_memory:
+Lemma load_store_from_different_pointers:
   forall m m' wb wofs i rb  rofs,
     Mem.store STORE_CHUNK_SIZE m wb 
               (Ptrofs.unsigned wofs) (Vint i) = 
@@ -3245,6 +3245,8 @@ Section LOOPWRITELOCATIONSMEMORY.
   
   Variable b: block.
   Variable ofs: nat.
+
+  
   (* p for pointer. I admit, this is confusing, because p for positive
   also works *)
   Definition ofsp : ptrofs := Ptrofs.repr (Z.of_nat ofs).
@@ -3311,56 +3313,10 @@ Section LOOPWRITELOCATIONSMEMORY.
         contradiction.
         
       + (* noalias, use this *)
-        
-        assert ((Mem.mem_contents m') =
-                PMap.set b0
-                (Mem.setN (encode_val STORE_CHUNK_SIZE (Vint i))
-                          (Ptrofs.unsigned i0)
-                          m.(Mem.mem_contents)#b0) m.(Mem.mem_contents)) as
-            MEM_CONTENTS_M'.
-        apply Mem.store_mem_contents. assumption.
-        rewrite MEM_CONTENTS_M'.
-
-        assert ({b0 = b} + {b0 <> b}) as B_CASES.
-        apply Pos.eq_dec.
-
-        destruct B_CASES as [BEQ | BNEQ].
-        * apply vptr_neq_implications in VPTR_NOALIAS.
-          assert (i0 <> ofsp) as OFS_NEQ.
-          destruct VPTR_NOALIAS; try contradiction; try auto.
-          
-          subst.
-          rewrite PMap.gss.
-          
-          rewrite Mem.setN_other.
-          reflexivity.
-
-          rewrite Memdata.encode_val_length.
-          simpl.
-          intros r R_LIMITS.
-
-          assert (r = Ptrofs.unsigned i0).
-          omega.
-          subst.
-          (* I need a new theorem, saying:
-          int x <> int y => unsinged x <> unsigned y *)
-          assert ({Ptrofs.unsigned i0 = Ptrofs.unsigned ofsp} +
-                  {Ptrofs.unsigned i0 <> Ptrofs.unsigned ofsp})
-                 as  PTROFS_UNSIGNED_EQ_CASES.
-          apply Z.eq_dec.
-
-          destruct PTROFS_UNSIGNED_EQ_CASES as [UNSIGNED_EQ | UNSIGNED_NEQ];
-            try auto.
-          eapply (f_equal Ptrofs.repr) in UNSIGNED_EQ .
-          rewrite Ptrofs.repr_unsigned in UNSIGNED_EQ.
-          rewrite Ptrofs.repr_unsigned in UNSIGNED_EQ.
-        (* contradiction *)
-          contradiction.
+        symmetry.
+        eapply load_store_from_different_pointers; try eassumption.
           
               
-              
-              
-          * rewrite PMap.gso; auto.
 
 
       + rewrite UNTOUCHED_BEGIN.
@@ -3373,6 +3329,8 @@ Section LOOPWRITELOCATIONSMEMORY.
   (* Note that this is wrong. This should actually talk about what
   the contents are written by stmt s*)
   Lemma loop_write_locations_has_write:
+    (* TODO: do I really need this? think about this *)
+    (viv le <= loopub l)%nat ->
     loopexec ->
     injective_stmt_b (loopstmt l) = true ->
     List.In (Vptr b ofsp) (LoopWriteLocations ge l (viv le) (viv le')) ->
@@ -3380,13 +3338,15 @@ Section LOOPWRITELOCATIONSMEMORY.
     ZMap.get  (Ptrofs.unsigned ofsp) ((Mem.mem_contents m') # b)  =
         Byte (Byte.repr (Int.unsigned (getStoreStmtValue (loopstmt l)))).
   Proof.
+    intros VIV_INRANGE.
     intros LOOPEXEC.
     unfold loopexec in *.
     rewrite <- exec_loop_exec_looprev_equiv in LOOPEXEC.
     
     induction LOOPEXEC.
 
-    - intros STMT_INJ.
+    - 
+      intros STMT_INJ.
       intros PTR_IN_WRITELOCS.
       intros EXECUB_IS_LOOPUB.
 
@@ -3396,7 +3356,8 @@ Section LOOPWRITELOCATIONSMEMORY.
       simpl in PTR_IN_WRITELOCS.
       contradiction.
 
-    - intros STMT_INJ.
+    - 
+      intros STMT_INJ.
       intros PTR_IN_WRITELOCS.
       intros EXECUB_IS_LOOPUB.
       unfold LoopWriteLocations in *.
@@ -3469,6 +3430,8 @@ Section LOOPWRITELOCATIONSMEMORY.
      try eauto;
      try eassumption.
 
+   (* Once again, split into a lemma that talks about what hd_error
+      memory looks like *)
    assert (hd_error (encode_val STORE_CHUNK_SIZE (Vint i)) =
            Some ((Byte (Byte.repr (Int.unsigned i))))) as
        HD_ERROR_VAL.
@@ -3542,7 +3505,6 @@ Section LOOPWRITELOCATIONSMEMORY.
                           m'.(Mem.mem_contents)#b0)
                        m'.(Mem.mem_contents)) as M''_CONTENTS.
       apply Mem.store_mem_contents; eassumption.
-      rewrite M''_CONTENTS.
 
       assert ({Vptr b0 i0 = Vptr b ofsp} +  {Vptr b0 i0 <> Vptr b ofsp})
         as PTR_ALIASING_CASES.
@@ -3552,13 +3514,77 @@ Section LOOPWRITELOCATIONSMEMORY.
 
       ** (* pointers alias. But this cannot happen since the write is in
            the previous part of the loop *)
-        admit.
+        (* assert (Ptrofs.unsigned i0 = viv le)%nat. *)
+        assert (nat_to_ptrofs (loopschedule l (viv le'')) = i0) as
+            i0_EQ_VIV.
+        rewrite <- eval_affineexpr_fn_eval_affineexpr_equiv in EVAL_AE.
+        unfold eval_affineexpr_fn in EVAL_AE.
+        unfold Genv.symbol_address in EVAL_AE.
+        destruct (Genv.find_symbol ge (looparrname l));
+          inversion EVAL_AE; auto.
+
+        
+        assert (nat_to_ptrofs (loopschedule l WRITEIX) = ofsp) as
+            WRITEIX_EQ_OFSP.
+        unfold getStmtWriteLocation in WRITEPTR.
+        rewrite <- LS in WRITEPTR.
+        unfold eval_affineexpr_fn in WRITEPTR.
+        unfold Genv.symbol_address in WRITEPTR.
+        destruct (Genv.find_symbol ge (looparrname l));
+          inversion WRITEPTR.
+        apply vptr_inversion in WRITEPTR.
+        intuition.
+
+
+        
+        assert (nat_to_ptrofs  (loopschedule l (viv le'')) = 
+                nat_to_ptrofs  (loopschedule l WRITEIX)) as
+            VIV_EQ_WRITEIX_IN_REPR.
+        rewrite i0_EQ_VIV.
+        rewrite WRITEIX_EQ_OFSP.
+        apply vptr_inversion in PTR_ALIAS.
+        intuition.
+
+        unfold nat_to_ptrofs in VIV_EQ_WRITEIX_IN_REPR.
+
+
+        assert ((loopschedule l (viv le'')) =
+                ((loopschedule l) WRITEIX)) as VIV_EQ_WRITEIX.
+
+        
+        assert (Z.of_nat (loopub l) < Ptrofs.max_unsigned)%Z as LUB_INRANGE.
+        apply (loopub_in_range_witness l).
+
+        assert (Ptrofs.max_unsigned < Ptrofs.modulus) as MAX_UNSIGNED_LT_MOD.
+        unfold Ptrofs.max_unsigned.
+        omega.
+
+        assert (loopschedule l (viv le'') < loopub l)%nat as
+            LOOPSCHED_VIV_IN_RANGE.
+        apply ((inrange_forward _ _ _  (loopschedulewitness l)) (viv le'')).
+        omega.
+
+        
+        assert (loopschedule l (WRITEIX) < loopub l)%nat as
+            LOOPSCHED_WRITEIX_IN_RANGE.
+        apply ((inrange_forward _ _ _  (loopschedulewitness l)) WRITEIX).
+        omega.
+
+        apply Ptrofs.repr_of_nat_inj.
+        omega.
+        omega.
+        assumption.
+        eapply inverseTillUb_inj_1 in VIV_EQ_WRITEIX;
+          try omega; try (apply (loopschedulewitness l)).
+        omega.
+        omega.
+
+          
       **  (* pointers do not alias. So, we can say that memory at m''
             = memory  at m'
             NOTE: copy the proof from  `loop_write_locations_does_not_have_write`*)
-
-
-      
+        eapply load_store_from_different_pointers;
+          eassumption.
       
 
       
@@ -3584,7 +3610,10 @@ Section LOOPWRITELOCATIONSMEMORY.
     * rewrite NOALIAS.
     rewrite M'_VALUE.
     auto.
-Admitted.
+
+    - 
+      eapply exec_loop_viv_loop_upper_bounded; eassumption.
+  Qed.
     
 End LOOPWRITELOCATIONSMEMORY.
 
