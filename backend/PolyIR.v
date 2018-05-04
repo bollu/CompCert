@@ -3160,6 +3160,17 @@ Section LOOPWRITELOCATIONSTRANSPORT.
   
 End LOOPWRITELOCATIONSTRANSPORT.
 
+
+Lemma load_store_from_different_pointers:
+  forall m' m'' b0 i0 i rb  rofs,
+    Mem.store STORE_CHUNK_SIZE m' b0 
+              (Ptrofs.unsigned i0) (Vint i) = 
+    Some m'' ->
+    (Vptr b0 i0 <> Vptr  rb rofs) -> 
+    ZMap.get (Ptrofs.unsigned rofs) (Mem.mem_contents m'') # rb =
+    ZMap.get (Ptrofs.unsigned rofs) (Mem.mem_contents m') # rb.
+Abort.
+
 (* Theorems about  loop write locations and their interaction with memory *)
 Section LOOPWRITELOCATIONSMEMORY.
   Variable execub: nat.
@@ -3293,9 +3304,7 @@ Section LOOPWRITELOCATIONSMEMORY.
   Qed.
       
 
-  
-
-  
+    
   (* Note that this is wrong. This should actually talk about what
   the contents are written by stmt s*)
   Lemma loop_write_locations_has_write:
@@ -3327,6 +3336,9 @@ Section LOOPWRITELOCATIONSMEMORY.
       intros EXECUB_IS_LOOPUB.
       unfold LoopWriteLocations in *.
       simpl in *.
+
+      remember PTR_IN_WRITELOCS as PTR_IN_WRITELOCS_SAVE.
+      clear HeqPTR_IN_WRITELOCS_SAVE.
 
       rewrite List.in_map_iff in PTR_IN_WRITELOCS.
       destruct PTR_IN_WRITELOCS as [WRITEIX [WRITEPTR WRITEIX_WITNESS]].
@@ -3418,7 +3430,95 @@ Section LOOPWRITELOCATIONSMEMORY.
     has the value we want. We nee to use the injective_stmt to make
     sure that we do not alias with that, so that we can punch through
     to m', and let the induction take care of the rest *)
-    admit.
+    assert (ZMap.get (Ptrofs.unsigned ofsp) (Mem.mem_contents m') # b =
+            Byte (Byte.repr (Int.unsigned (getStoreStmtValue (loopstmt l)))))
+      as M'_VALUE.
+    apply IHLOOPEXEC; try assumption.
+    rewrite in_map_iff.
+    exists WRITEIX.
+    split.
+    assumption.
+    rewrite List.in_seq.
+    simpl.
+    omega.
+
+    assert (ZMap.get (Ptrofs.unsigned ofsp) (Mem.mem_contents m'') # b =
+            ZMap.get (Ptrofs.unsigned ofsp) (Mem.mem_contents m') # b)
+      as NOALIAS.
+
+    rename H1 into EXECSTMT.
+    inversion EXECSTMT; subst.
+    rename H1 into LS.
+    rename H3 into EVAL_AE.
+    rename H8 into M''_AS_STORE_M'.
+
+    (* consider possibilies for AE *)
+    inversion EVAL_AE.
+    * (* induction variable, where we know what the vaddr will look like.
+         In this case, we need to show that the write in the final
+         iteation cannot overlap with the index we are reading, since that
+         write has already happened *)
+      rename H3 into VADDR_VALUE.
+      rename H1 into EADDR_VALUE.
+      subst.
+
+      unfold Mem.storev in M''_AS_STORE_M'.
+      induction ( Genv.symbol_address ge (looparrname l)
+                                      (nat_to_ptrofs (loopschedule l (viv le''))));
+        inversion M''_AS_STORE_M'.
+      (* repeated clause from inversion of M''_AS_STORE_M *)
+      clear H3.
+      
+      assert (Mem.mem_contents m'' =
+              PMap.set b0
+                       (Mem.setN
+                          (encode_val STORE_CHUNK_SIZE (Vint i))
+                          (Ptrofs.unsigned i0)
+                          m'.(Mem.mem_contents)#b0)
+                       m'.(Mem.mem_contents)) as M''_CONTENTS.
+      apply Mem.store_mem_contents; eassumption.
+      rewrite M''_CONTENTS.
+
+      assert ({Vptr b0 i0 = Vptr b ofsp} +  {Vptr b0 i0 <> Vptr b ofsp})
+        as PTR_ALIASING_CASES.
+      apply Val.eq.
+
+      destruct PTR_ALIASING_CASES as [PTR_ALIAS | PTR_NOALIAS].
+
+      ** (* pointers alias. But this cannot happen since the write is in
+           the previous part of the loop *)
+        admit.
+      **  (* pointers do not alias. So, we can say that memory at m''
+            = memory  at m'
+            NOTE: copy the proof from  `loop_write_locations_does_not_have_write`*)
+
+
+      
+      
+
+      
+      
+    * (* constant offset, which is not possible when the statement is
+      injective *)
+      rename H1 into EADDR_VALUE.
+      assert (injective_stmt_b (loopstmt l) = false) as CONTRA_TO_STMT_INJ.
+      unfold injective_stmt_b.
+      rewrite <- LS.
+      unfold injective_affineexpr_b.
+      rewrite <-EADDR_VALUE.
+      auto.
+
+      assert (true = false) as CONTRA.
+      rewrite <- STMT_INJ.
+      rewrite <- CONTRA_TO_STMT_INJ.
+      auto.
+
+      inversion CONTRA.
+
+
+    * rewrite NOALIAS.
+    rewrite M'_VALUE.
+    auto.
 Admitted.
     
 End LOOPWRITELOCATIONSMEMORY.
