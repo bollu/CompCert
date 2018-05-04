@@ -3203,7 +3203,7 @@ Section LOOPWRITELOCATIONSMEMORY.
       rename H2 into EXECS.
       assert (stmt_does_not_write_to_ix_in_loop ge l (loopstmt l) (Vptr b ofsp))
         as STMT_NO_WRITE_TO_IX.
-      apply  loop_write_locations_complete_2; eassumption.
+      apply loop_write_locations_complete_2; eassumption.
       
       inversion EXECS. subst.
       rename H4 into EVAL_VADDR.
@@ -3219,7 +3219,21 @@ Section LOOPWRITELOCATIONSMEMORY.
       apply Val.eq.
       destruct VPTR_CASES as [VPTR_ALIAS | VPTR_NOALIAS].
       + (* alias, need to create contradiction *)
-        admit.
+        inversion VPTR_ALIAS.
+        subst.
+
+        assert (Vptr b ofsp <> Vptr b ofsp) as CONTRA.
+        unfold stmt_does_not_write_to_ix_in_loop in STMT_NO_WRITE_TO_IX.
+        rename H2 into LOOPSTMT.
+        rewrite <- LOOPSTMT in STMT_NO_WRITE_TO_IX.
+        unfold affineexpr_does_not_take_value_in_loop in STMT_NO_WRITE_TO_IX.
+        eapply STMT_NO_WRITE_TO_IX with (vivval := (viv le)).
+        split; try omega.
+        replace ({| viv := viv le |}) with le.
+        exact EVAL_VADDR.
+        destruct le. auto.
+        contradiction.
+        
       + (* noalias, use this *)
         
         assert ((Mem.mem_contents m') =
@@ -3276,8 +3290,8 @@ Section LOOPWRITELOCATIONSMEMORY.
       + rewrite UNTOUCHED_BEGIN.
       rewrite UNTOUCHED_TILL_LAST.
       reflexivity.
+  Qed.
       
-  Admitted.
 
   
 
