@@ -14,6 +14,10 @@ Require Import Equivalence EquivDec.
 Require Import Coqlib.
 Require Import Floats.
 Require Import Archi.
+Require Import Linking.
+Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Switch Cminor Selectionproof.
+Require Import Errors.
 
 Definition nat_to_int32 (n: nat): int := (Int.repr (Z.of_nat n)).
 Definition nat_to_int64 (n: nat): int64 := (Int64.repr (Z.of_nat n)).
@@ -1396,3 +1400,8 @@ End STMTINTERCHANGE.
 
 Definition stmtInterchangeProgram (p: Cminor.program): Cminor.program := p.
                                                
+Definition match_prog (p: Cminor.program) (tp: Cminor.program) :=
+  match_program (fun cu f tf => f = tf) (fun v1 v2 => v1 = v2) p tp. 
+(* TODO: why does this NOT WORK? 
+match_program (fun cu f tf => f = tf) eq p tp.
+*)

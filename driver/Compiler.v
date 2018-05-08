@@ -147,9 +147,15 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ print print_Mach
   @@@ time "Asm generation" Asmgen.transf_program.
 
+Definition transf_stmt_interchange_program (p: Cminor.program) : res Cminor.program :=
+  OK (CMinorExperiments.stmtInterchangeProgram p).
+  
+
 Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
-   OK (CMinorExperiments.stmtInterchangeProgram p)
+   OK p
    @@ print print_Cminor
+  (* add statement interchange into the pass pipeline *)
+  @@@ time "Statement Interchange" transf_stmt_interchange_program
   @@@ time "Instruction selection" Selection.sel_program
   @@@ time "RTL generation" RTLgen.transl_program
   @@@ transf_rtl_program.
@@ -234,6 +240,7 @@ Definition CompCert's_passes :=
   ::: mkpass SimplLocalsproof.match_prog
   ::: mkpass Cshmgenproof.match_prog
   ::: mkpass Cminorgenproof.match_prog
+  ::: mkpass CMinorExperiments.match_prog
   ::: mkpass Selectionproof.match_prog
   ::: mkpass RTLgenproof.match_prog
   ::: mkpass (match_if Compopts.optim_tailcalls Tailcallproof.match_prog)
