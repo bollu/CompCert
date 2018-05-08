@@ -378,7 +378,7 @@ Ltac DestructM :=
       destruct H as (p & M & MM); clear H
   end.
   repeat DestructM. subst tp.
-  assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics p21)).
+  assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics p22)).
   {
   eapply compose_forward_simulations.
     eapply SimplExprproof.transl_program_correct; eassumption.
@@ -387,7 +387,9 @@ Ltac DestructM :=
   eapply compose_forward_simulations.
     eapply Cshmgenproof.transl_program_correct; eassumption.
   eapply compose_forward_simulations.
-    eapply Cminorgenproof.transl_program_correct; eassumption.
+  eapply Cminorgenproof.transl_program_correct; eassumption.
+  eapply compose_forward_simulations.
+    eapply CMinorExperiments.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
     eapply Selectionproof.transf_program_correct; eassumption.
   eapply compose_forward_simulations.

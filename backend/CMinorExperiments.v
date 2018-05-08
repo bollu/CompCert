@@ -1426,6 +1426,12 @@ Proof.
   inversion H.
 Admitted.
   
+Theorem transf_program_correct: forall (p p': Cminor.program),
+    match_prog p p' ->
+    forward_simulation (Cminor.semantics p) (Cminor.semantics p').
+Proof.
+  intros.
+Admitted.
 
 (* TODO: why does this NOT WORK? 
 match_program (fun cu f tf => f = tf) eq p tp.
