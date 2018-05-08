@@ -235,6 +235,11 @@ Qed.
 
 Local Open Scope linking_scope.
 
+
+Check (mkpass Tailcallproof.match_prog).
+Check (mkpass Cminorgenproof.match_prog).
+Check (mkpass CMinorExperiments.match_prog).
+
 Definition CompCert's_passes :=
       mkpass SimplExprproof.match_prog
   ::: mkpass SimplLocalsproof.match_prog

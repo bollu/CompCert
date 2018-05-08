@@ -1399,9 +1399,25 @@ Section STMTINTERCHANGE.
 End STMTINTERCHANGE.
 
 Definition stmtInterchangeProgram (p: Cminor.program): Cminor.program := p.
-                                               
-Definition match_prog (p: Cminor.program) (tp: Cminor.program) :=
-  match_program (fun cu f tf => f = tf) (fun v1 v2 => v1 = v2) p tp. 
+
+Definition transf_function (fd: function) : function := fd.
+
+
+(* as seen from tailcallproof *)
+(* I chose tailcallproof to imitate since it is referred to from the paper:
+ https://people.mpi-sws.org/~viktor/papers/sepcompcert.pdf
+as a "trivial pass"
+*)
+Definition transf_fundef (fd: fundef) : fundef :=
+  AST.transf_fundef transf_function fd.
+
+Definition match_prog (p tp: Cminor.program) :=
+  Linking.match_program
+    (fun cu f tf =>  tf = transf_fundef  f)
+    Coq.Init.Logic.eq
+    p
+    tp.
+
 (* TODO: why does this NOT WORK? 
 match_program (fun cu f tf => f = tf) eq p tp.
 *)
