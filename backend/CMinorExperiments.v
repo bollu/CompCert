@@ -1393,3 +1393,6 @@ Section STMTINTERCHANGE.
        Qed.
 
 End STMTINTERCHANGE.
+
+Definition stmtInterchangeProgram (p: Cminor.program): Cminor.program := p.
+                                               

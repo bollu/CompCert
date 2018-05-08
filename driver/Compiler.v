@@ -70,6 +70,7 @@ Require CleanupLabelsproof.
 Require Debugvarproof.
 Require Stackingproof.
 Require Asmgenproof.
+Require CMinorExperiments.
 (** Command-line flags. *)
 Require Import Compopts.
 
@@ -147,7 +148,7 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
   @@@ time "Asm generation" Asmgen.transf_program.
 
 Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
-   OK p
+   OK (CMinorExperiments.stmtInterchangeProgram p)
    @@ print print_Cminor
   @@@ time "Instruction selection" Selection.sel_program
   @@@ time "RTL generation" RTLgen.transl_program
