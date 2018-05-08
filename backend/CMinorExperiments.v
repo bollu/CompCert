@@ -1398,7 +1398,7 @@ Section STMTINTERCHANGE.
 
 End STMTINTERCHANGE.
 
-Definition stmtInterchangeProgram (p: Cminor.program): Cminor.program := p.
+Definition stmt_interchange_program (p: Cminor.program): res Cminor.program := OK p.
 
 Definition transf_function (fd: function) : function := fd.
 
@@ -1417,6 +1417,15 @@ Definition match_prog (p tp: Cminor.program) :=
     Coq.Init.Logic.eq
     p
     tp.
+
+Theorem transf_program_match:
+  forall p tp, stmt_interchange_program p = OK tp -> match_prog p tp.
+Proof.
+  intros.
+  unfold stmt_interchange_program in H.
+  inversion H.
+Admitted.
+  
 
 (* TODO: why does this NOT WORK? 
 match_program (fun cu f tf => f = tf) eq p tp.

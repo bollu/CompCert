@@ -147,15 +147,13 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
    @@ print print_Mach
   @@@ time "Asm generation" Asmgen.transf_program.
 
-Definition transf_stmt_interchange_program (p: Cminor.program) : res Cminor.program :=
-  OK (CMinorExperiments.stmtInterchangeProgram p).
   
 
 Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
    OK p
    @@ print print_Cminor
   (* add statement interchange into the pass pipeline *)
-  @@@ time "Statement Interchange" transf_stmt_interchange_program
+  @@@ time "Statement Interchange" CMinorExperiments.stmt_interchange_program
   @@@ time "Instruction selection" Selection.sel_program
   @@@ time "RTL generation" RTLgen.transl_program
   @@@ transf_rtl_program.
@@ -287,7 +285,9 @@ Proof.
   destruct (SimplLocals.transf_program p1) as [p2|e] eqn:P2; simpl in T; try discriminate.
   destruct (Cshmgen.transl_program p2) as [p3|e] eqn:P3; simpl in T; try discriminate.
   destruct (Cminorgen.transl_program p3) as [p4|e] eqn:P4; simpl in T; try discriminate.
-  unfold transf_cminor_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
+  unfold transf_cminor_program, time in T.
+  rewrite ! compose_print_identity in T.
+  simpl in T.
   destruct (Selection.sel_program p4) as [p5|e] eqn:P5; simpl in T; try discriminate.
   destruct (RTLgen.transl_program p5) as [p6|e] eqn:P6; simpl in T; try discriminate.
   unfold transf_rtl_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
@@ -310,6 +310,7 @@ Proof.
   exists p2; split. apply SimplLocalsproof.match_transf_program; auto.
   exists p3; split. apply Cshmgenproof.transf_program_match; auto.
   exists p4; split. apply Cminorgenproof.transf_program_match; auto.
+  exists p4; split. apply CMinorExperiments.transf_program_match. auto.
   exists p5; split. apply Selectionproof.transf_program_match; auto.
   exists p6; split. apply RTLgenproof.transf_program_match; auto.
   exists p7; split. apply total_if_match. apply Tailcallproof.transf_program_match.
