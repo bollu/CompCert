@@ -165,7 +165,7 @@ let rec expr p (prec, e) =
       fprintf p "%a@ %s %a"
                  expr (prec1, a1) (name_of_binop op) expr (prec2, a2)
   | Eload(chunk, a1) ->
-      fprintf p "%s[%a]" (name_of_chunk chunk) expr (0, a1)
+      fprintf p "(load %s[%a])" (name_of_chunk chunk) expr (0, a1)
   end;
   if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
@@ -211,9 +211,9 @@ let rec print_stmt p s =
   | Sskip ->
       fprintf p "/*skip*/"
   | Sassign(id, e2) ->
-      fprintf p "@[<hv 2>%s =@ %a;@]" (ident_name id) print_expr e2
+      fprintf p "@[<hv 2>assign %s =@ %a;@]" (ident_name id) print_expr e2
   | Sstore(chunk, a1, a2) ->
-      fprintf p "@[<hv 2>%s[%a] =@ %a;@]"
+      fprintf p "@[<hv 2>store %s[%a] =@ %a;@]"
               (name_of_chunk chunk) print_expr a1 print_expr a2
   | Scall(None, sg, e1, el) ->
       fprintf p "@[<hv 2>%a@,(@[<hov 0>%a@])@ : @[<hov 0>%a@];@]"
@@ -221,7 +221,7 @@ let rec print_stmt p s =
                 print_expr_list (true, el)
                 print_sig sg
   | Scall(Some id, sg, e1, el) ->
-      fprintf p "@[<hv 2>%s =@ %a@,(@[<hov 0>%a@])@] : @[<hov 0>%a;@]"
+      fprintf p "@[<hv 2>call %s =@ %a@,(@[<hov 0>%a@])@] : @[<hov 0>%a;@]"
                 (ident_name id)
                 print_expr e1
                 print_expr_list (true, el)
@@ -288,7 +288,7 @@ let rec print_stmt p s =
   | Sreturn (Some e) ->
       fprintf p "return %a;" print_expr e
   | Slabel(lbl, s1) ->
-      fprintf p "%s:@ %a" (ident_name lbl) print_stmt s1  (* wrong for Cminorgen output *)
+      fprintf p "label %s:@ %a" (ident_name lbl) print_stmt s1  (* wrong for Cminorgen output *)
   | Sgoto lbl ->
       fprintf p "goto %s;" (ident_name lbl)               (* wrong for Cminorgen output *)
 
