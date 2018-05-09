@@ -288,7 +288,14 @@ Proof.
   unfold transf_cminor_program, time in T.
   rewrite ! compose_print_identity in T.
   simpl in T.
-  destruct (Selection.sel_program p4) as [p5|e] eqn:P5; simpl in T; try discriminate.
+
+  (* stmt interchange pass added here *)
+  destruct (CMinorExperiments.stmt_interchange_program p4) as [p0 | e] eqn:P0;
+    simpl in T; try discriminate.
+
+
+  
+  destruct (Selection.sel_program p0) as [p5|e] eqn:P5; simpl in T; try discriminate.
   destruct (RTLgen.transl_program p5) as [p6|e] eqn:P6; simpl in T; try discriminate.
   unfold transf_rtl_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
   set (p7 := total_if optim_tailcalls Tailcall.transf_program p6) in *.
@@ -310,7 +317,7 @@ Proof.
   exists p2; split. apply SimplLocalsproof.match_transf_program; auto.
   exists p3; split. apply Cshmgenproof.transf_program_match; auto.
   exists p4; split. apply Cminorgenproof.transf_program_match; auto.
-  exists p4; split. apply CMinorExperiments.transf_program_match. auto.
+  exists p0; split. apply CMinorExperiments.transf_program_match. auto.
   exists p5; split. apply Selectionproof.transf_program_match; auto.
   exists p6; split. apply RTLgenproof.transf_program_match; auto.
   exists p7; split. apply total_if_match. apply Tailcallproof.transf_program_match.
