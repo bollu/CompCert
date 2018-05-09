@@ -77,12 +77,14 @@ Definition match_prog (p tp: Cminor.program) :=
     p
     tp.
 
+(* As seen in Tailcallproof.v *)
 Theorem transf_program_match:
-  forall p tp, transf_program p =  tp -> match_prog p tp.
+  forall p tp, transf_program p = tp -> match_prog p tp.
 Proof.
   intros.
-  inversion H.
-Admitted.
+  rewrite <- H.
+  apply match_transform_program; auto.
+Qed.
   
 Theorem transf_program_correct: forall (p p': Cminor.program),
     match_prog p p' ->
