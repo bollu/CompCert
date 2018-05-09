@@ -1398,6 +1398,21 @@ Section STMTINTERCHANGE.
 
 End STMTINTERCHANGE.
 
+(* EXAMPLE STMT INTERCHANGE IR
+"stmtinterchange"('A') : long -> void
+{
+  int32['A' +l 4LL *l longofint 0] = 1;
+  int32['A' +l 4LL *l longofint 1] = 2;
+}
+"main"() : int
+{
+  stack 8;
+  "stmtinterchange"(&0) : long -> void;
+  return int32[&0 +l 4LL *l longofint 0];
+  return 0;
+}
+*)
+
 
 Definition perform_stmt_interchange(s: stmt) : stmt := s.
 
