@@ -207,5 +207,29 @@ Proof.
   - apply senv_preserved.
   - apply transf_initial_states.
   - apply transf_final_states.
-  - admit.
+  - intros until s1'.
+    intros STEP_S1_S1'.
+    intros s2.
+    intros S1_S2_MATCH.
+
+    (* I need to pattern match on s1' to see what it is *)
+    induction s1'.
+    + assert (S_CASES: {s = Sskip} + {s <> Sskip}).
+      admit.
+
+      destruct S_CASES as [S_EQ_SSKIP | S_NEQ_SSKIP].
+      ++ admit.
+      ++ left.
+         exists (State (transf_fn f) s k sp e m).
+         split.
+         +++ admit.
+         +++ constructor; auto.
+
+
+    + left.
+      exists (Callstate (transf_fundef f) args k m).
+      split; try constructor.
+      (* matching *)
+      ++ 
+    
 Admitted.
