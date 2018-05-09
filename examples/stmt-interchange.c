@@ -1,4 +1,4 @@
-void stmtinterchange(int A[2]) {
+void stmtinterchange(char A[2]) {
     {
         A[0] = 1;
         A[1] = 2;
@@ -6,7 +6,7 @@ void stmtinterchange(int A[2]) {
 }
 
 int main() {
-    int Arr[2];
+    char Arr[2];
     stmtinterchange(Arr);
-    return Arr[0];
+    return (int)Arr[0];
 }

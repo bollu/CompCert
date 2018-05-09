@@ -1416,7 +1416,8 @@ End STMTINTERCHANGE.
 
 Definition perform_stmt_interchange(s: stmt) : stmt :=
   match s with
-  | _ => Sskip
+  | Sseq xxx yyy => Sseq xxx xxx
+  | _ => s
   end.
 
 Definition replace_fn_body (fn: Cminor.function) (b: stmt): Cminor.function :=

@@ -1,4 +1,4 @@
-stmt-interchange: 
+stmt-interchange: clean
 	ccomp  -timings  -dcminor  stmt-interchange.c 
 
 clean:

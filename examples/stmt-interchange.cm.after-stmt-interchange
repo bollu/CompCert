@@ -74,11 +74,15 @@ extern "__builtin_nop" = builtin "__builtin_nop" : void
 extern "__builtin_debug" = extern "__builtin_debug" : int -> void
 "stmtinterchange"('A') : long -> void
 {
-  /*skip*/
+  int8s['A' +l 1LL *l longofint 0] = int8s 1;
+  int8s['A' +l 1LL *l longofint 0] = int8s 1;
 }
 "main"() : int
 {
-  stack 8;
-  /*skip*/
+  stack 2;
+  "stmtinterchange"(&0) : long -> void;
+  return int8s[&0 +l 1LL *l longofint 0];
+  "stmtinterchange"(&0) : long -> void;
+  return int8s[&0 +l 1LL *l longofint 0];
 }
 
