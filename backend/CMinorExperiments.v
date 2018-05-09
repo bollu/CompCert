@@ -1414,7 +1414,10 @@ End STMTINTERCHANGE.
 *)
 
 
-Definition perform_stmt_interchange(s: stmt) : stmt := s.
+Definition perform_stmt_interchange(s: stmt) : stmt :=
+  match s with
+  | _ => Sskip
+  end.
 
 Definition replace_fn_body (fn: Cminor.function) (b: stmt): Cminor.function :=
   {|

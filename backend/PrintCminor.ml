@@ -372,3 +372,12 @@ let print_if prog =
       let oc = open_out f in
       print_program (formatter_of_out_channel oc) prog;
       close_out oc
+
+
+let print_if_named name prog =
+  match !destination with
+  | None -> ()
+  | Some f ->
+      let oc = open_out (f ^ "." ^ (Camlcoq.camlstring_of_coqstring name)) in
+      print_program (formatter_of_out_channel oc) prog;
+      close_out oc
