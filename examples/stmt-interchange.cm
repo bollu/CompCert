@@ -1,3 +1,4 @@
+extern "__builtin_ais_annot" = builtin "__builtin_ais_annot" : long -> void
 extern "__builtin_bswap" = builtin "__builtin_bswap" : int -> int
 extern "__builtin_bswap32" = builtin "__builtin_bswap32" : int -> int
 extern "__builtin_bswap16" = builtin "__builtin_bswap16" : int -> int

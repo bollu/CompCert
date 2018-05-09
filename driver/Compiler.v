@@ -155,7 +155,7 @@ Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
   @@ print (print_Cminor)
   (* add statement interchange into the pass pipeline *)
   @@@ time "Statement Interchange" CMinorExperiments.stmt_interchange_program
-  @@ print (print_Cminor_named "Statement interchange")
+  @@ print (print_Cminor_named "after-stmt-interchange")
   @@@ time "Instruction selection" Selection.sel_program
   @@@ time "RTL generation" RTLgen.transl_program
   @@@ transf_rtl_program.

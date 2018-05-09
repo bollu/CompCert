@@ -1,5 +1,5 @@
 stmt-interchange: 
-	ccomp  -timings  -dcminor stmt-interchange.c
+	ccomp  -timings  -dcminor  stmt-interchange.c 
 
 clean:
-	rm *.clight
+	-rm *.clight *.cm* a.out

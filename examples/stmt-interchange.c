@@ -1,6 +1,8 @@
 void stmtinterchange(int A[2]) {
-    A[0] = 1;
-    A[1] = 2;
+    {
+        A[0] = 1;
+        A[1] = 2;
+    }
 }
 
 int main() {
