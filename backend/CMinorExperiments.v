@@ -1398,7 +1398,28 @@ Section STMTINTERCHANGE.
 
 End STMTINTERCHANGE.
 
-Definition stmt_interchange_program (p: Cminor.program): res Cminor.program := OK p.
+
+Definition perform_stmt_interchange(s: stmt) : stmt := s.
+
+Definition replace_fn_body (fn: Cminor.function) (b: stmt): Cminor.function :=
+  {|
+    fn_sig := fn_sig fn;
+    fn_params := fn_params fn;
+    fn_vars := fn_vars fn;
+    fn_stackspace := fn_stackspace fn;
+    fn_body := b;
+  |}.
+Definition transf_stmt_interchange(f: Cminor.fundef): res Cminor.fundef :=
+  match f with
+  | Internal fn => OK (AST.Internal (replace_fn_body fn                        
+                                   (perform_stmt_interchange (fn_body fn))))
+  | External ef => OK (External ef)
+  end.
+  
+
+
+Definition stmt_interchange_program (p: Cminor.program): res Cminor.program :=
+  AST.transform_partial_program transf_stmt_interchange p.
 
 Definition transf_function (fd: function) : function := fd.
 
