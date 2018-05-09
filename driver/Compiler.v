@@ -154,8 +154,10 @@ Definition transf_rtl_program (f: RTL.program) : res Asm.program :=
 Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
    OK p
   @@ print (print_Cminor)
-  (* add statement interchange into the pass pipeline *)
+  (* add skip elimination into the pass pipeline *)
   @@ time "CMinor: Eliminate skip" CMinorEliminateSkip.transf_program
+  @@ print (print_Cminor_named "after-elim-skip")
+  (* add statement interchange into the pass pipeline *)
   @@@ time "Statement Interchange" CMinorExperiments.stmt_interchange_program
   @@ print (print_Cminor_named "after-stmt-interchange")
   @@@ time "Instruction selection" Selection.sel_program

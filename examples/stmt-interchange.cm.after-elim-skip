@@ -81,5 +81,7 @@ extern "__builtin_debug" = extern "__builtin_debug" : int -> void
 {
   stack 2;
   "stmtinterchange"(&0) : long -> void;
+  return (load int8s[&0 +l 1LL *l longofint 0]);
+  return 0;
 }
 

@@ -26,7 +26,17 @@ Fixpoint remove_skip_from_seq_stmt(s: stmt) : stmt :=
   | Sseq Sskip y =>
     remove_skip_from_seq_stmt y
   | Sseq x Sskip => remove_skip_from_seq_stmt x
+  | Sseq x y =>  Sseq (remove_skip_from_seq_stmt x)
+                     (remove_skip_from_seq_stmt y)
+  (* need these for completeness, just not right now.
+  | Sblock s => Sblock (remove_skip_from_seq_stmt s)
+  | Sloop s => Sloop (remove_skip_from_seq_stmt s)
+  | Sifthenelse cond t e => Sifthenelse cond
+                                       (remove_skip_from_seq_stmt t)
+                                       (remove_skip_from_seq_stmt e)
+   *)
   | _ => s
+                      
   end.
 
 Definition replace_fn_body (fn: Cminor.function) (b: stmt): Cminor.function :=
