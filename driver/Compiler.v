@@ -71,6 +71,7 @@ Require Debugvarproof.
 Require Stackingproof.
 Require Asmgenproof.
 Require CMinorExperiments.
+Require CMinorEliminateSkip.
 (** Command-line flags. *)
 Require Import Compopts.
 
@@ -154,6 +155,7 @@ Definition transf_cminor_program (p: Cminor.program) : res Asm.program :=
    OK p
   @@ print (print_Cminor)
   (* add statement interchange into the pass pipeline *)
+  @@ time "CMinor: Eliminate skip" CMinorEliminateSkip.transf_program
   @@@ time "Statement Interchange" CMinorExperiments.stmt_interchange_program
   @@ print (print_Cminor_named "after-stmt-interchange")
   @@@ time "Instruction selection" Selection.sel_program
@@ -239,12 +241,14 @@ Local Open Scope linking_scope.
 Check (mkpass Tailcallproof.match_prog).
 Check (mkpass Cminorgenproof.match_prog).
 Check (mkpass CMinorExperiments.match_prog).
+Check (mkpass CMinorEliminateSkip.match_prog).
 
 Definition CompCert's_passes :=
       mkpass SimplExprproof.match_prog
   ::: mkpass SimplLocalsproof.match_prog
   ::: mkpass Cshmgenproof.match_prog
   ::: mkpass Cminorgenproof.match_prog
+  ::: mkpass CMinorEliminateSkip.match_prog
   ::: mkpass CMinorExperiments.match_prog
   ::: mkpass Selectionproof.match_prog
   ::: mkpass RTLgenproof.match_prog
@@ -291,8 +295,11 @@ Proof.
   rewrite ! compose_print_identity in T.
   simpl in T.
 
+  (* remove skip added here *)
+  set (pcmskip := CMinorEliminateSkip.transf_program p4) in *.
+
   (* stmt interchange pass added here *)
-  destruct (CMinorExperiments.stmt_interchange_program p4) as [p0 | e] eqn:P0;
+  destruct (CMinorExperiments.stmt_interchange_program pcmskip) as [p0 | e] eqn:P0;
     simpl in T; try discriminate.
 
 
@@ -319,6 +326,7 @@ Proof.
   exists p2; split. apply SimplLocalsproof.match_transf_program; auto.
   exists p3; split. apply Cshmgenproof.transf_program_match; auto.
   exists p4; split. apply Cminorgenproof.transf_program_match; auto.
+  exists pcmskip; split. apply CMinorEliminateSkip.transf_program_match; auto.
   exists p0; split. apply CMinorExperiments.transf_program_match. auto.
   exists p5; split. apply Selectionproof.transf_program_match; auto.
   exists p6; split. apply RTLgenproof.transf_program_match; auto.
@@ -387,7 +395,7 @@ Ltac DestructM :=
       destruct H as (p & M & MM); clear H
   end.
   repeat DestructM. subst tp.
-  assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics p22)).
+  assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics p23)).
   {
   eapply compose_forward_simulations.
     eapply SimplExprproof.transl_program_correct; eassumption.
@@ -398,6 +406,10 @@ Ltac DestructM :=
   eapply compose_forward_simulations.
   eapply Cminorgenproof.transl_program_correct; eassumption.
   eapply compose_forward_simulations.
+  (* Cminor eliminate skipadded here *)
+  eapply CMinorEliminateSkip.transf_program_correct; eassumption.
+  eapply compose_forward_simulations.
+  (* Cminorexperiments added here *)
     eapply CMinorExperiments.transf_program_correct; eassumption.
   eapply compose_forward_simulations.
     eapply Selectionproof.transf_program_correct; eassumption.

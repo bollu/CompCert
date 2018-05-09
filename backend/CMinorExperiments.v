@@ -1418,9 +1418,8 @@ Definition perform_stmt_interchange(s: stmt) : stmt :=
   match s with
   | Sseq x y =>
     match x with
-      | Sassign _ _ => y
-      | Sstore mem ix val => Sskip
-      | _ => x
+      | Sseq a b => a
+      | _ => s
     end
   | _ => s
   end.

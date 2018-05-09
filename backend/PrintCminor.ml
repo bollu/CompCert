@@ -242,12 +242,6 @@ let rec print_stmt p s =
                 (name_of_external ef)
                 print_expr_list (true, el)
 	        print_sig (ef_sig ef)
-  | Sseq(s1,s2) when just_skips s1 && just_skips s2 ->
-      ()
-  | Sseq(s1, s2) when just_skips s1 ->
-      print_stmt p s2
-  | Sseq(s1, s2) when just_skips s2 ->
-      print_stmt p s1
   | Sseq(s1, s2) ->
       fprintf p "%a@ %a" print_stmt s1 print_stmt s2
   | Sifthenelse(e, s1, Sskip) ->
@@ -267,7 +261,7 @@ let rec print_stmt p s =
       fprintf p "@[<v 2>loop {@ %a@;<0 -2>}@]"
               print_stmt s
   | Sblock(s) ->
-      fprintf p "@[<v 3>{{ %a@;<0 -3>}}@]"
+      fprintf p "@[<v 3>{{BLOCK %a@;<0 -3>ENDBLOCK}}@]"
               print_stmt s
   | Sexit n ->
       fprintf p "exit %d;" (Nat.to_int n)
