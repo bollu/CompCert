@@ -17,11 +17,38 @@ Require Import Archi.
 Require Import Linking.
 Require Import Values Memory Events Globalenvs Smallstep.
 Require Import Switch Cminor Selectionproof.
+Require Import CMinorExperiments.
 Require Import Errors.
 
 
-Fixpoint measure(st: Cminor.state) : nat :=
+
+Fixpoint measure_stmt (s: stmt):nat  :=
+  match s with
+  | Sskip => 1
+  | _ => 0
+  end.
+
+
+Fixpoint measure_cont(c: Cminor.cont): nat :=
+  match c with
+  | Kseq s k => measure_stmt s + measure_cont k 
+  | Kblock k =>  measure_cont k + 1
+  | _ => 1
+  end.
+
+Lemma measure_of_block_decreases:
+  forall (k: cont), (measure_cont k  < measure_cont (Kblock k))%nat.
+Proof.
+  intros.
+  induction k; simpl; try omega.
+Qed.
+
+  
+
+
+Fixpoint measure_state(st: Cminor.state) : nat :=
   match st with
+  |  State f s k sp e m => measure_stmt s + measure_cont k 
   | _ => 0
   end.
 
@@ -131,25 +158,65 @@ Proof.
   destruct f; auto. 
 Qed.
 
+Check(PTree.set).
+
 Inductive match_states: Cminor.state -> Cminor.state -> Prop :=
-| match_callstates: forall (fdef: fundef)
-                      (args: list val)
-                      (k: cont)
-                      (m: mem),
-    match_states (Callstate fdef args k m)
-                 (Callstate (transf_fundef fdef) args k m)
-| match_state: forall (f: function)  (s: stmt)
+|  match_deliberate_skip: forall (f: function) (s: stmt)
+                          (k: cont)
+                          (sp: val)
+                          (e: env)
+                          (m: mem),
+    s <> Sskip -> 
+    match_states (State f Sskip (Kseq s k) sp e m)
+                 (State f s k sp e m)
+| match_non_skip: forall (f: function)
+                    (k: cont)
+                    (sp: val)
+                    (e: env)
+                    (m: mem)
+                    (s: stmt),
+    (s <> Sskip) -> match_states (State f s k sp e m)
+                               (State f s k sp e m)
+| match_non_deliberate_skip: forall (f: function)
+                            (k: cont)
+                            (sp: val)
+                            (e: env)
+                            (m: mem),
+     (forall s' k', k <> Kseq s' k') ->
+    match_states (State f Sskip k sp e m)
+                 (State f Sskip k sp e m)
+| match_callstate: forall (f: fundef) (m: mem),
+  match_states (Callstate f nil Kstop m)
+               (Callstate (transf_fundef f) nil Kstop m).
+
+(* 
+               
+(* 
+| match_skip_setter:
+    forall (f: functionte: 
+      (k: cont)
+      (sp: val)
+      (id: ident)
+      (v: val)
+      (e: env)
+      (m: mem)
+      (st2: state)
+      match_states (State f Sskip k sp (PTree.set id v e) m) st2
+*)
+      
+| match_non_skip_seq_state: forall (f: function)  (s s': stmt)
                  (k: cont)
                  (sp: val)
                  (e: env)
                  (m: mem),
-    s <> Sskip -> match_states (State f s k sp e m)
-                             (State (transf_fn f) s k sp e m)
+    s <> Sskip -> match_states (State f s (Kseq s' k) sp e m)
+                             (State (transf_fn f) s (Kseq s' k) sp e m)
 
 | match_returnstates: forall (v: val)
                         (k: cont)
                         (m: mem),
     match_states (Returnstate v k m) (Returnstate v k m).
+*)
 
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
@@ -181,6 +248,7 @@ Proof.
 
     + rewrite sig_preserved.
       auto.
+
 Qed.
 
 Lemma transf_final_states:
@@ -189,47 +257,38 @@ Lemma transf_final_states:
 Proof.
   intros.
   inversion H0; inversion H; subst; try discriminate.
-
-  rename H0 into FINAL_STATE.
-  rename H3 into STATE_EQ_FINAL_STATE.
-  rewrite <- STATE_EQ_FINAL_STATE in FINAL_STATE.
-  auto.
 Qed.
 
+    
 
 
 Theorem transf_program_correct:
     forward_simulation (Cminor.semantics prog) (Cminor.semantics tprog).
 Proof.
   eapply forward_simulation_opt with (match_states := match_states)
-                                     (measure := measure).
+                                     (measure := measure_state).
  
   - apply senv_preserved.
   - apply transf_initial_states.
   - apply transf_final_states.
   - intros until s1'.
     intros STEP_S1_S1'.
-    intros s2.
-    intros S1_S2_MATCH.
+    
+    induction STEP_S1_S1'.
+    
+    -- intros s2.
+       intros MATCH_S1_S2.
+       inversion MATCH_S1_S2; subst.
+       + right.
+         repeat split; auto; try omega.
+         eapply match_non_skip; auto.
+       + congruence.
 
-    (* I need to pattern match on s1' to see what it is *)
-    induction s1'.
-    + assert (S_CASES: {s = Sskip} + {s <> Sskip}).
-      admit.
+       + specialize (H5 s k).
+         congruence.
 
-      destruct S_CASES as [S_EQ_SSKIP | S_NEQ_SSKIP].
-      ++ admit.
-      ++ left.
-         exists (State (transf_fn f) s k sp e m).
-         split.
-         +++ admit.
-         +++ constructor; auto.
+    -- 
+         
 
-
-    + left.
-      exists (Callstate (transf_fundef f) args k m).
-      split; try constructor.
-      (* matching *)
-      ++ 
     
 Admitted.
