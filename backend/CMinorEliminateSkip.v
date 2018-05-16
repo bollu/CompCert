@@ -132,6 +132,19 @@ Section PRESERVATION.
    apply TRANSL.
  Qed.
 
+ Lemma symbol_address_preserved:
+   forall (id: ident) (ofs: ptrofs),
+     Genv.symbol_address tge id ofs =
+     Genv.symbol_address ge id ofs.
+ Proof.
+   intros.
+   unfold Genv.symbol_address.
+   rewrite symbols_preserved.
+   auto.
+ Qed.
+
+ Hint Resolve symbols_preserved symbol_address_preserved.
+
 Lemma functions_translated:
   forall (v: val) (f: Cminor.fundef),
   Genv.find_funct ge v = Some f ->
@@ -139,6 +152,9 @@ Lemma functions_translated:
 Proof.
   apply (Genv.find_funct_transf TRANSL).
 Qed.
+
+
+ Hint Resolve functions_translated.
 
 Lemma funct_ptr_translated:
   forall (b: block) (f: Cminor.fundef),
@@ -148,9 +164,15 @@ Proof.
   apply (Genv.find_funct_ptr_transf TRANSL).
 Qed.
 
+
+ Hint Resolve funct_ptr_translated.
+
 Lemma senv_preserved:
   Senv.equiv ge tge.
 Proof. apply (Genv.senv_transf TRANSL). Qed.
+
+
+ Hint Resolve senv_preserved.
 
 Lemma sig_preserved:
   forall f, funsig (transf_fundef f) = funsig f.
@@ -158,36 +180,25 @@ Proof.
   destruct f; auto. 
 Qed.
 
+ Hint Resolve sig_preserved.
+
 Check(PTree.set).
 
 Inductive match_states: Cminor.state -> Cminor.state -> Prop :=
-|  match_deliberate_skip: forall (f: function) (s: stmt)
-                          (k: cont)
-                          (sp: val)
-                          (e: env)
-                          (m: mem),
-    s <> Sskip -> 
-    match_states (State f Sskip (Kseq s k) sp e m)
-                 (State f s k sp e m)
-| match_non_skip: forall (f: function)
-                    (k: cont)
-                    (sp: val)
-                    (e: env)
-                    (m: mem)
-                    (s: stmt),
-    (s <> Sskip) -> match_states (State f s k sp e m)
-                               (State f s k sp e m)
-| match_non_deliberate_skip: forall (f: function)
-                            (k: cont)
-                            (sp: val)
-                            (e: env)
-                            (m: mem),
-     (forall s' k', k <> Kseq s' k') ->
-    match_states (State f Sskip k sp e m)
-                 (State f Sskip k sp e m)
-| match_callstate: forall (f: fundef) (m: mem),
-  match_states (Callstate f nil Kstop m)
-               (Callstate (transf_fundef f) nil Kstop m).
+|  match_deliberate_skip:
+     forall (f: function) (s: stmt)
+       (k: cont)
+       (sp: val)
+       (e: env)
+       (m: mem)
+       (NOTCALL: forall sp', sp <> (Vptr sp' Ptrofs.zero)),
+       match_states (State f Sskip (Kseq s k) sp e m)
+                    (State f s k sp e m)
+| match_id: forall (s: state),
+    match_states s s
+| match_callstate: forall (f: fundef) (m: mem) (k: cont) args,
+  match_states (Callstate f args k m)
+               (Callstate (transf_fundef f) args k m).
 
 (* 
                
@@ -257,8 +268,150 @@ Lemma transf_final_states:
 Proof.
   intros.
   inversion H0; inversion H; subst; try discriminate.
+  auto.
 Qed.
 
+ Hint Resolve senv_preserved.
+
+Lemma eval_expr_preserved:
+  forall sp e m a v,
+  eval_expr (globalenv (semantics prog)) sp e m a v ->
+  eval_expr (globalenv (semantics tprog)) sp e m a v.
+Proof.
+  induction 1;
+    try(simpl; constructor; auto);
+    try (simpl in *; econstructor; eauto).
+       
+  - induction cst; simpl in H; inversion H; subst; simpl; auto 10.
+    rewrite symbol_address_preserved.
+    auto.
+Qed.
+
+
+ Hint Resolve eval_expr_preserved.
+  
+
+ Lemma eval_exprlist_preserved: forall sp e m bl vargs,
+   eval_exprlist (globalenv (semantics prog)) sp e m bl vargs ->
+   eval_exprlist (globalenv (semantics tprog)) sp e m bl vargs.
+ Proof.
+   induction 1;
+   simpl; eauto; constructor; eauto.
+ Qed.
+
+ Lemma external_call_preserved: forall (ef: external_function)
+                                  (vargs: list val)
+                                  (m: mem)
+                                  (t: trace)
+                                  (vres: val)
+                                  (m': mem),
+   external_call ef (globalenv (semantics prog)) vargs m t vres m' ->
+   external_call ef (globalenv (semantics tprog)) vargs m t vres m'.
+ Proof.
+   intros ef.
+   induction ef;
+     intros until m'; intros EXTCALL; simpl in *.
+
+   - eapply ec_symbols_preserved.
+     eapply external_functions_properties.
+     eapply senv_preserved.
+     auto.
+
+  
+
+     
+   - eapply ec_symbols_preserved.
+     eapply external_functions_properties.
+     eapply senv_preserved.
+     auto.
+
+
+       
+   - eapply ec_symbols_preserved.
+     eapply external_functions_properties.
+     eapply senv_preserved.
+     auto.
+
+     
+
+   
+   - eapply ec_symbols_preserved.
+     inversion EXTCALL. subst.
+     eapply volatile_load_ok.
+     eapply senv_preserved.
+     auto.
+
+
+   - eapply ec_symbols_preserved.
+     inversion EXTCALL. subst.
+     eapply volatile_store_ok.
+     eapply senv_preserved.
+     auto.
+
+     (* NO *)
+   - eapply ec_symbols_preserved.
+     inversion EXTCALL. subst.
+     eapply extcall_malloc_ok.
+     eapply senv_preserved.
+     auto.
+
+     
+   - eapply ec_symbols_preserved.
+     inversion EXTCALL. subst.
+     eapply extcall_free_ok.
+     eapply senv_preserved.
+     auto.
+
+     
+   - eapply ec_symbols_preserved.
+     inversion EXTCALL. subst.
+     eapply extcall_memcpy_ok.
+     eapply senv_preserved.
+     auto.
+
+  
+   - eapply ec_symbols_preserved.
+     inversion EXTCALL. subst.
+     eapply extcall_annot_ok.
+     eapply senv_preserved.
+     auto.
+
+     
+   - eapply ec_symbols_preserved.
+     inversion EXTCALL. subst.
+     eapply extcall_annot_val_ok.
+     eapply senv_preserved.
+     auto.
+
+     
+     (* NO *)
+     
+   - eapply ec_symbols_preserved.
+     apply inline_assembly_properties.
+     eapply senv_preserved.
+     auto.
+
+     
+
+     
+   - eapply ec_symbols_preserved.
+     eapply extcall_debug_ok.
+     eapply senv_preserved.
+     auto.
+
+     Unshelve.
+     auto.
+ Qed.
+
+
+  
+     
+
+     
+   
+
+ 
+ Hint Resolve eval_exprlist_preserved.
     
 
 
@@ -267,7 +420,7 @@ Theorem transf_program_correct:
 Proof.
   eapply forward_simulation_opt with (match_states := match_states)
                                      (measure := measure_state).
- 
+  
   - apply senv_preserved.
   - apply transf_initial_states.
   - apply transf_final_states.
@@ -276,18 +429,78 @@ Proof.
     
     induction STEP_S1_S1'.
     
-    -- intros s2.
-       intros MATCH_S1_S2.
+    ++ (* regular skip *)
+      intros s2.
+      intros MATCH_S1_S2.
+      inversion MATCH_S1_S2; subst.
+       *** right.
+           repeat split; auto; try omega.
+           constructor.
+       *** left.
+           exists (State f s k sp e m).
+           split; constructor.
+
+    ++ (* skip out of block *)
+      intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit; econstructor; eauto.
+       
+    ++ (* skip for call *)
+      intros s2 MATCH_S1_S2;
        inversion MATCH_S1_S2; subst.
-       + right.
-         repeat split; auto; try omega.
-         eapply match_non_skip; auto.
-       + congruence.
+       *** specialize (NOTCALL sp).
+           congruence.
+       *** left.
+           repeat esplit.
+           econstructor; eauto.
+           constructor.
 
-       + specialize (H5 s k).
-         congruence.
+    ++ (* assign *)
+      intros s2 MATCH_S1_S2;
+       inversion MATCH_S1_S2; subst.
+       left.
+       repeat esplit; econstructor; eauto.
 
-    -- 
+   ++ (* store *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit; econstructor; eauto.
+
+    
+   ++ (* call *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+   ++ (* tailcall *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+   ++ (* external call *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       
+
+
+
+       
+         
          
 
     
