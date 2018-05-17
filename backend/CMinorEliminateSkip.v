@@ -82,6 +82,14 @@ Definition replace_fn_body (fn: Cminor.function) (b: stmt): Cminor.function :=
 Definition transf_fn(fn : Cminor.function): Cminor.function :=
   replace_fn_body fn (remove_skip_from_seq_stmt (fn_body fn)).
   
+(* 
+Lemma transf_fn_preserved_fn_params:
+  forall (fn: Cminor.function),
+    fn_params fn = fn_params(transf_fn fn).
+Proof.
+  auto.
+Qed.
+*)
 
 Definition transf_fundef (fd: Cminor.fundef) : Cminor.fundef :=
   AST.transf_fundef transf_fn fd.
@@ -299,6 +307,8 @@ Qed.
    simpl; eauto; constructor; eauto.
  Qed.
 
+ Hint Resolve eval_exprlist_preserved.
+ 
  Lemma external_call_preserved: forall (ef: external_function)
                                   (vargs: list val)
                                   (m: mem)
@@ -403,15 +413,8 @@ Qed.
      auto.
  Qed.
 
-
-  
-     
-
-     
-   
-
  
- Hint Resolve eval_exprlist_preserved.
+ Hint Resolve external_call_preserved.
     
 
 
@@ -439,6 +442,7 @@ Proof.
        *** left.
            exists (State f s k sp e m).
            split; constructor.
+
 
     ++ (* skip out of block *)
       intros s2 MATCH_S1_S2.
@@ -495,6 +499,164 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
+       constructor.
+
+   ++ (* Sseq *)
+     intros s0.
+     intros MATCH_S1_S2.
+     inversion MATCH_S1_S2.
+     subst.
+     left.
+     repeat esplit.
+     econstructor; eauto.
+     constructor.
+
+  ++ (* Sifthenelse *)
+     intros s0.
+     intros MATCH_S1_S2.
+     inversion MATCH_S1_S2.
+     subst.
+     left.
+     repeat esplit.
+     econstructor; eauto.
+     constructor.
+
+  ++ (* Sloop *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+  ++  (* Sblock *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+  ++ (* SExit *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+  ++  (* SExit 0 *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+  ++  (* SExit (S n) *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+  ++  (* Sswitch *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+  ++ (* Sreturn *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+  ++ (* Sreturn *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+  ++  (* Slabel *)
+    
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+   ++ 
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+   ++ intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2; subst.
+       *** left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+
+       *** left.
+       repeat esplit.
+       econstructor; eauto.
+       simpl.
+       (* The case that actually matters, remove_skip_from_seq_stmt *)
+       admit.
+
+   ++  (* External call *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left. 
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+       admit.
+
+   ++ (* Returnstate *)
+     intros s2 MATCH_S1_S2.
+       inversion MATCH_S1_S2.
+       subst.
+       left.
+       repeat esplit.
+       econstructor; eauto.
+       constructor.
+Admitted.
+
+       
+
+  
+    
+
+
+    
+    
+    
+    
+       
        
 
 
