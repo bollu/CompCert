@@ -331,14 +331,35 @@ Qed.
 
  Hint Resolve eval_exprlist_preserved.
 
+ Lemma find_label_on_cur_stmt: forall (lbl: ident) (s1 s2 sres: stmt) (k kres: cont),
+     find_label lbl s1 k = Some (sres, kres) ->
+     find_label lbl s1 (Kseq s2 k) = Some (sres, kres).
+ Proof.
+   intros.
+   induction s1; simpl in *; try discriminate.
+ Abort.
+
  Lemma find_label_preserved: forall (lbl: ident) (s: stmt) (k: cont),
-   find_label lbl s (call_cont k)  =
-   find_label lbl (remove_skip_from_seq_stmt s) (call_cont k).
+   find_label lbl s k = 
+   find_label lbl (remove_skip_from_seq_stmt s) k.
  Proof.
    intros.
    induction s; auto.
 
-   unfold remove_skip_from_seq_stmt.
+   assert (FIND_LBL_SSEQ: find_label lbl (Sseq s1 s2) k = 
+           match find_label lbl s1 (Kseq s2 k) with
+           | Some sk => Some sk
+           | None => find_label lbl s2 k
+           end).
+   auto.
+
+   rewrite FIND_LBL_SSEQ.
+ Admitted.
+
+
+
+   
+
 
 
 
@@ -653,18 +674,32 @@ Proof.
      left.
      repeat esplit.
      econstructor; eauto.
+     (* find_label *)
+     admit.
+     econstructor.
 
    ++ intros s2 MATCH_S1_S2.
       inversion MATCH_S1_S2; subst.
-      ***  simpl in H1. discriminate.
-
        *** left.
        repeat esplit.
        econstructor; eauto.
        simpl.
-       remember (fn_body f) as FBODY.
-       generalize dependent f.
-       induction FBODY; intros; subst; simpl; admit.
+       admit.
+
+       *** left.
+           repeat esplit.
+           constructor.
+           (* allocated stack space *)
+           admit.
+           eauto.
+           simpl.
+
+           induction (fn_body f); simpl; try econstructor; auto.
+
+           assert ({s1 = Sskip} + { s1 <> Sskip}).
+           destruct s1; (left; auto || right; auto).
+           
+           
        
 
    ++  (* External call *)
