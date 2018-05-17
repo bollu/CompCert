@@ -188,9 +188,15 @@ Proof.
   destruct f; auto. 
 Qed.
 
- Hint Resolve sig_preserved.
+Hint Resolve sig_preserved.
 
 Check(PTree.set).
+
+Definition is_callstate (s: state): bool :=
+  match s with
+  | Callstate  _ _ _ _ => true
+  | _ => false
+  end.
 
 Inductive match_states: Cminor.state -> Cminor.state -> Prop :=
 |  match_deliberate_skip:
@@ -201,12 +207,34 @@ Inductive match_states: Cminor.state -> Cminor.state -> Prop :=
        (m: mem)
        (NOTCALL: forall sp', sp <> (Vptr sp' Ptrofs.zero)),
        match_states (State f Sskip (Kseq s k) sp e m)
-                    (State f s k sp e m)
-| match_id: forall (s: state),
-    match_states s s
-| match_callstate: forall (f: fundef) (m: mem) (k: cont) args,
-  match_states (Callstate f args k m)
-               (Callstate (transf_fundef f) args k m).
+                    (State (transf_fn f) s k sp e m)
+| match_general_state:
+     forall (f: function) (s: stmt)
+       (k: cont)
+       (sp: val)
+       (e: env)
+       (m: mem),
+       match_states (State f s k sp e m)
+                    (State (transf_fn f) s k sp e m)
+| match_returnstate: forall (v: val) (k: cont) (m: mem),
+    match_states
+      (Returnstate v k m)
+      (Returnstate v k m)
+| match_callstate_call: forall (fd: fundef)
+                     (f: function)
+                     (m: mem)
+                     (k: cont)
+                     (e: env)
+                     (sp: val)
+                     optid
+                     args,
+    match_states (Callstate fd args (Kcall optid f sp e k) m)
+                 (Callstate (transf_fundef fd) args
+                 (Kcall optid (transf_fn f) sp e k)
+                 m)
+| match_callstate_initial: forall (f: fundef) (m: mem),
+    match_states (Callstate f nil Kstop m)
+                 (Callstate (transf_fundef f) nil Kstop m).
 
 (* 
                
@@ -244,30 +272,23 @@ Proof.
   intros.
   inversion H.
   subst.
-  exists (Callstate (transf_fundef f) nil Kstop m0).
-  split; try constructor.
-  
-  - econstructor; try auto.
-    
-    + apply (Genv.init_mem_transf TRANSL). auto.
-
-    + replace (prog_main tprog) with (prog_main prog).
-      rewrite symbols_preserved. eauto.
-      symmetry;
+  repeat esplit.
+  + apply (Genv.init_mem_transf TRANSL). eassumption.
+  + replace (prog_main tprog) with (prog_main prog).
+    rewrite symbols_preserved. eauto.
+    symmetry;
       (* comes from Linking *)
-        eapply match_program_main; eauto.
+      eapply match_program_main; eauto.
 
-      
-    + subst.
-      
-      assert (Genv.find_funct_ptr tge b = Some (transf_fundef f)).
+  + assert (Genv.find_funct_ptr tge b = Some (transf_fundef f)).
       apply funct_ptr_translated.
       auto.
-      replace (Genv.globalenv tprog) with tge; try auto.
+      replace (Genv.globalenv tprog) with tge; try eauto.
 
-    + rewrite sig_preserved.
-      auto.
+  + rewrite sig_preserved.
+    auto.
 
+  + econstructor; try auto.
 Qed.
 
 Lemma transf_final_states:
@@ -276,6 +297,7 @@ Lemma transf_final_states:
 Proof.
   intros.
   inversion H0; inversion H; subst; try discriminate.
+  inversion H3. subst.
   auto.
 Qed.
 
@@ -308,6 +330,24 @@ Qed.
  Qed.
 
  Hint Resolve eval_exprlist_preserved.
+
+ Lemma find_label_preserved: forall (lbl: ident) (s: stmt) (k: cont),
+   find_label lbl s (call_cont k)  =
+   find_label lbl (remove_skip_from_seq_stmt s) (call_cont k).
+ Proof.
+   intros.
+   induction s; auto.
+
+   unfold remove_skip_from_seq_stmt.
+
+
+
+   
+   
+
+   
+
+
  
  Lemma external_call_preserved: forall (ef: external_function)
                                   (vargs: list val)
@@ -436,12 +476,13 @@ Proof.
       intros s2.
       intros MATCH_S1_S2.
       inversion MATCH_S1_S2; subst.
-       *** right.
+      *** right.
            repeat split; auto; try omega.
-           constructor.
-       *** left.
-           exists (State f s k sp e m).
-           split; constructor.
+           constructor; auto.
+      *** left.
+          repeat esplit.
+          econstructor.
+          econstructor.
 
 
     ++ (* skip out of block *)
@@ -459,7 +500,7 @@ Proof.
        *** left.
            repeat esplit.
            econstructor; eauto.
-           constructor.
+           constructor; auto.
 
     ++ (* assign *)
       intros s2 MATCH_S1_S2;
@@ -491,7 +532,9 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       (* tail call *)
+       admit.
+       
    ++ (* external call *)
      intros s2 MATCH_S1_S2.
        inversion MATCH_S1_S2.
@@ -499,7 +542,7 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor; auto.
 
    ++ (* Sseq *)
      intros s0.
@@ -509,7 +552,7 @@ Proof.
      left.
      repeat esplit.
      econstructor; eauto.
-     constructor.
+     constructor; auto.
 
   ++ (* Sifthenelse *)
      intros s0.
@@ -519,7 +562,7 @@ Proof.
      left.
      repeat esplit.
      econstructor; eauto.
-     constructor.
+     constructor; auto.
 
   ++ (* Sloop *)
      intros s2 MATCH_S1_S2.
@@ -528,7 +571,7 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor; auto.
 
   ++  (* Sblock *)
      intros s2 MATCH_S1_S2.
@@ -537,7 +580,7 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor; auto.
 
   ++ (* SExit *)
      intros s2 MATCH_S1_S2.
@@ -546,7 +589,7 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor; auto.
 
   ++  (* SExit 0 *)
      intros s2 MATCH_S1_S2.
@@ -555,7 +598,7 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor; auto.
 
   ++  (* SExit (S n) *)
      intros s2 MATCH_S1_S2.
@@ -564,7 +607,7 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor; auto.
 
   ++  (* Sswitch *)
      intros s2 MATCH_S1_S2.
@@ -573,7 +616,7 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor; auto.
 
   ++ (* Sreturn *)
      intros s2 MATCH_S1_S2.
@@ -582,7 +625,7 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor; auto.
 
   ++ (* Sreturn *)
      intros s2 MATCH_S1_S2.
@@ -591,7 +634,7 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor; auto.
 
   ++  (* Slabel *)
     
@@ -601,40 +644,39 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor. 
 
-   ++ 
+   ++  (* goto *)
      intros s2 MATCH_S1_S2.
-       inversion MATCH_S1_S2.
-       subst.
-       left.
-       repeat esplit.
-       econstructor; eauto.
-       constructor.
+     inversion MATCH_S1_S2.
+     subst.
+     left.
+     repeat esplit.
+     econstructor; eauto.
 
    ++ intros s2 MATCH_S1_S2.
-       inversion MATCH_S1_S2; subst.
-       *** left.
-       repeat esplit.
-       econstructor; eauto.
-       constructor.
+      inversion MATCH_S1_S2; subst.
+      ***  simpl in H1. discriminate.
 
        *** left.
        repeat esplit.
        econstructor; eauto.
        simpl.
-       (* The case that actually matters, remove_skip_from_seq_stmt *)
-       admit.
+       remember (fn_body f) as FBODY.
+       generalize dependent f.
+       induction FBODY; intros; subst; simpl; admit.
+       
 
    ++  (* External call *)
      intros s2 MATCH_S1_S2.
-       inversion MATCH_S1_S2.
-       subst.
-       left. 
-       repeat esplit.
-       econstructor; eauto.
-       constructor.
-       admit.
+     inversion MATCH_S1_S2; subst.
+
+     *** simpl in *. discriminate.
+     *** 
+     left. 
+     repeat esplit.
+     econstructor; eauto.
+     constructor. auto.
 
    ++ (* Returnstate *)
      intros s2 MATCH_S1_S2.
@@ -643,7 +685,7 @@ Proof.
        left.
        repeat esplit.
        econstructor; eauto.
-       constructor.
+       constructor. auto.
 Admitted.
 
        
